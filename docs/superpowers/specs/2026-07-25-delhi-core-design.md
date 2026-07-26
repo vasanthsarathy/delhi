@@ -23,9 +23,20 @@ surface syntax, and a test suite derived from the papers' own correctness claims
   Ch. 3 mA-local, Ch. 4 mA-revise, **Ch. 5 mB** (the semantics delhi implements),
   Ch. 6 cooperation-agnostic search, §9.2–9.3 proofs.
 - **[KR24]** Buckingham, Scheutz, Son, Fabiano. *Action Language mA\* with Higher-Order Action
-  Observability*, KR 2024 (`refs/kr2024-0020-buckingham-et-al.pdf`).
+  Observability*, KR 2024 (`refs/kr2024-0020-buckingham-et-al.pdf`). = [T] Ch. 3, mA-local.
+- **[KR21]** Buckingham, **Sarathy**, Scheutz, Son. *A Multi-Agent Epistemic and Doxastic Action
+  Language with Belief Revision and Local Dynamic Observability*, KR 2021
+  (`refs/buckingham_kr2021.pdf`), with **[KR21-S]** its supplementary appendix
+  (`refs/buckingham_kr2021_supplement.pdf`). = [T] Ch. 4, mA-revise.
+- **[MBD]** *mB*, working draft dated 2022-02-21 (`refs/mb_draft_1.pdf`). An **earlier and
+  non-equivalent** version of [T] Ch. 5; see §3.5 and §3.3. Incomplete (placeholder
+  "Intuitively, …" sections, no propositions). [T] Ch. 5 supersedes it.
 - **[J]** The mecaPlanner Java source (`refs/mecaPlanner-main/`), used as a reference
   implementation and as a catalogue of defects to avoid.
+
+**Lineage.** KR2020 (Buckingham, Kasenberg, Scheutz) → [KR21] mA-revise → [T] Ch. 5 mB;
+separately [KR24] mA-local. Where documents conflict, **[T] is authoritative** as the latest and
+most complete, with conflicts recorded explicitly below rather than silently resolved.
 
 ### 1.2 Non-goals for v0.1
 
@@ -34,6 +45,7 @@ surface syntax, and a test suite derived from the papers' own correctness claims
 - No probabilistic or graded-degree belief.
 - No awareness logic (agents unaware that a proposition exists).
 - No general formula-satisfiability-driven model synthesis.
+- No hypothetical actions ([KR21] eq. 23). Known limitation, pinned by a failing test — see §3.8.
 
 ---
 
@@ -47,6 +59,8 @@ surface syntax, and a test suite derived from the papers' own correctness claims
 | D4 | **New surface language** with a type/object/grounding front-end | DEPL's grammar has drifted from its own corpus; grounding and constant folding earn their keep; the new modalities have no DEPL syntax. |
 | D5 | **Initial states**: declarative form + explicit escape hatch | The declarative form is what people write; the explicit form reproduces published figures exactly and is what the pretty-printer emits. |
 | D6 | **Incompleteness: tiers 1 + 2** — measure the gap, and ship complete equivalence for the K/B/□/C fragment | Bounded-depth merging (tier 3) has no consumer until the planner and carries unsoundness risk. |
+| D7 | **Hypothetical actions: test and document, do not fix in v0.1** | mB+ appears to inherit the defect [KR21] §7 exists to fix. Pin it with a failing test before changing Def. 2, the one part of mB with published proofs. See §3.8. |
+| D8 | **At most one `pre` clause per action**; conjunction written explicitly | [T], [MBD], [KR21], and the `[J]` corpus disagree three ways on how multiple executability statements combine. Removing multiplicity removes the ambiguity instead of picking a side. See §3.3. |
 
 ---
 
@@ -83,7 +97,7 @@ Derived:
 | `p` | `u ∈ V(p)` |
 | `Kᵢφ` | `φ` at all `v ∈ ~ᵢᵘ` |
 | `Bᵢφ` | `φ` at all `v ∈ →ᵢᵘ` |
-| `C_g φ` | `φ` at all `v` with `u (∪_{i∈g} ~ᵢ)* v` |
+| `C_g φ` | `φ` at all `v` with `u (∪_{i∈g} ~ᵢ)* v` — **common knowledge**, since it is built on `~ᵢ`, not on `Belᵢ`. ([KR24] uses `C_g` for common *belief* over `Rᵢ`; do not conflate. [MBD] has only ungrouped `C` over all of `G`; [T] generalises to groups.) |
 | **`Bᵢ^ψ φ`** | `φ` at all `v ∈ →ᵢ(~ᵢᵘ ∩ ⟦ψ⟧)`; vacuously true if that set is empty |
 | **`□ᵢ φ`** | `φ` at all `v` with `u Rᵢ v` |
 
@@ -92,24 +106,48 @@ Derived:
 
 ### 3.3 Action theories — extends [T] §5.2
 
-An action theory `T` is a set of statements:
+An action theory `T` is a set of statements. **Formula typing is load-bearing** and was omitted
+from [MBD] (which restricts everything to `L^P`); [T] §5.2 and [KR21] §3 agree on the following:
 
-1. `executable a if φ`
-2. `a causes l₀, …, lₙ` **`if φ`** *(the `if` clause is new in mB+)*
-3. `a determines φ`
-4. `a announces φ`
-5. `i observes a if φ`
-6. `i aware_of a if φ`
+| # | form | typing |
+|---|---|---|
+| 1 | `a requires φ` | `φ ∈ L^P` |
+| 2 | `a causes l₀, …, lₙ` **`if φ`** *(the `if` is new in mB+)* | `lⱼ` propositional literals, `φ ∈ L^P` |
+| 3 | `a determines φ` | `φ ∈ L^P` |
+| 4 | `a announces ψ` | **`ψ ∈ L^P_GB` — modal, and need not be true** |
+| 5 | `i observes a if φ` | `φ ∈ L^P` |
+| 6 | `i aware_of a if φ` | `φ ∈ L^P` |
 
-`a_pre := ⋁_{"executable a if φ" ∈ T} φ`.
+Form 4 taking a modal `ψ` has real consequences: announcement event preconditions
+(`a_pre ∧ ψ`, §3.6) are modal, so `pre` evaluation requires full modal entailment against the
+*pre-update* model, and no consistency check on announcements may assume propositional formulas.
+[KR21] §3 is explicit: "ψ may be a belief formula, admitting announcements about beliefs and
+knowledge, and that ψ need not be true."
+
+**Preconditions — D8.** The sources disagree three ways:
+
+| source | rule |
+|---|---|
+| [T] eq. 5.1 | `a_pre := ⋁_{"if φ then a is executable" ∈ T} φ` — **disjunction** |
+| [MBD] line 150 | **at most one** form-1 sentence; `a_pre := φ` if present, else `⊤` |
+| [KR21] form 3 | `α requires φ`, phrasing implies necessity |
+| `[J] example.depl` | repeated `precondition{…}` clauses, semantically **conjoined** — `move` requires `at(?a,?f)` *and* `connected(…)` |
+
+Under [T]'s disjunction, *adding* a precondition makes an action *more* applicable, which
+contradicts both the word "precondition" and every file in the `[J]` corpus. delhi adopts
+**[MBD]'s at-most-one rule**: a single `pre` clause per action, with conjunction written
+explicitly (`pre φ & ψ`). Absent a `pre` clause, `a_pre := ⊤`. A second `pre` clause is a
+lowering-time error, not a silent combination.
 
 **Well-formedness** (from [T] §5.2, promoted from runtime assertion to a lowering-time
 diagnostic with a source span):
 
 - exactly one statement of form 2, 3, or 4 per action;
+- at most one statement of form 1 per action (D8);
 - for every state and every pair `observes a if φ` / `aware_of a if ψ`, `⊭ φ ∧ ψ`
-  — checked syntactically where decidable, else emitted as a runtime-checked obligation;
-- no `causes` list containing both `p` and `¬p`.
+  — checked syntactically where decidable, else emitted as a runtime-checked obligation.
+  ([KR21] eq. 2 states the same requirement; eq. 6 derives `F(α,u) ∩ P(α,u) = ∅` from it.)
+- no `causes` list containing both `p` and `¬p` ([KR21] eq. 1 states the same requirement).
 
 ### 3.4 Action plausibility models — [T] §5.1.2
 
@@ -140,6 +178,33 @@ This is Baltag–Smets action-priority update: event plausibility overrides stat
 (first disjunct), so incoming information takes precedence over prior belief unless it
 contradicts prior knowledge.
 
+#### 3.5.1 [MBD] gives a different, non-equivalent rule
+
+[MBD] line 129:
+
+```
+R′(⟨u,e⟩,⟨v,f⟩)(i) = ( uRᵢv ∧ (e ⟶ᶦᵘᵛ f ∨ f ⟶ᶦᵘᵛ e) )
+                   ∨ ( vRᵢu ∧ e ⟶ᶦᵘᵛ f ∧ ¬ f ⟶ᶦᵘᵛ e )
+```
+
+Case analysis over the four event-comparability configurations:
+
+| configuration | [T] Def. 2 | [MBD] | agree? |
+|---|---|---|---|
+| `e→f ∧ f→e` (tie) | `uRᵢv` | `uRᵢv` | yes |
+| `e→f ∧ ¬f→e` (`f` strictly preferred) | `u ~ᵢ v` | `uRᵢv ∨ vRᵢu` = `u ~ᵢ v` | yes |
+| neither direction | `false` | `false` | yes |
+| **`f→e ∧ ¬e→f`** (**`e` strictly preferred**) | **`false`** | **`uRᵢv`** | **no** |
+
+In the divergent case [T] keeps `⟨u,e⟩` strictly more plausible than `⟨v,f⟩`, while [MBD] can make
+them equiplausible, destroying a belief [T] retains. **[T] is authoritative** — it is later, and
+it is the reading consistent with action priority (a strict event preference must not be washed
+out by the state order).
+
+*Test obligation:* implement both rules behind a feature flag, assert they agree on every worked
+example in §7, and assert the divergent configuration is reachable by at least one constructed
+case. This guards against having transcribed the wrong rule.
+
 ### 3.6 The three constructions
 
 **Ontic** ([T] Def. 4), with conditional effects. Base case (`P⁺`, `P⁻` the positive and
@@ -147,6 +212,12 @@ negative literals of the `causes` list):
 
 `E = {e^c, e^⊤}`, `Q = {⟨⟨e^c, e^⊤⟩, N⟩}`, `pre(e^c) = a_pre`, `pre(e^⊤) = ⊤`,
 `add(e^c) = P⁺`, `del(e^c) = P⁻`, `Γ = {e^c}`.
+
+*Conflict note:* [MBD] line 188 defines `P⁻ := {p | lᵢ = ¬p for some i **and p ∉ P⁺**}` —
+tolerating contradictory literals by letting `add` silently win. [T] omits the exclusion and
+instead *forbids* contradictory literals as a well-formedness rule. delhi follows [T]: a
+contradiction is a diagnostic, not a silent precedence rule. ([MBD] also carries a vestigial
+`post` map at line 193 that its own tuple definition does not include; not ported.)
 
 With conditional effects, `e^c` splits into one event per realizable outcome, with mutually
 exclusive preconditions `a_pre ∧ (condition combination yielding that outcome)`, each with an
@@ -185,12 +256,66 @@ when the actor is uncertain, splitting changes which actions are executable, so 
 semantics-preserving in general. delhi implements the direct event-splitting construction and
 retains compilation as a documented alternative for domains where the actor knows `φ`.
 
-The subtle question is what observers learn about effect *conditions*. mA-revise §4.3.2
-(eqs. 4.8–4.9) has the machinery for "discernible conditions"; the commented-out
-`intermediateTransition` in `[J] actions/Action.java` is an abandoned attempt at it.
+The subtle question is what observers learn about effect *conditions*. **This is fully specified
+in [KR21] §4.1** — it is a port, not an invention:
 
-*Acceptance test:* a full observer of `a causes p if φ` comes to know `p` iff `φ` held, and comes
-to know `φ`'s truth value only where the effect made it discernible.
+- `φ_uαf := ⋁ {φ | "if φ then α causes f to become l" ∈ Γ and V(f,u) ≠ l}` — the disjunction of
+  conditions of effects that would *alter* `f` at `u`. Effects that would not change `f` contribute
+  nothing.
+- `𝒦^eff_u := ⋀_{f ∈ ℱ} (φ_uαf if u ⊨ φ_uαf, else ¬φ_uαf)` (eq. 8) — an observer who sees `f`
+  change learns that at least one responsible condition held, *without* learning which; an observer
+  who sees `f` not change learns none held.
+- `𝒦^obs_iu` (eq. 9) — what an agent learns about her own and others' observability, split by
+  observer class.
+- `𝒦^α_iu` (eq. 10) — combined per class: full observers get `det ∧ eff ∧ obs`, partial observers
+  `eff ∧ obs`, oblivious agents `obs` only.
+- **Theorem 1** ([KR21]) — all acquired knowledge is true. This is the property test.
+
+The commented-out `intermediateTransition` in `[J] actions/Action.java` is a partial transcription
+of exactly these equations (its comments cite "equation 4.6" … "equation 4.12"), abandoned mid-way
+— note its `m.get(m).add(c)` typo, which is why it never worked.
+
+*Acceptance tests:* (i) [KR21] Theorem 1 as a property — every formula in `𝒦^α_iu` holds at `u`;
+(ii) a full observer of `a causes p if φ` comes to know `p` iff `φ` held, and learns `φ`'s truth
+value only where the effect made it discernible; (iii) when two conditions could each have caused
+the same change, the observer learns the *disjunction* and not either disjunct.
+
+### 3.8 Hypothetical actions — a gap in mB (D7)
+
+[KR21] §7 identifies its "most significant difference" from KR2020 as the treatment of oblivious
+agents: an agent oblivious to an action must consider **every** action she could not have ruled
+out, including `No-op`. Formally `Hᵢ` at [KR21] eq. 23:
+
+```
+Hᵢ = { M ×̄ α | α ∈ 𝒜⁰, ∃u ∈ S. i ∈ O(α,u), ∀"α requires φ" ∈ Γ. u ⊨ φ }
+```
+
+where `𝒜⁰ = 𝒜 ∪ {No-op}`. Eqs. 26 and 29 then interconnect all sub-models in `Hᵢ`, since an
+oblivious agent does not know which sub-model she is in.
+
+**The demonstrating case — Bicycle-3** ([KR21] §7): T can perform `tim_look` *or* `tim_play`
+(which `causes p`); M is oblivious to both. M must not come to know `¬p`. [KR21] Fig. 7 is correct;
+Fig. 8 shows KR2020 getting it wrong, with M knowing `¬p`.
+
+**mB appears to inherit that defect.** Its transition is `⟨M,d⟩ × a`, indexed by the single action
+that occurred, and non-observers reach only the `e^⊤` "nothing happened" event. Under mB+,
+`tim_look` has no ontic effects and no source world satisfies `p`, so no resulting world satisfies
+`p`, and M knows `¬p`. [T] §5.3's Discussion lists two mB limitations (incomplete bisimulation, the
+nested-announcement issue) and does **not** list this one, so it reads as an unacknowledged gap.
+
+**Two qualifications.** First, the above is a derivation from the definitions, not a claim either
+document makes; it is therefore recorded as a *test*, not an assumption. Second, at the planner
+level (v0.2) `PERSPECTIVE` ([T] §6.2) partially routes around it: several g-states collapse into one
+p-node, so M's uncertainty about T's action lives in a p-node referencing multiple g-states. That
+suffices for search but not for a model checker, which is precisely what v0.1 is.
+
+**v0.1 treatment (D7).** Add Bicycle-3 to the figure suite as a `#[should_panic]` test asserting
+`!K[m]!p`, so the gap is pinned and demonstrated rather than assumed, and document it as a known
+limitation. Do **not** modify Def. 2 in v0.1: Def. 2 is the one part of mB with published
+frame-preservation proofs ([T] §9.2.1), extending it to `Hᵢ` would require re-establishing them,
+and it would widen the transition interface from one action to an action *set*.
+
+Options deferred to v0.2, in §10.
 
 ---
 
@@ -422,11 +547,20 @@ statements**, i.e. property tests written in prose. `[J]` has no test suite at a
 | [T] Figs 5.4–5.10 | Coin Lie |
 | [KR24] Figs 1, 3–4 | move-marble (Sally-Anne) |
 | [KR24] Figs 5–7 | Eavesdropping |
+| [KR21] Figs 1–3 | Bicycle (mA-revise reference values) |
+| [KR21] Figs 4–6 | Bicycle-2 — local observability; Fig. 6 is mA\*'s *wrong* answer |
+| **[KR21] Figs 7–8** | **Bicycle-3 — `#[should_panic]`, the §3.8 gap** |
+| [MBD] Figs 4–10 | Coin Lie under the [MBD] transition rule (§3.5.1 differential) |
 
 Each asserts both the entailments the text claims and a pretty-printed model snapshot, so a
-semantics change surfaces as a readable diff. Note that [T] Ch. 3 examples are mA-local; under mB+
-they must be re-derived, and any divergence from the published figure is itself a finding to
-record.
+semantics change surfaces as a readable diff.
+
+Three notes on this table. [T] Ch. 3 examples are mA-local and [KR21]'s are mA-revise; under mB+
+they must be **re-derived**, and any divergence from the published figure is itself a finding to
+record, not a test failure to suppress. [KR21] Fig. 6 and Fig. 8 are deliberately *incorrect*
+outputs of prior formalisms — they are negative tests, asserting mB+ does **not** reproduce them.
+And [MBD] Figs 4–10 depict the same Coin Lie scenario as [T] Figs 5.4–5.10, so running both is the
+§3.5.1 differential test.
 
 **L3 — Propositions as `proptest` properties.**
 
@@ -439,6 +573,18 @@ record.
 - [T] Prop. 5.2.5 — `a causes l` ⇒ result entails `l`.
 - [T] Props. 5.2.6–5.2.7 — observers learn ontic effects, and learn that observers learn them.
 - [T] Prop. 5.2.8 — non-observers' beliefs unchanged on the K-free fragment.
+- [KR21] Theorem 1 — all acquired knowledge is true: `∀α, i, u. ⟨M,u⟩ ⊨ 𝒦^α_iu` (§3.7(b)).
+
+**[KR21-S] as a ready-made frame suite.** The supplementary appendix proves, for mA-revise's
+*separate* `Kᵢ`/`Bᵢ`, that update preserves S5 (Thm. 2), KD45 (Thms. 5, Lemma 6), KB1 (Thm. 3), and
+KB2 (Thm. 4), enumerating each frame property individually — reflexivity, symmetry, transitivity,
+seriality, Euclideanness. Two uses:
+
+1. **Now:** mB derives `Kᵢ` and `Bᵢ` from a single preorder, so KB1 (`Belᵢ ⊆ ~ᵢ`) and KB2
+   (`(u,v) ∈ ~ᵢ ∧ (v,w) ∈ Belᵢ ⇒ (u,w) ∈ Belᵢ`) should hold **by construction**. That makes them
+   theorems to *verify*, not axioms to assert — cheap property tests with the exact statements
+   given by [KR21-S] lines 7–9.
+2. **If mA-revise becomes a backend (§10):** Thms. 2–5 transcribe directly into its property suite.
 
 **L4 — Algebraic and metamorphic properties.**
 
@@ -501,13 +647,35 @@ being a picture.
 | 8 | 996-line one-pass parser visitor | §6.4 staged compiler |
 | 9 | `C[g]` documented in the README but absent from both `Depl.g4` and `formulae/`; `S'` (safe belief) reserved in the grammar with no implementing class. `[J] todo` lists "common knowledge" as future work | §3.2 |
 | 10 | No visualisation | §8 `delhi dot` |
+| 11 | `[J]` treats repeated `precondition{…}` clauses as a **conjunction** while [T] eq. 5.1 defines `a_pre` as a **disjunction** — the implementation and the paper contradict each other | §3.3 D8: one `pre` clause, explicit `&` |
+| 12 | `intermediateTransition` in `Action.java` is an abandoned transcription of [KR21] eqs. 4.6–4.12, containing the typo `m.get(m).add(c)` (should be `m.get(f)`), which is why it never worked | §3.7(b), ported properly from [KR21] §4.1 |
 
 ---
 
 ## 10. Open questions for v0.2
 
+**Hypothetical actions (§3.8)** — the live one, informed by whatever the Bicycle-3 test shows:
+
+1. *Extend mB+*: port `Hᵢ` ([KR21] eq. 23) into product update, unioning in the action models of
+   every action an oblivious agent could not rule out, plus `No-op`. Widens the transition
+   interface from one action to an action set, and requires re-establishing [T] §9.2.1's
+   frame-preservation proofs for the extended Def. 2.
+2. *Add mA-revise as a second backend*: it already solves this, and [KR21-S] supplies the proofs as
+   a test suite. Cost: a second complete semantics using ad-hoc transitions rather than action
+   models — which [T] §5 argues is the weaker foundation.
+3. *Leave it to the planner*: rely on `PERSPECTIVE` collapsing g-states into p-nodes, accepting
+   that the model checker cannot answer Bicycle-3.
+
+**Backend priority.** v0.1's §10 originally reasoned that mB+ subsumes mA-local, making a second
+backend marginal. That remains true for mA-local but is **false for mA-revise**, which supports
+hypothetical actions that mB+ does not. If exactly one second backend is built, mA-revise is now the
+stronger candidate — and it is the one with a published supplementary proof appendix.
+
+**Also open:**
+
 - Environment-agent behavior model registry (replacing named Java classes).
 - Cooperation-agnostic search ([T] Ch. 6) generic over `delhi-core` traits.
 - Whether to build the DEPL importer for the EFP benchmark corpus.
-- Tier-3 bounded-depth merging.
-- Whether mA-local is worth adding as a second backend, given mB+ subsumes its expressivity.
+- Tier-3 bounded-depth merging (§5.4).
+- Whether mB+'s announcement `ψ ∈ L^P_GB` (§3.3) interacts badly with `Hᵢ`, since a modal
+  announcement precondition evaluated across hypothetical sub-models may not be well defined.
