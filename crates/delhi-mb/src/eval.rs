@@ -62,6 +62,8 @@ impl<'a> Evaluator<'a> {
                 .into_iter()
                 .all(|v| self.eval(g, v)),
             Node::Common(g, inner) => {
+                // Cloning the cached closure rows is a deliberate borrow-checker tradeoff:
+                // the `&mut self` recursion into `self.eval` forces it, not an oversight.
                 let rows = match self.closures.get(&g) {
                     Some(r) => r.clone(),
                     None => {
@@ -173,5 +175,43 @@ mod tests {
         let f = st.fls();
         let cb = st.cond_bel(2, f, h);
         assert!(s.entails(&st, cb));
+    }
+
+    /// One agent, three worlds, atom 0 = `p`, true only at world 0.
+    /// Relation: 0 R 1, 0 R 2, 1 R 2, 2 R 1 — worlds 1 and 2 tie at the top,
+    /// world 0 sits strictly below both.
+    ///
+    ///   at world 0:  rel = {0,1,2}  comp = {0,1,2}  bel = {1,2}   -> B differs from []
+    ///   at world 1:  rel = {1,2}    comp = {0,1,2}  bel = {1,2}   -> K differs from [] and B
+    fn three_level() -> Model {
+        let mut m = Model::new(3, 1, 1);
+        m.val[0].set(0);
+        m.relate(0, 0, 1);
+        m.relate(0, 0, 2);
+        m.relate(0, 1, 2);
+        m.relate(0, 2, 1);
+        m
+    }
+
+    #[test]
+    fn knows_safe_and_believes_quantify_over_different_sets() {
+        let m = three_level();
+        assert_eq!(m.validate(), Ok(()));
+        let mut st = Store::default();
+        let p = st.atom(0);
+        let np = st.not(p);
+        let b = st.believes(0, np);
+        let sq = st.safe(0, np);
+        let k = st.knows(0, np);
+
+        // World 0: belief looks only at the maxima {1,2}; safe belief also sees world 0.
+        let at0 = State { model: m.clone(), designated: 0 };
+        assert!(at0.entails(&st, b), "B quantifies over {{1,2}}, where !p holds");
+        assert!(!at0.entails(&st, sq), "[] quantifies over {{0,1,2}}, and p holds at 0");
+
+        // World 1: knowledge sees the whole class {0,1,2}; safe belief only {1,2}.
+        let at1 = State { model: m, designated: 1 };
+        assert!(!at1.entails(&st, k), "K quantifies over {{0,1,2}}, and p holds at 0");
+        assert!(at1.entails(&st, sq), "[] quantifies over {{1,2}}, where !p holds");
     }
 }
