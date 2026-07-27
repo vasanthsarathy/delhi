@@ -79,18 +79,28 @@ impl Model {
     }
 
     /// Records `u Rᵢ v` — *"`v` is at least as plausible as `u`"*.
+    ///
+    /// # Panics
+    /// If `agent`, `u`, or `v` is out of range for this model.
     pub fn relate(&mut self, agent: usize, u: WorldId, v: WorldId) {
+        debug_assert!(
+            agent < self.n_agents && u < self.n_worlds && v < self.n_worlds,
+            "relate index out of range"
+        );
         self.rel[agent][u].set(v);
     }
 
     /// `~ᵢ` as a row per world: `{v | u Rᵢ v or v Rᵢ u}`.
-    #[allow(clippy::needless_range_loop)]
+    ///
+    /// # Panics
+    /// If `agent` is out of range for this model.
     pub fn comparability_rows(&self, agent: usize) -> Vec<Bits> {
+        debug_assert!(agent < self.n_agents, "comparability_rows: agent out of range");
         let mut c = vec![Bits::new(self.n_worlds); self.n_worlds];
-        for u in 0..self.n_worlds {
+        for (u, cu) in c.iter_mut().enumerate() {
             for v in 0..self.n_worlds {
                 if self.rel[agent][u].get(v) || self.rel[agent][v].get(u) {
-                    c[u].set(v);
+                    cu.set(v);
                 }
             }
         }
@@ -98,7 +108,6 @@ impl Model {
     }
 
     /// Checks reflexivity, transitivity, and local connectedness for every agent.
-    #[allow(clippy::needless_range_loop)]
     pub fn validate(&self) -> Result<(), FrameError> {
         for i in 0..self.n_agents {
             for u in 0..self.n_worlds {
