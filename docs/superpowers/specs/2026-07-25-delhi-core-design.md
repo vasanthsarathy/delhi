@@ -202,7 +202,7 @@ it is the reading consistent with action priority (a strict event preference mus
 out by the state order).
 
 *Test obligation:* implement both rules behind a feature flag, assert they agree on every worked
-example in §7, and assert the divergent configuration is reachable by at least one constructed
+example in §8, and assert the divergent configuration is reachable by at least one constructed
 case. This guards against having transcribed the wrong rule.
 
 ### 3.6 The three constructions
@@ -315,7 +315,7 @@ limitation. Do **not** modify Def. 2 in v0.1: Def. 2 is the one part of mB with 
 frame-preservation proofs ([T] §9.2.1), extending it to `Hᵢ` would require re-establishing them,
 and it would widen the transition interface from one action to an action *set*.
 
-Options deferred to v0.2, in §10.
+Options deferred to v0.2, in §11.
 
 ---
 
@@ -527,7 +527,265 @@ the IR without touching the semantics.
 
 ---
 
-## 7. Testing
+## 7. Using delhi: worked examples
+
+This section is normative for the surface syntax and illustrative for the semantics. Every formula
+here is a query delhi must accept and answer.
+
+### 7.1 The five epistemic attitudes, in plain terms
+
+| you write | it means | can it be wrong? |
+|---|---|---|
+| `h` | the coin *is* heads-up | — it's the fact itself |
+| `K[a] h` | **a knows** the coin is heads | **No.** Knowledge is correct by construction. |
+| `□[a] h` | **a safely believes** it: she believes it, and no *true* information could ever dislodge that | No — but it's weaker than knowledge |
+| `B[a] h` | **a believes** it | **Yes.** This is the point of the system. |
+| `B^ψ[a] h` | **if a learned ψ**, she would believe it | Yes — it's a hypothetical |
+| `C[g] h` | it is **common knowledge** in group `g`: everyone knows it, everyone knows everyone knows, forever | No |
+
+The three unconditional attitudes form a chain, `K[a]φ → □[a]φ → B[a]φ`, which follows from the
+model structure: `K` quantifies over the whole comparability class `~ᵢᵘ`, `□` over the worlds `Rᵢ`
+reaches from `u`, and `B` over the most plausible worlds in `~ᵢᵘ` — each a subset of the last.
+Reading it backwards is the useful direction: a belief may be false; a *safe* belief may still be
+false but nothing true will fix it; knowledge cannot be false at all.
+
+**Why belief is not just "weak knowledge."** `B[c] !h & h` says C believes the coin is tails while
+it is in fact heads. No amount of `K` can express that, because `K[c] !h` would entail `!h`. Every
+false-belief task in the literature lives in this gap.
+
+**Why safe belief earns its place.** Consider a robot deciding whether to correct a human:
+
+```
+B[human] safe & !safe          // the human wrongly believes it's safe
+!□[human] safe                 // ...and that belief IS dislodgeable by true information
+```
+
+The second line is what tells the robot intervening will work. If `□[human] safe` held instead,
+the human's error is entrenched and no truthful announcement will shift it — the robot needs a
+different plan. Plain `B` cannot distinguish these two cases.
+
+**Why conditional belief earns its place.** `B^ψ[a] φ` asks what `a` *would* believe on learning
+`ψ`, which is a look at the plausibility ordering *underneath* the top layer. Its practical use is
+**previewing belief revision before acting**:
+
+```
+B^{!heads}[carol] distracted_alice
+```
+
+"If Carol were told the coin is tails, she would conclude Alice was distracted." A planner can ask
+this *before* choosing to announce, rather than announcing and inspecting the wreckage. Note
+`B[a]φ ≡ B^⊤[a]φ`, which §8 records as a property test.
+
+### 7.2 Nesting: the attitudes that actually matter
+
+Nesting is where this system does work nothing simpler can:
+
+```
+B[alice] B[carol] !heads              // Alice thinks Carol thinks it's tails
+B[alice] B[carol] !heads & K[carol] heads   // ...and Alice is WRONG: Carol knows it's heads
+K[bob] K[alice] heads                 // Bob knows that Alice knows
+!B[human] B[robot] heads              // the human does NOT think the robot has figured it out
+```
+
+The last line is lifted from mecaPlanner's own `example.depl`, whose full goal is:
+
+```
+goal { (B[robot] heads & !B[human] B[robot] heads)
+     | (B[robot] !heads & !B[human] B[robot] !heads) }
+```
+
+In English: *"I want to find out how the coin lies without the human realising I've found out."*
+That single formula is the entire justification for higher-order modalities — you cannot state that
+goal at all in a system with only first-order belief.
+
+### 7.3 Query idioms
+
+Common things people want to say, and how they're written:
+
+| intent | formula |
+|---|---|
+| a is uncertain whether φ | `!K[a]φ & !K[a]!φ` — or `?[a]φ` in an `initially` block |
+| a knows whether φ (but you don't care which) | `K[a]φ \| K[a]!φ` |
+| a has a **false belief** that φ | `B[a]φ & !φ` |
+| a believes φ but isn't certain | `B[a]φ & !K[a]φ` |
+| a considers φ possible | `K'[a]φ` — sugar for `!K[a]!φ` |
+| a doesn't rule out φ | `B'[a]φ` — sugar for `!B[a]!φ` |
+| a is **wrong about b's beliefs** (2nd-order false belief) | `B[a]B[b]φ & !B[b]φ` |
+| a's belief in φ is entrenched | `□[a]φ` |
+| telling a that ψ would make her believe φ | `B^ψ[a]φ` |
+| everyone in the room knows, and knows they all know | `C[alice,bob,carol] φ` — `C[*]` for all agents |
+
+### 7.4 A full trace: the Coin Lie scenario
+
+Three agents (A, B, C), two propositions: `h` (coin is heads-up) and `d` (A is distracted). The
+coin *is* heads. The story: A lies that it isn't; B distracts A; C peeks and learns the truth; A
+never sees the peek, so A's picture of C goes stale. From [T] §5.2.5, Figs. 5.4–5.10.
+
+```
+action announce_not_heads {         // A lies
+  actor     alice
+  announces !h                      // NOT required to be true
+  alice observes, bob observes, carol observes
+}
+
+action distract_a {                 // B distracts A
+  actor  bob
+  causes d
+  alice observes, bob observes, carol observes
+}
+
+action peek_c {                     // C looks at the coin
+  actor      carol
+  determines h
+  carol observes                    // sees it: comes to KNOW
+  bob   aware                       // hears it: knows C learned something, not what
+  alice aware if !d                 // only notices if she isn't distracted
+}
+```
+
+Applying them in order, `s0 → s1 → s2 → s3`, the queries that hold at each stage:
+
+| stage | query | plain reading |
+|---|---|---|
+| `s0` | `K[a] h & K[b] h` | A and B know the coin is heads |
+| `s0` | `!K[c] h & !K[c] !h` | C does not know which way it lies |
+| `s0` | `C[*] (K[a] h \| K[a] !h)` | everyone knows that A knows which way — common knowledge |
+| `s1` | `B[c] !h & !K[c] !h` | the lie worked: C now *believes* tails, wrongly, but doesn't *know* it |
+| `s1` | `K[a] h & K[b] h` | the lie changed nothing for A and B — it contradicts what they know, so it is rejected |
+| `s1` | `K[a] B[c] !h` | A knows her lie landed |
+| `s2` | `d` | A is now distracted |
+| `s3` | `K[a] h & K[b] h & K[c] h` | everyone now knows the coin is heads |
+| `s3` | **`B[a] B[c] !h`** | **but A still believes C believes tails** |
+| `s3` | `B[a] B[c] !h & K[c] h` | **second-order false belief**: A is wrong about C |
+
+The mechanism is worth stating plainly, because it generalises. **A's picture of C froze at the
+moment A stopped observing.** `alice aware if !d` made A's observer status depend on `d`; once `d`
+became true, A was oblivious to `peek_c`, so A's most-plausible worlds still contain the pre-peek
+version of C. That is the recipe for second-order false belief:
+
+1. Give `b` a belief (announcement or sensing).
+2. Change `b`'s belief with an action `a` is **oblivious** to.
+3. `a`'s belief about `b` stays stale, and is now wrong.
+
+Note also line `s1`: **A's lie does not shift B's or A's own knowledge.** Announcements are soft
+information — they are rejected outright when they contradict what an agent *knows*. That is the
+whole reason `announces` confers belief rather than knowledge (§7.6).
+
+### 7.5 Observability: `observes`, `aware`, and neither
+
+Every action assigns each agent to exactly one of three classes, per world:
+
+| clause | class | intuition |
+|---|---|---|
+| `i observes a if φ` | **full observer** (where φ holds) | sees *what* happened |
+| `i aware a if φ` | **partial observer** | knows *that* something happened, not what |
+| neither clause fires | **oblivious** | believes nothing happened at all |
+
+`observes` and `aware` must never both hold for the same agent in the same world — §3.3 makes that
+a lowering-time diagnostic. An agent with no clause at all is oblivious everywhere.
+
+The `if` is the important part. **Static observability cannot produce false beliefs about
+observation; dynamic observability can.** `alice aware if !d` means Alice's observer status varies
+by world — so other agents who don't know whether `d` holds don't know whether Alice observed, and
+can therefore be wrong about what Alice believes. This is exactly the "higher-order action
+observability" of [KR24]; a fixed observer list would make Alice's status common knowledge and the
+whole class of tasks would collapse.
+
+What each class actually learns:
+
+| action type | full observer | partial observer | oblivious |
+|---|---|---|---|
+| `causes` (ontic) | the effects, and that they happened | the same — mB does not distinguish full from partial for ontic actions | believes nothing happened |
+| `determines φ` (sensing) | **knows** whether φ | knows *that* full observers learned whether φ — not which | believes nothing happened |
+| `announces ψ` | comes to **believe** ψ, unless she knows `¬ψ` | knows either ψ or `¬ψ` was announced, not which | believes nothing happened |
+
+"Believes nothing happened" is a *belief*, not knowledge: the action-worlds remain epistemically
+accessible, so an oblivious agent knows the action *could* have occurred while believing it did
+not. See [T] Prop. 5.2.8 — and §3.8 for the limitation that she does not consider *other* actions
+that might have occurred instead.
+
+### 7.6 The three action types, and when to use which
+
+**`causes` — ontic. Changes the world.**
+
+```
+action move(?a - Actor, ?f - Location, ?t - Location) {
+  actor  ?a
+  pre    at(?a,?f) & (adjacent(?f,?t) | adjacent(?t,?f))
+  causes at(?a,?t), !at(?a,?f)
+
+  ?o observes if at(?o,?f) | at(?o,?t)    // anyone in either room sees it
+}
+```
+
+The `?o` is scoped to its clause and expands over `Actor` — one `observes` statement per actor,
+each conditioned on that actor's location. Note the single `pre` with an explicit `&` (D8, §3.3).
+
+With conditional effects:
+
+```
+action flip_switch {
+  actor  robot
+  causes light_on if !broken       // works only if the bulb is sound
+  causes sparks   if broken
+
+  ?o observes if in_room(?o)
+}
+```
+
+Here an observer who sees the light come on thereby learns `!broken` — they observed an effect that
+only fires under that condition. When two different conditions could each have caused the *same*
+change, the observer learns only the **disjunction**, not which one fired. That is the "discernible
+conditions" machinery of §3.7(b), specified in [KR21] §4.1.
+
+**`determines` — sensing. Hard information: confers knowledge, cannot be wrong.**
+
+```
+action peek_c {
+  actor      carol
+  determines h
+  carol observes
+}
+```
+
+Use for looking, measuring, reading a sensor. A full observer ends up with `K[carol] h` or
+`K[carol] !h` depending on the actual value. Because it yields knowledge, `determines` takes a
+**propositional** formula only (§3.3).
+
+**`announces` — communication. Soft information: confers belief, may be false.**
+
+```
+action announce_not_heads {
+  actor     alice
+  announces !h                     // a lie; truth is not required
+  alice observes, bob observes, carol observes
+}
+```
+
+Full observers come to *believe* the announcement — unless it contradicts what they already
+**know**, in which case they reject it outright. This asymmetry is not a design quirk; it is
+forced. If announcements conferred knowledge, a lie would make an agent know something false, which
+is impossible by definition. So an announcement reorders plausibility instead, which is exactly
+what a plausibility model is for.
+
+Unlike `determines`, `announces` takes a **modal** formula (§3.3), so agents can talk about mental
+states:
+
+```
+action bob_tells_carol_about_alice {
+  actor     bob
+  announces K[alice] h             // "Alice knows how the coin lies"
+  bob observes, carol observes
+}
+```
+
+**Choosing between them**, in one line each: `causes` changes the world; `determines` is what an
+agent finds out for herself and cannot be wrong about; `announces` is what one agent tells another
+and may be a lie.
+
+---
+
+## 8. Testing
 
 The strongest available lever: **the papers' correctness claims are universally quantified
 statements**, i.e. property tests written in prose. `[J]` has no test suite at all
@@ -584,7 +842,7 @@ seriality, Euclideanness. Two uses:
    (`(u,v) ∈ ~ᵢ ∧ (v,w) ∈ Belᵢ ⇒ (u,w) ∈ Belᵢ`) should hold **by construction**. That makes them
    theorems to *verify*, not axioms to assert — cheap property tests with the exact statements
    given by [KR21-S] lines 7–9.
-2. **If mA-revise becomes a backend (§10):** Thms. 2–5 transcribe directly into its property suite.
+2. **If mA-revise becomes a backend (§11):** Thms. 2–5 transcribe directly into its property suite.
 
 **L4 — Algebraic and metamorphic properties.**
 
@@ -602,7 +860,7 @@ relations and rejecting), bounded-depth random formulas, and well-formed random 
 
 ---
 
-## 8. Interfaces
+## 9. Interfaces
 
 Library API as the primary surface:
 
@@ -633,11 +891,11 @@ being a picture.
 
 ---
 
-## 9. Defects in mecaPlanner this design addresses
+## 10. Defects in mecaPlanner this design addresses
 
 | # | Defect | Addressed by |
 |---|---|---|
-| 1 | No tests whatsoever | §7 |
+| 1 | No tests whatsoever | §8 |
 | 2 | `Depl.g4` action syntax matches none of the ~90 corpus files | §6, new language |
 | 3 | `PlausibilityState.hashCode()` returns `1`; `equals()` returns `false` unconditionally | §4.1 canonical keys |
 | 4 | Event models built without the edge conditions Defs. 3–4 require | §3.6 |
@@ -646,13 +904,13 @@ being a picture.
 | 7 | Environment models as compiled Java classes | deferred to v0.2 with a registry design |
 | 8 | 996-line one-pass parser visitor | §6.4 staged compiler |
 | 9 | `C[g]` documented in the README but absent from both `Depl.g4` and `formulae/`; `S'` (safe belief) reserved in the grammar with no implementing class. `[J] todo` lists "common knowledge" as future work | §3.2 |
-| 10 | No visualisation | §8 `delhi dot` |
+| 10 | No visualisation | §9 `delhi dot` |
 | 11 | `[J]` treats repeated `precondition{…}` clauses as a **conjunction** while [T] eq. 5.1 defines `a_pre` as a **disjunction** — the implementation and the paper contradict each other | §3.3 D8: one `pre` clause, explicit `&` |
 | 12 | `intermediateTransition` in `Action.java` is an abandoned transcription of [KR21] eqs. 4.6–4.12, containing the typo `m.get(m).add(c)` (should be `m.get(f)`), which is why it never worked | §3.7(b), ported properly from [KR21] §4.1 |
 
 ---
 
-## 10. Open questions for v0.2
+## 11. Open questions for v0.2
 
 **Hypothetical actions (§3.8)** — the live one, informed by whatever the Bicycle-3 test shows:
 
@@ -666,7 +924,7 @@ being a picture.
 3. *Leave it to the planner*: rely on `PERSPECTIVE` collapsing g-states into p-nodes, accepting
    that the model checker cannot answer Bicycle-3.
 
-**Backend priority.** v0.1's §10 originally reasoned that mB+ subsumes mA-local, making a second
+**Backend priority.** An earlier draft of this section reasoned that mB+ subsumes mA-local, making a second
 backend marginal. That remains true for mA-local but is **false for mA-revise**, which supports
 hypothetical actions that mB+ does not. If exactly one second backend is built, mA-revise is now the
 stronger candidate — and it is the one with a published supplementary proof appendix.
