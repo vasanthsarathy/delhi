@@ -683,9 +683,29 @@ them equiplausible, destroying a belief [T] retains. **[T] is authoritative** �
 it is the reading consistent with action priority (a strict event preference must not be washed
 out by the state order).
 
-*Test obligation:* implement both rules behind a feature flag, assert they agree on every worked
-example in §9, and assert the divergent configuration is reachable by at least one constructed
-case. This guards against having transcribed the wrong rule.
+*Test obligation:* implement both rules behind a feature flag, and pin the divergent
+configuration with a test.
+
+> **Correction (2026-07-27, from implementation).** An earlier version of this paragraph said
+> to "assert they agree on every worked example in §9, and assert the divergent configuration is
+> reachable by at least one constructed case." **The first half is false, and no constructed case
+> is needed — Coin Lie itself is the divergent case.**
+>
+> At agent C, from `⟨world 1, e^ψ⟩` to `⟨world 0, e^¬ψ⟩`: `Q(e^ψ, e^¬ψ)(C)` is the `PN` label,
+> which for a full observer is `¬⊤ = ⊥`, so `e→f` is **false**; `Q(e^¬ψ, e^ψ)(C)` is `FPN = ⊤`, so
+> `f→e` is **true**. That is exactly the fourth row of the table above. `u ~ᵢ v` and `u Rᵢ v` hold;
+> `v Rᵢ u` does not.
+>
+> Consequence, verified in `crates/delhi-mb/src/update.rs`'s test suite: under [T] no edge is
+> created, C retains a strict preference for the announced world, and `B[c]¬h` **holds** — the lie
+> lands, matching [T] Fig. 5.6. Under [MBD] the first disjunct fires, the edge appears in both
+> directions, the two worlds become equiplausible, and `B[c]¬h` **fails** — the lie does not land
+> at all.
+>
+> This strengthens the case for [T] being authoritative. §4.5 argued that on recency and on
+> consistency with action priority; this is direct evidence, since [MBD]'s rule breaks the very
+> scenario the source uses to demonstrate second-order false belief. The test is
+> `the_two_update_rules_diverge_on_coin_lie`.
 
 ### 4.6 The three constructions
 
@@ -731,6 +751,27 @@ construction.
 *Acceptance test (independent of the hypothesis):* after `a announces φ` with `j` a full observer
 and `i` a partial observer, the resulting state must entail `K[j](B[i]φ | B[i]!φ)` and must **not**
 entail `K[j]B[i]φ`.
+
+> **⚠ Correction (2026-07-27, from implementation). The defect does not manifest as described
+> above, and this acceptance test may encode the wrong target.**
+>
+> The test was written and run (`crates/delhi-mb/tests/known_defects.rs`, ignored and failing by
+> design). It fails — but on its **first** assertion, not the second. Traced and independently
+> confirmed: for a **partial** observer `i`, the `observes` disjunction is empty, so
+> `PN(i) = ¬⊥ = ⊤`. Both edge directions between `e^φ` and `e^¬φ` are therefore `⊤`, the two
+> events are equiplausible, `→ᵢ` spans both, and **`i` ends up undecided** — believing neither `φ`
+> nor `¬φ`. So `B[i]φ ∨ B[i]¬φ` is itself false, and `K[j]` of it fails for that reason rather than
+> because `j` failed to learn it.
+>
+> Two things this is **not**. It is not an implementation bug: `FPN(i) := ⊤` unconditionally is
+> exactly [T] Def. 3. And a full observer *not knowing* `φ` is correct by design — announcements
+> confer belief, not knowledge; `j` strictly prefers `e^φ` because `PN(j) = ⊥` removes the reverse
+> edge, so `j` believes `φ` without knowing it.
+>
+> What is unresolved: whether this section mischaracterises [T] §5.3's limitation, or whether
+> §5.3 needs re-reading against the primary source. **Settle that before attempting the θ/τ fix** —
+> a fix aimed at "over-informing" would be aimed at a symptom that does not occur. The test's doc
+> comment carries the same warning.
 
 **(b) Conditional effects.** [T] §5.3 sanctions compiling `a causes p if φ` into two actions with
 `φ` / `¬φ` pushed into preconditions. **This is sound only when the actor knows whether `φ` holds**;
