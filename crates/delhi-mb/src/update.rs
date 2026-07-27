@@ -58,6 +58,15 @@ impl State {
         let n_new = pairs.len();
         let mut out = Model::new(n_new, m.n_agents, m.n_atoms);
 
+        // `Model::new` seeds the identity relation. Clear it so the transition rule below
+        // is the ONLY thing that sets any bit — otherwise the reflexivity assertion at the
+        // end re-confirms this seeding rather than checking the rule, and cannot fail.
+        for i in 0..m.n_agents {
+            for k in 0..n_new {
+                out.rel[i][k].unset(k);
+            }
+        }
+
         // V'(⟨u,e⟩) = (V(u) ∪ add(e)) \ del(e)
         for (k, &(u, e)) in pairs.iter().enumerate() {
             let mut v = m.val[u].clone();
@@ -71,10 +80,10 @@ impl State {
         }
 
         // Q(e,f)(i) evaluated at BOTH u and v (§4.5).
-        let arrow = |ev: &mut Evaluator, i: usize, e: usize, f: usize, u: usize, v: usize| {
+        let arrow = |evaluator: &mut Evaluator, i: usize, e: usize, f: usize, u: usize, v: usize| {
             match am.q[i][e][f] {
                 None => false,
-                Some(cond) => ev.eval(cond, u) && ev.eval(cond, v),
+                Some(cond) => evaluator.eval(cond, u) && evaluator.eval(cond, v),
             }
         };
 
