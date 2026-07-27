@@ -55,9 +55,18 @@ impl Diagnostics {
     }
     /// Renders every diagnostic against `src` as `line:col: message`, echoing the
     /// offending line with a caret run beneath the span.
+    ///
+    /// Precondition: every diagnostic's span must lie within `src` (`end <=
+    /// src.len()`) with `start` and `end` on UTF-8 char boundaries.
     pub fn render(&self, src: &str) -> String {
         let mut out = String::new();
         for d in &self.0 {
+            debug_assert!(
+                d.span.end <= src.len()
+                    && src.is_char_boundary(d.span.start)
+                    && src.is_char_boundary(d.span.end),
+                "diagnostic span must lie within `src` and on char boundaries"
+            );
             let (line_no, line_start) = line_of(src, d.span.start);
             let line_end = src[line_start..].find('\n').map_or(src.len(), |i| line_start + i);
             let col = src[line_start..d.span.start].chars().count() + 1;
@@ -117,5 +126,21 @@ mod tests {
     fn empty_diagnostics_render_to_nothing() {
         assert!(Diagnostics::default().is_empty());
         assert_eq!(Diagnostics::default().render("x"), "");
+    }
+
+    #[test]
+    fn render_counts_columns_and_width_in_chars_not_bytes() {
+        // "¿" is 2 bytes in UTF-8. A byte-based column or caret width would be
+        // wrong here even though the span itself lands on valid char
+        // boundaries. Task 2's lexer produces exactly this kind of span for
+        // multi-byte tokens like `¿` and `□`.
+        let src = "line1\n¿¿bad\n";
+        let mut d = Diagnostics::default();
+        // line 2 starts at byte 6; "¿¿" takes 4 bytes, so "bad" spans 10..13.
+        d.push(Span::new(10, 13), "oops");
+        let out = d.render(src);
+        assert!(out.contains("2:3"), "expected line 2 col 3 (3rd character), got:\n{out}");
+        assert!(out.contains("¿¿bad"), "the offending line should be echoed verbatim");
+        assert!(out.contains("^^^"), "caret run should be 3 wide (chars in `bad`), got:\n{out}");
     }
 }
