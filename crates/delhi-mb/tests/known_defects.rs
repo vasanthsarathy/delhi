@@ -4,10 +4,25 @@
 use delhi_mb::{build, ActionDef, Kind, Model, State};
 use delhi_syntax::Store;
 
-/// §4.7(a) — [T] §5.3's announcement defect. A full observer `j` should end up knowing
-/// that a partial observer `i` believes *whether* φ, not *that* φ.
+/// §4.7(a) — a documented limitation of the announcement construction.
+///
+/// The design document describes the defect as "`j` comes to know that `i` believes
+/// *that* φ rather than merely *whether* φ", and these assertions encode that reading.
+///
+/// OBSERVED BEHAVIOUR (2026-07-27) DIFFERS FROM THAT DESCRIPTION. The construction is
+/// faithful to [T] Def. 3, where `FPN(i) := ⊤` unconditionally. For a partial observer
+/// `i` the `observes` disjunction is empty, so `PN(i) = ¬⊥ = ⊤`; both edge directions
+/// between `e^φ` and `e^¬φ` are therefore ⊤, the two events are equiplausible, and `i`
+/// ends up UNDECIDED — believing neither φ nor ¬φ. Consequently this test fails on its
+/// FIRST assertion (`K[j](B[i]φ ∨ B[i]¬φ)`), because the inner disjunction is itself
+/// false, not because `j` failed to learn it.
+///
+/// So the acceptance criterion below may encode the wrong target. Before attempting the
+/// θ/τ fix, re-read [T] §5.3 against this observation and settle what the correct
+/// post-announcement state for a partial observer actually is.
 #[test]
-#[ignore = "known defect: [T] §5.3. Un-ignore when the θ/τ split lands (§4.7(a))."]
+#[ignore = "known defect §4.7(a); NOTE the observed failure differs from the documented \
+            description — see the doc comment before attempting a fix"]
 fn announcement_does_not_overinform_full_observers() {
     let mut s = Store::default();
     let t = s.tru();
