@@ -95,3 +95,185 @@ impl Expr {
         }
     }
 }
+
+/// `Sub - Super` in the `types` section.
+#[derive(Clone, Debug)]
+pub struct TypeDecl {
+    /// The subtype.
+    pub name: String,
+    /// Its immediate supertype.
+    pub parent: String,
+    /// Source location.
+    pub span: Span,
+}
+
+/// `name - Type` in the `objects` section.
+#[derive(Clone, Debug)]
+pub struct ObjDecl {
+    /// The object.
+    pub name: String,
+    /// Its type.
+    pub ty: String,
+    /// Source location.
+    pub span: Span,
+}
+
+/// `pred(Type, Type)` in the `props` section.
+#[derive(Clone, Debug)]
+pub struct PropDecl {
+    /// Predicate name.
+    pub name: String,
+    /// Parameter types, possibly empty.
+    pub params: Vec<String>,
+    /// Source location.
+    pub span: Span,
+}
+
+/// A `constants` entry: a possibly-negated pattern over objects or types.
+#[derive(Clone, Debug)]
+pub struct ConstDecl {
+    /// Whether the entry is negated.
+    pub negated: bool,
+    /// The pattern; arguments may name a type, which expands over its objects.
+    pub term: Term,
+}
+
+/// One clause inside an `action` body.
+#[derive(Clone, Debug)]
+pub enum Clause {
+    /// `actor <arg>`
+    Actor(Arg, Span),
+    /// `pre <expr>`
+    Pre(Expr),
+    /// `causes l0, l1 [if cond]`
+    Causes {
+        /// Literals: `(term, positive?)`.
+        lits: Vec<(Term, bool)>,
+        /// The `if` guard, if written.
+        cond: Option<Expr>,
+        /// Source location.
+        span: Span,
+    },
+    /// `determines <expr>`
+    Determines(Expr),
+    /// `announces <expr>`
+    Announces(Expr),
+    /// `<arg> observes [if cond]`
+    Observes {
+        /// The observing agent, possibly a clause-scoped variable.
+        who: Arg,
+        /// The `if` guard, if written.
+        cond: Option<Expr>,
+        /// Source location.
+        span: Span,
+    },
+    /// `<arg> aware [if cond]`
+    Aware {
+        /// The partially-observing agent.
+        who: Arg,
+        /// The `if` guard, if written.
+        cond: Option<Expr>,
+        /// Source location.
+        span: Span,
+    },
+}
+
+/// `?v - Type` in an action's parameter list.
+#[derive(Clone, Debug)]
+pub struct ParamDecl {
+    /// Variable name, without the `?`.
+    pub name: String,
+    /// The type it ranges over.
+    pub ty: String,
+    /// Source location.
+    pub span: Span,
+}
+
+/// An `action` declaration.
+#[derive(Clone, Debug)]
+pub struct ActionDecl {
+    /// Action name.
+    pub name: String,
+    /// Parameters, possibly empty.
+    pub params: Vec<ParamDecl>,
+    /// Body clauses in source order.
+    pub clauses: Vec<Clause>,
+    /// Source location of the name.
+    pub span: Span,
+}
+
+/// A world in an explicit `state` block.
+#[derive(Clone, Debug)]
+pub struct WorldDecl {
+    /// World name.
+    pub name: String,
+    /// Whether it is the designated world (`*` prefix).
+    pub designated: bool,
+    /// Atoms true here; everything else is false.
+    pub facts: Vec<Term>,
+    /// Source location.
+    pub span: Span,
+}
+
+/// How two worlds compare for one agent, in an explicit `state` block.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Cmp {
+    /// `u ~ v` — both directions.
+    Equi,
+    /// `u < v` — `v` strictly more plausible; the converse must not hold.
+    Lt,
+    /// `u <= v` — `v` at least as plausible; says nothing about the converse.
+    Le,
+}
+
+/// `agent: u < v` in an explicit `state` block.
+#[derive(Clone, Debug)]
+pub struct EdgeDecl {
+    /// Whose relation.
+    pub agent: String,
+    /// Left world.
+    pub from: String,
+    /// Comparison.
+    pub cmp: Cmp,
+    /// Right world.
+    pub to: String,
+    /// Source location.
+    pub span: Span,
+}
+
+/// The initial state, in whichever of the two forms was written (§7.3).
+#[derive(Clone, Debug)]
+pub enum Init {
+    /// `initially { ... }` — every entry is a formula, some of which drive construction.
+    Declarative(Vec<Expr>, Span),
+    /// `state { ... }` — worlds and edges given explicitly.
+    Explicit {
+        /// The worlds.
+        worlds: Vec<WorldDecl>,
+        /// The plausibility edges.
+        edges: Vec<EdgeDecl>,
+        /// Source location.
+        span: Span,
+    },
+}
+
+/// A whole parsed file, before any checking.
+#[derive(Clone, Debug, Default)]
+pub struct Ast {
+    /// `types`
+    pub types: Vec<TypeDecl>,
+    /// `objects`
+    pub objects: Vec<ObjDecl>,
+    /// `agents`
+    pub agents: Vec<(String, Span)>,
+    /// `props`
+    pub props: Vec<PropDecl>,
+    /// `constants`
+    pub constants: Vec<ConstDecl>,
+    /// `initially` or `state`
+    pub init: Option<Init>,
+    /// `goal`, if written.
+    pub goal: Option<Expr>,
+    /// `actions`
+    pub actions: Vec<ActionDecl>,
+}
