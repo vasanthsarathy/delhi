@@ -3,7 +3,9 @@
 #![deny(missing_docs)]
 
 pub mod bits;
+pub mod derived;
 pub mod model;
 
 pub use bits::Bits;
+pub use derived::{common_closure, maxima, Derived};
 pub use model::{FrameError, Model, State, WorldId};
