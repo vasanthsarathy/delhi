@@ -20,3 +20,26 @@ pub use eval::Evaluator;
 pub use model::{FrameError, Model, State, WorldId};
 pub use theory::{ActionDef, Effect, Kind, TheoryError};
 pub use update::UpdateRule;
+
+impl delhi_core::EpistemicState for State {
+    type Action = crate::ActionModel;
+    type Store = delhi_syntax::Store;
+    type Formula = delhi_syntax::FormulaId;
+
+    fn entails(&self, store: &Self::Store, f: Self::Formula) -> bool {
+        State::entails(self, store, f)
+    }
+    fn apply(&self, store: &Self::Store, action: &Self::Action) -> Option<Self> {
+        State::apply(self, store, action)
+    }
+    fn contract_dynamic(&self) -> Self {
+        let (m, map) = self.model.contract_dynamic();
+        State { model: m, designated: map[self.designated] as usize }
+    }
+    fn equivalent(&self, other: &Self) -> bool {
+        State::equivalent(self, other)
+    }
+    fn key(&self) -> Vec<u8> {
+        State::key(self)
+    }
+}
