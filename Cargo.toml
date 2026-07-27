@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/delhi-syntax", "crates/delhi-core", "crates/delhi-mb"]
+members = ["crates/delhi-syntax", "crates/delhi-core", "crates/delhi-mb", "crates/delhi-lang"]
 
 [workspace.package]
 edition = "2021"

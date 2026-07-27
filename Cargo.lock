@@ -40,6 +40,14 @@ name = "delhi-core"
 version = "0.1.0"
 
 [[package]]
+name = "delhi-lang"
+version = "0.1.0"
+dependencies = [
+ "delhi-mb",
+ "delhi-syntax",
+]
+
+[[package]]
 name = "delhi-mb"
 version = "0.1.0"
 dependencies = [
