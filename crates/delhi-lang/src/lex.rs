@@ -37,7 +37,7 @@ pub enum Tok {
     Amp,
     /// `|` or `||`
     Bar,
-    /// `!` or `~` used prefix — see `Tilde` for the infix form
+    /// `!` — prefix negation.
     Bang,
     /// `->`
     Arrow,
