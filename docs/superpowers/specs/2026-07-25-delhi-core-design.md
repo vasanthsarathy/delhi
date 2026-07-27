@@ -68,10 +68,10 @@ sections are errors; they have already caused one round of them.
 
 ---
 
-## 3. Background: Kripke frames and the named systems
+## 3. Background: Kripke frames, modal systems, and bisimulation
 
-*Orientation only — nothing here is a delhi design decision. Skip if `S5`, `KD45`, and "Euclidean"
-are already familiar. §4 assumes this vocabulary throughout.*
+*Orientation only — nothing here is a delhi design decision. Skip if `S5`, `KD45`, "Euclidean", and
+"bisimulation" are already familiar. §4 assumes this vocabulary throughout, and §6 assumes §3.7.*
 
 ### 3.1 What a Kripke model is
 
@@ -315,6 +315,177 @@ new semantics **preserves** KD45 across action occurrences "will be a topic of o
 investigation." mB's analogous obligation — preservation of local well-preorderedness — *is*
 proved, in [T] §9.2.1. That is a point in mB's favour and a reason §9 treats those proofs as the
 specification for the frame property tests.
+
+### 3.7 Bisimulation: when are two models the same?
+
+#### 3.7.1 The problem
+
+Two Kripke models can be drawn completely differently — different world counts, different names —
+and yet **no formula in the language can tell them apart**. You need a test for that, and you need
+it for two reasons:
+
+- **Size.** Product update (§4.5) builds `W' ⊆ W × E`, so every action multiplies the world count.
+  Ten actions with a 3-event model takes 2 worlds to 118 098. Without collapsing redundant worlds
+  after each step, nothing runs.
+- **Termination.** A planner must recognise "I have been in this state before." If it cannot, it
+  re-explores forever. [T] §6.4 names this the algorithm's main cost.
+
+The obvious test — *"do they satisfy the same formulas?"* — is useless directly: there are infinitely
+many formulas. Bisimulation is the **structural** test that stands in for it.
+
+#### 3.7.2 The definition
+
+A **bisimulation** is a relation `Z` between the worlds of two models such that whenever `u Z u'`:
+
+1. **atoms** — `u` and `u'` satisfy exactly the same propositions;
+2. **forth** — for every `i`, if `u Rᵢ v`, there is some `v'` with `u' Rᵢ v'` and `v Z v'`;
+3. **back** — for every `i`, if `u' Rᵢ v'`, there is some `v` with `u Rᵢ v` and `v Z v'`.
+
+Two *states* are **bisimilar** when some bisimulation relates their designated worlds.
+
+```
+        u  ────── Z ──────  u'
+        │                   ┊
+     Rᵢ │                   ┊ Rᵢ        FORTH: given the solid edge,
+        ▼                   ▼           some dotted edge must exist,
+        v  ────── Z ──────  v'          landing Z-related.
+
+     BACK is the same picture mirrored: start from u' ──► v'.
+```
+
+The useful mental model is a **two-player game**. *Spoiler* is trying to prove the models differ;
+*Duplicator* is trying to prove they don't. Spoiler picks either model and walks along an edge;
+Duplicator must walk a matching edge in the other. If Duplicator can keep matching forever, the
+models are bisimilar. If Spoiler can force a position where the two current worlds disagree on some
+atom, they are not.
+
+#### 3.7.3 Two worked examples
+
+**Bisimilar, despite different shapes:**
+
+```
+   Model A                    Model B
+
+   ┌───────┐                  ┌───────┐
+   │  u  p │                  │  x  p │
+   └───┬───┘                  └───┬───┘
+       │                    ┌─────┴─────┐
+       ▼                    ▼           ▼
+   ┌───────┐            ┌───────┐   ┌───────┐
+   │  v ¬p │            │  y ¬p │   │  z ¬p │
+   └───────┘            └───────┘   └───────┘
+
+   Z = { (u,x), (v,y), (v,z) }
+```
+
+B has an extra world, but `y` and `z` are indistinguishable from `v`, so duplicating a successor
+changes nothing any formula can see. Check it: at `u`, `□φ` asks about `v`; at `x` it asks about `y`
+*and* `z` — but both are `Z`-matched to `v` and agree on atoms, so the answer is the same. Spoiler
+has no winning move. **Bisimulation does not care how many copies of a world you have.**
+
+**Not bisimilar:**
+
+```
+   Model A                    Model C
+
+   ┌───────┐                  ┌───────┐
+   │  u  p │                  │  x  p │
+   └───┬───┘                  └───┬───┘
+       │                    ┌─────┴─────┐
+       ▼                    ▼           ▼
+   ┌───────┐            ┌───────┐   ┌───────┐
+   │  v ¬p │            │  y ¬p │   │  z  p │   ← p, not ¬p
+   └───────┘            └───────┘   └───────┘
+```
+
+Spoiler moves `x ──► z`. Duplicator's only reply is `u ──► v`, and `p` holds at `z` but fails at
+`v`. Spoiler wins. And sure enough a formula witnesses it: `◇p` (i.e. `!□!p`) is **true** at `x`,
+**false** at `u`.
+
+*(These are generic frames drawn to isolate the idea — the sink worlds have no outgoing edges, which
+a belief relation would forbid by seriality. Adding self-loops changes nothing in either argument.)*
+
+#### 3.7.4 Soundness and completeness — the two directions
+
+This is the distinction §6 turns on, so it is worth naming carefully.
+
+| direction | statement | difficulty |
+|---|---|---|
+| **soundness** | bisimilar ⇒ modally equivalent | the easy direction; holds essentially always |
+| **completeness** | modally equivalent ⇒ bisimilar | the hard direction — **this is what fails in mB** |
+
+Soundness is what makes bisimulation *safe*: collapse two bisimilar worlds and no formula notices.
+Completeness is what makes it *effective*: without it, you have states that are genuinely
+interchangeable but that your algorithm refuses to merge, so you keep redundant copies and do
+redundant work. **Losing completeness costs performance, not correctness** — which is why §6's
+conservatism is tolerable while it is being sorted out.
+
+**Hennessy–Milner.** For *image-finite* models (every world has finitely many successors) and the
+*basic* modal language — plain boxes over fixed relations — both directions hold, and bisimilarity
+*is* modal equivalence. This theorem is exactly what §6.3 tries to invoke: if `K`, `B`, `□`, `C` are
+all boxes over fixed (possibly derived) relations, the fragment should behave like a basic modal
+language and completeness should follow.
+
+#### 3.7.5 Why plausibility models break it
+
+Two features of mB sit outside the Hennessy–Milner setting:
+
+**`Bᵢ` is defined by *maximality*, which is a global property.** `→ᵢᵘ` is "the worlds that
+*everything* in the comparability class points to." Bisimulation's conditions are **local** — one
+edge at a time. Matching every edge individually does not self-evidently preserve a property
+quantified over an entire class. Whether it does anyway is precisely what §6.1.2 flags as unsettled.
+
+**`Bᵢ^ψ` maximises over a set that depends on the formula.** There is no fixed relation for a
+bisimulation to be *about*, so no fixed-relation bisimulation can be complete for it (§6.1.1). This
+one is not a gap in the proof — it is a genuine obstruction.
+
+#### 3.7.6 Contraction: the algorithm delhi actually runs
+
+**Bisimulation contraction** (or quotienting) takes one model and returns the smallest model
+bisimilar to it. Take the coarsest bisimulation *of the model with itself* — that is an equivalence
+relation on worlds — and collapse each class to a single world.
+
+The standard algorithm is **partition refinement** (Kanellakis–Smolka; Paige–Tarjan for the fast
+version):
+
+```
+  1. Start: group worlds by valuation.        [ u v w ] [ x y ]
+
+  2. Repeat: if some block has worlds that
+     can reach block C and worlds that
+     cannot, split it.                        [ u v ] [ w ] [ x y ]
+
+  3. Stop when no block splits.               ← 3 worlds instead of 5
+```
+
+`[J] PlausibilityState.refineSystem` and `splitBlocks` implement exactly this, refining against both
+`lessToMorePlausible` and `moreToLessPlausible` — i.e. against `Rᵢ` **and** `Rᵢ⁻¹`, which is what
+makes it sound for `K` as well as `□`.
+
+Note what contraction gives you: **the smallest model bisimilar to yours.** If bisimulation is
+incomplete for your language, that is still larger than the smallest *equivalent* model. The
+difference is the gap §6 exists to measure.
+
+#### 3.7.7 Why contraction is not enough, and canonical keys
+
+Contraction minimises **one** model. The question a planner asks is different: *"is this state one
+I already have?"* Answering it by contracting both and comparing is a graph-isomorphism test, run
+once per pair — and `[J]` does it as a linear scan because `hashCode()` returns a constant (§5.1).
+
+**Canonical labelling** goes one step further: assign each contracted model a canonical byte string,
+so that bisimilar models get identical strings. Then equality is a byte comparison and states can go
+in a hash map. That is the difference between a bisimulation check per candidate and one hash
+lookup.
+
+| operation | what it is | used for | §  |
+|---|---|---|---|
+| `bisimilar(s, s')` | back-and-forth over `Rᵢ`, `Rᵢ⁻¹` | inside the dynamics — sound, preserved by update | §6.3 |
+| `contract(s)` | quotient by the coarsest bisimulation | after every update, to stop worlds multiplying | §5.1 |
+| `key(s)` | canonical byte string of `contract(s)` | hashing and dedup | §5.1 |
+| `equivalent_static(s, s')` | ⚠ conjectured complete for `K/B/□/C` | the user-facing "are these the same?" | §6.3 |
+
+The first three are sound-but-possibly-incomplete and that is fine. The fourth is the one making a
+completeness claim, and §6.1.2 explains why that claim is currently in doubt.
 
 ---
 
@@ -684,6 +855,10 @@ incompleteness of §6 below. That conservatism is sound and is what [T] §6.1 al
 > **Status: this section states conjectures, not results.** Everything below marked ⚠ must be
 > proved or refuted before any code depends on it. An earlier draft asserted these as fact; a
 > review found the causal story incoherent (§6.1.2). Treat §6 as a work item, not a specification.
+>
+> **§3.7 is a prerequisite** — it defines bisimulation, the soundness/completeness split, the
+> Hennessy–Milner theorem this section tries to invoke, and why maximality-based `Bᵢ` sits outside
+> it. This section is unreadable without it.
 
 [T] p. 68: "the algorithm is not complete in the multi-agent case. Thus, when using mB we may
 compute that two states are not bisimilar even when they are semantically equivalent." Note [T]
