@@ -145,6 +145,10 @@ impl Model {
 }
 
 fn joint(a: &State, b: &State) -> (Model, usize, usize) {
+    debug_assert_eq!(
+        a.model.n_agents, b.model.n_agents,
+        "joint: states must share an agent count"
+    );
     let n = a.model.n_worlds + b.model.n_worlds;
     let agents = a.model.n_agents.max(b.model.n_agents);
     let atoms = a.model.n_atoms.max(b.model.n_atoms);
@@ -182,12 +186,18 @@ fn joint(a: &State, b: &State) -> (Model, usize, usize) {
 
 impl State {
     /// Whether the two designated worlds fall in one `~R` block of the disjoint union.
+    ///
+    /// # Panics
+    /// If `self` and `other` do not have the same `n_agents`.
     pub fn bisimilar_dynamic(&self, other: &State) -> bool {
         let (m, x, y) = joint(self, other);
         let b = blocks_dynamic(&m);
         b[x] == b[y]
     }
     /// Whether the two states satisfy exactly the same `K/B/□/C` formulas (§6.3).
+    ///
+    /// # Panics
+    /// If `self` and `other` do not have the same `n_agents`.
     pub fn equivalent(&self, other: &State) -> bool {
         let (m, x, y) = joint(self, other);
         let b = blocks_full(&m);

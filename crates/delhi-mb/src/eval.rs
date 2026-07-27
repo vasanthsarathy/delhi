@@ -104,7 +104,6 @@ impl State {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::{Model, State};
     use delhi_syntax::Store;
 
