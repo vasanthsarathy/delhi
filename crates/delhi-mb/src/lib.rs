@@ -4,6 +4,7 @@
 
 pub mod bisim;
 pub mod bits;
+pub mod canon;
 pub mod derived;
 pub mod eval;
 pub mod model;
