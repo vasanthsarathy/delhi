@@ -21,7 +21,7 @@ surface syntax, and a test suite derived from the papers' own correctness claims
 
 - **[T]** Buckingham, D. *Dissertation* (`refs/Buckingham - In partial fulfillment...pdf`).
   Ch. 3 mA-local, Ch. 4 mA-revise, **Ch. 5 mB** (the semantics delhi implements),
-  Ch. 6 cooperation-agnostic search, [T] §9.2–9.3 proofs.
+  Ch. 6 cooperation-agnostic search, §9.2–9.3 proofs (all section numbers in this bullet are [T]'s).
 - **[KR24]** Buckingham, Scheutz, Son, Fabiano. *Action Language mA\* with Higher-Order Action
   Observability*, KR 2024 (`refs/kr2024-0020-buckingham-et-al.pdf`). = [T] Ch. 3, mA-local.
 - **[KR21]** Buckingham, **Sarathy**, Scheutz, Son. *A Multi-Agent Epistemic and Doxastic Action
@@ -212,12 +212,23 @@ agent** — an S5 `Kᵢ` and a KD45 `Bᵢ` — plus bridge axioms tying them tog
 - **KB2**: `(u,v) ∈ Kᵢ, (v,w) ∈ Bᵢ ⇒ (u,w) ∈ Bᵢ`, i.e. `Bᵢφ → KᵢBᵢφ` — you know what you believe.
 
 ```
-   ═══►  knowledge (S5)        ┌──────┐ ═════► ┌──────┐
-   ───►  belief (KD45)         │  u   │        │  v   │
-                               │  p   │ ─────► │  ¬p  │
-                               └──────┘        └──────┘
-                               knows nothing, believes ¬p
+   legend:  ═══►  knowledge Kᵢ (S5)
+            ───►  belief Bᵢ (KD45)
+
+            ┌──────┐ ═══════► ┌──────┐
+            │  u   │          │  v   │ ⟲ ═ ─
+            │  p   │ ───────► │  ¬p  │
+            └──────┘          └──────┘
+              ⟲ ═                ◄══════ (K is symmetric)
+
+   Kᵢ = {(u,u),(u,v),(v,u),(v,v)}    S5   ⇒ K nothing: p fails at v
+   Bᵢ = {(u,v),(v,v)}               KD45 ⇒ B ¬p, though p holds at u
+   KB1: Bᵢ ⊆ Kᵢ ✓        KB2: (u,v)∈Kᵢ, (v,v)∈Bᵢ ⇒ (u,v)∈Bᵢ ✓
 ```
+
+Unlike the plausibility figures later, this one shows **every** edge, including the reflexive and
+serial ones the source papers omit — because with two relations the omitted edges are exactly where
+KB1 and KB2 get violated by accident.
 
 The cost is that **nothing keeps the two relations coherent as actions occur**. After an
 announcement, `Bᵢ` can lose seriality, so [KR21] needs a three-stage repair ([KR21] eqs. 18–20,
@@ -266,10 +277,17 @@ relation to get wrong. §9 records both as property tests rather than axioms.
 chain of `Rᵢ` edges, they must be directly comparable.
 
 ```
-   FORBIDDEN:      ┌───┐        ┌───┐        u and v are linked through w,
-                   │ u │───►┌───┐◄───│ v │   so they must be comparable —
-                   └───┘    │ w │    └───┘   but neither u──►v nor v──►u exists
-                            └───┘
+   FORBIDDEN:
+
+      ┌───┐                    ┌───┐
+      │ u │──────►┌───┐◄───────│ v │
+      └───┘       │ w │        └───┘
+                  └───┘
+
+      u and v are linked through w, so they must be comparable —
+      but neither u──►v nor v──►u exists. The frame is illegal.
+
+   LEGAL FIXES:   add u──►v,  or  add v──►u,  or  add both (a tie)
 ```
 
 This is what makes `~ᵢ` transitive (hence an equivalence relation, hence `K` is S5) and what
@@ -324,7 +342,23 @@ Derived:
 
 - `u ~ᵢ v` iff `u Rᵢ v` or `v Rᵢ u` — an equivalence relation. `~ᵢᵘ := {v | u ~ᵢ v}`.
 - `→ᵢ C := {u ∈ C | u' Rᵢ u for all u' ∈ C}` — the most-plausible elements of `C`.
-  `→ᵢᵘ := →ᵢ ~ᵢᵘ`. Non-empty whenever `C` is.
+  `→ᵢᵘ := →ᵢ ~ᵢᵘ`.
+
+**Non-emptiness — a precondition [T] omits.** [T] §5.1.1 asserts "if `C ≠ ∅` then `|→ᵢ C| > 0`"
+without qualification. **That is false in general.** If `C` contains two worlds from *different*
+comparability classes, neither is `Rᵢ`-related to the other, so neither can be in `→ᵢ C`, and the
+set is empty. The correct statement:
+
+> `→ᵢ C` is non-empty whenever `C` is a non-empty **finite** subset of a **single comparability
+> class** — because local connectedness makes `Rᵢ` restricted to that class a total preorder, and a
+> finite total preorder has maxima.
+
+Both uses in delhi satisfy this: `→ᵢ ~ᵢᵘ` is a whole class, and `→ᵢ(~ᵢᵘ ∩ ⟦ψ⟧)` for `Bᵢ^ψ` is a
+subset of one class (§4.2 handles the `~ᵢᵘ ∩ ⟦ψ⟧ = ∅` case explicitly). **`→ᵢ` must therefore be
+implemented with a documented precondition, not an unconditional non-empty assertion.** `[J]
+PlausibilityState.getMinimum` carries a bare `assert(!min.isEmpty())` that would fire on
+multi-class input; delhi's equivalent takes a class-identifier argument or debug-asserts
+single-class membership.
 
 ### 4.2 The query language `L_GB` — extends [T] Def. 1
 
@@ -346,17 +380,36 @@ Derived:
 
 ### 4.3 Action theories — extends [T] §5.2
 
-An action theory `T` is a set of statements. **Formula typing is load-bearing** and was omitted
-from [MBD] (which restricts everything to `L^P`); [T] §5.2 and [KR21] §3 agree on the following:
+An action theory `T` is a set of statements. **The numbering below is delhi's own** — [T] §5.2 and
+[KR21] §3 order the same six forms differently ([T]: executable, observes, aware, causes,
+determines, announces; [KR21]: observes, aware, requires, causes, determines, announces). Wherever
+this spec says "form *n*" it means delhi's numbering; source citations are given separately.
+
+**Formula typing is load-bearing** and was omitted from [MBD] (which restricts everything to
+`L^P`); [T] §5.2 and [KR21] §3 agree on it:
 
 | # | form | typing |
 |---|---|---|
 | 1 | `a requires φ` | `φ ∈ L^P` |
 | 2 | `a causes l₀, …, lₙ` **`if φ`** *(the `if` is new in mB+)* | `lⱼ` propositional literals, `φ ∈ L^P` |
+
 | 3 | `a determines φ` | `φ ∈ L^P` |
 | 4 | `a announces ψ` | **`ψ ∈ L^P_GB` — modal, and need not be true** |
 | 5 | `i observes a if φ` | `φ ∈ L^P` |
 | 6 | `i aware_of a if φ` | `φ ∈ L^P` |
+
+**Form 2 is a synthesis, not a transcription.** [T] form 4 is a *list* of literals with **no**
+condition; [KR21] form 4 is a *single* fluent **with** a condition (`if φ then α causes f to become
+l`). delhi takes the list *and* the condition. [KR21]'s `φ_uαf` machinery (§4.7(b)) is stated
+per-fluent and carries over unchanged: for fluent `f`, collect every statement whose literal list
+mentions `f` and disjoin their conditions.
+
+**A capability both papers lack but `[J]` has.** `[J] Depl.g4` admits `causes f <- φ` and
+`[J] Assignment` stores `⟨Fluent, Formula⟩` — *formula-valued postconditions*, assigning `f` the
+truth value of an arbitrary `φ` (Andersen–Bolander–Jensen style). This strictly subsumes conditional
+effects: `causes p if φ` is `p <- (p | φ)`. delhi v0.1 implements the conditional-effect form
+because that is what [KR21] §4.1's observer machinery is specified for; whether to generalise to
+assignments — and what observers should then learn — is recorded in §12.
 
 Form 4 taking a modal `ψ` has real consequences: announcement event preconditions
 (`a_pre ∧ ψ`, §4.6) are modal, so `pre` evaluation requires full modal entailment against the
@@ -392,7 +445,19 @@ diagnostic with a source span):
 ### 4.4 Action plausibility models — [T] §5.1.2
 
 `⟨E, Q, pre, add, del, Γ⟩` with `Q : E × E → (G → L^P)` the edge conditions,
-`pre : E → L^P`, `add, del : E → 2^P`, `Γ ⊆ E` designated.
+**`pre : E → L^P_GB`**, `add, del : E → 2^P`, `Γ ⊆ E` designated.
+
+**Typing correction — [T] is internally inconsistent here.** [T] §5.1.2 types `pre : E → L^P`
+(propositional), but [T] §5.2 permits `a announces ψ` with `ψ ∈ L^P_GB` (modal), and [T] Def. 3
+then sets `pre(e^ψ) = a_pre ∧ ψ` — a modal precondition, which the `L^P` typing forbids. The two
+cannot both stand. delhi resolves it by widening `pre` to `L^P_GB`, since the alternative
+(restricting announcements to propositional formulas) would discard expressivity that [T] §5.2 and
+[KR21] §3 both state explicitly.
+
+`Q` stays propositional: edge labels are built only from `FPN`/`PN`/`N`, which are boolean
+combinations of observability conditions, and those are `L^P` by §4.3. So modal evaluation is
+needed for `pre` but not for edge conditions — worth keeping distinct, because `e ⟶^{iuv} f`
+(§4.5) is evaluated at two worlds per edge per agent and is the hottest loop in the update.
 
 Edge labels:
 
@@ -462,7 +527,7 @@ contradiction is a diagnostic, not a silent precedence rule. ([MBD] also carries
 With conditional effects, `e^c` splits into one event per realizable outcome, with mutually
 exclusive preconditions `a_pre ∧ (condition combination yielding that outcome)`, each with an
 `N` edge to `e^⊤`. Mutual exclusivity preserves the "exactly one designated event" applicability
-requirement. **This is the highest-risk part of the spec**; see §4.7.
+requirement. See §4.7(b) — no longer the highest-risk item, since [KR21] §4.1 specifies it completely.
 
 **Announcement** ([T] Def. 3), *pending the [T] §5.3 fix*:
 
@@ -592,12 +657,12 @@ which drives the initial partition of bisimulation refinement — becomes a word
 than a `HashSet<Fluent>` comparison.
 
 **Relations as adjacency bitsets.** `rel[agent][u]` is the bitset of `v` with `u Rᵢ v`.
-Comparability, the `→ᵢᵘ` minimal-element scan, and `C_g` reachability become bitset kernels.
+Comparability, the `→ᵢᵘ` most-plausible-element scan, and `C_g` reachability become bitset kernels.
 
 **Canonical state keys.** This targets the bottleneck [T] §6.4 names explicitly: "the high cost
 of checking semantic equivalence to construct p-nodes is the main limiting factor of this
 algorithm." `[J] PlausibilityState` has `hashCode() { return 1; }` and an `equals()` that returns
-`false` unconditionally, so every hash lookup degenerates to a linear scan of graph-refinement
+`false` for any two distinct objects, so every hash lookup degenerates to a linear scan of graph-refinement
 calls.
 
 1. Bisimulation contraction by partition refinement.
@@ -616,20 +681,57 @@ incompleteness of §6 below. That conservatism is sound and is what [T] §6.1 al
 
 ### 6.1 Where it comes from
 
-[T] p. 68 notes that bisimulation for multi-agent plausibility models is sound but not complete:
-two states may be modally equivalent without being bisimilar. The cause is localised.
+> **Status: this section states conjectures, not results.** Everything below marked ⚠ must be
+> proved or refuted before any code depends on it. An earlier draft asserted these as fact; a
+> review found the causal story incoherent (§6.1.2). Treat §6 as a work item, not a specification.
+
+[T] p. 68: "the algorithm is not complete in the multi-agent case. Thus, when using mB we may
+compute that two states are not bisimilar even when they are semantically equivalent." Note [T]
+attributes this to *the algorithm*, citing Andersen, Bolander, van Ditmarsch et al. (2013).
+
+#### 6.1.1 Which operators factor through a fixed relation
 
 | operator | box over | fixed relation? |
 |---|---|---|
 | `□ᵢ` | `Rᵢ` | yes |
-| `Kᵢ` | `~ᵢ` | yes |
+| `Kᵢ` | `~ᵢ = Rᵢ ∪ Rᵢ⁻¹` | yes (derived) |
 | `Bᵢ` | `Belᵢ = {(u,v) : v ∈ →ᵢᵘ}` | yes (derived) |
 | `C_g` | `(∪_{i∈g} ~ᵢ)*` | yes (derived) |
-| `Bᵢ^ψ` | min of `~ᵢᵘ ∩ ⟦ψ⟧` | **no — varies with ψ** |
+| `Bᵢ^ψ` | maxima of `~ᵢᵘ ∩ ⟦ψ⟧` | **no — varies with ψ** |
 
-`Bᵢ` minimises over a *fixed* class, so it factors through a derived relation. `Bᵢ^ψ` minimises
-over a set that changes with the formula, so no fixed-relation bisimulation can be complete for
-it.
+This table is sound: `Bᵢ` maximises over a *fixed* class, so it factors through a derived relation;
+`Bᵢ^ψ` maximises over a set that changes with the formula, so no fixed-relation bisimulation can be
+complete for it.
+
+#### 6.1.2 ⚠ Why the obvious diagnosis cannot be right
+
+An earlier draft concluded from that table that the incompleteness "is localised in `Bᵢ^ψ`." **That
+cannot explain [T]'s observation**, for a simple reason: **mB as published has no `Bᵢ^ψ`.** [T]
+Def. 1's language is `K`, `B`, `C` only. Conditional belief is a mB+ *addition* (D2). So whatever
+causes [T]'s incompleteness, it is not an operator [T] does not have.
+
+Two further tensions, both unresolved:
+
+**⚠ (i) The ordering may be inverted.** [T]/`[J]` compute bisimulation over `{Rᵢ, Rᵢ⁻¹}`
+(`[J] splitBlocks` refines against both `lessToMorePlausible` and `moreToLessPlausible`). §6.3
+proposes bisimulation over `{~ᵢ, Belᵢ, Rᵢ, C-closure}`. Since `□` forces `Rᵢ` to be respected
+anyway, that set *adds* a back-and-forth requirement on `Belᵢ` — making it **finer**, so it merges
+**fewer** states, not more. But a finer relation cannot be *complete* for a language on which a
+coarser one is already *sound*: both would then sit on the same side of modal equivalence. Either
+`{Rᵢ, Rᵢ⁻¹}`-bisimulation is **not** sound for `B` (plausible — maximality is a global property
+that local back-and-forth need not preserve), or §6.3's claim is wrong. **Settle this first.**
+
+**⚠ (ii) mB+ changes the picture from [T]'s.** Adding `□ᵢ` — a box over `Rᵢ` itself — makes the
+plausibility *ordering* directly observable in the object language, which [T]'s `K`/`B`/`C`
+language cannot see. Two models that differ in ordering but agree on every maximal set are
+`K`/`B`-equivalent yet `□`-distinguishable. So mB+ is **closer** to `Rᵢ`-bisimulation than mB is,
+and [T]'s incompleteness analysis does not transfer to mB+ unmodified. This may shrink the gap;
+it may also mean tier 1's measurement differs between the two languages, which is itself worth
+measuring.
+
+**§3.5's remark** that "`Rᵢ` is neither S5 nor KD45 … which is the root of the incompleteness" is a
+third distinct conjecture and is likewise unproven. The three should be reconciled, not left
+side by side.
 
 ### 6.2 Tier 1 — measure the gap (v0.1)
 
@@ -641,11 +743,18 @@ how often is `bisimilar = false` while `equivalent = true`?
 downstream decision depends on whether it bites on 40% of pairs or 0.1%, and the number is not
 published. The oracle is also a first-class correctness test in its own right.
 
-### 6.3 Tier 2 — complete equivalence for K/B/□/C (v0.1)
+### 6.3 Tier 2 — ⚠ conjectured complete equivalence for K/B/□/C (v0.1)
 
-**Claim to be proved or refuted as the first task:** bisimulation over the *derived* relations
+**⚠ Claim to be proved or refuted as the first task:** bisimulation over the *derived* relations
 `{~ᵢ, Belᵢ, Rᵢ, C-closure}` is complete for the `K/B/□/C` fragment, by Hennessy–Milner on finite
-models. This is reasoned, not cited; it must be established before anything depends on it.
+models. This is reasoned, not cited, and §6.1.2(i) identifies a tension that may refute it. **Nothing
+may depend on it until it is settled.** If it fails, tier 2 reduces to whatever fragment survives —
+possibly `K`/`□`/`C` without `B`, since `Belᵢ` is the problematic relation.
+
+**Tier 2 is a decision procedure, not a performance measure.** Being *finer* than
+`{Rᵢ, Rᵢ⁻¹}`-bisimulation (§6.1.2(i)), it merges at most as many states and probably fewer. It does
+**not** shrink the search space and must not be sold as an optimisation. Its value is answering
+"are these two states equivalent?" correctly for the user, and dedup at terminal points.
 
 **Critical constraint.** Derived-relation bisimilarity is **not a congruence for product update**.
 Two states can agree on `~ᵢ`, `Belᵢ`, `C` yet differ on `Rᵢ`, and Def. 2 reads `Rᵢ` directly, so
@@ -746,10 +855,17 @@ state {
   *u <- { heads }
    v <- { }
 
-  carol: u ~ v      // equiplausible => uncertainty
-  alice: u < v      // u strictly preferred => belief
+  carol: u ~ v      // equiplausible: carol can rank them but has no preference
+  alice: u < v      // v strictly MORE plausible: alice believes whatever holds at v
 }
 ```
+
+**Notation, fixed once.** `u < v` reads *"`v` is strictly more plausible than `u`"* and lowers to
+`u Rᵢ v` without `v Rᵢ u`. `u ~ v` lowers to both directions. `u <= v` lowers to `u Rᵢ v` alone
+without asserting anything about the converse. The mnemonic is that **plausibility increases to the
+right**, matching `u Rᵢ v` = *"`v` is at least as plausible as `u`"* (§4.1) and the arrow convention
+in every figure. An earlier draft annotated `u < v` as "u strictly preferred", which is backwards;
+§8.1 records why getting this backwards is easy and expensive.
 
 Both lower to the same model. **The explicit form is also what the pretty-printer emits**, so a
 declarative state can always be inspected as the structure it built. This is deliberate: it makes
@@ -834,18 +950,28 @@ These three sets are **nested**, and that single fact generates the whole attitu
 at least as plausible as `u`. `Rᵢ(u) ⊆ ~ᵢᵘ` by definition. Hence `K[i]φ → □[i]φ → B[i]φ`: the
 smaller the set you quantify over, the weaker the claim.
 
-**Worked instance** — Coin Lie `s0` ([T] Fig. 5.4), two worlds `u` (where `h`) and `v` (where
-`!h`), with one drawn edge `u R_C v` plus the reflexive edges every figure omits:
+**Worked instance** — Coin Lie `s0` ([T] Fig. 5.4), two worlds `u` (where `h`, designated) and `v`
+(where `!h`). The figure draws exactly one edge, **`v ──C──► u`**, i.e. `v R_C u`: C considers the
+heads-world at least as plausible as the tails-world. Reflexive edges are omitted, as in every
+figure.
 
 | | A and B | C |
 |---|---|---|
-| `~ᵢᵘ` | `{u}` — no edges out, so nothing to compare | `{u, v}` — she can rank them, so both are live |
-| `Rᵢ(u)` | `{u}` | `{u, v}` |
-| `→ᵢᵘ` | `{u}` | `{v}` — only `v` is ranked at-least-as-good by *everything* in the class |
-| verdict | `K[a] h`, `K[b] h` | `!K[c] h & !K[c] !h`, and `B[c] !h` |
+| `~ᵢᵘ` | `{u}` — no edges either way, so nothing to compare | `{u, v}` — she can rank them, so both are live |
+| `Rᵢ(u)` | `{u}` | `{u}` — `u R_C v` does **not** hold; only the reflexive edge leaves `u` |
+| `→ᵢᵘ` | `{u}` | `{u}` — `u` is ranked at-least-as-good by *everything* in the class (`u R_C u`, `v R_C u`); `v` is not, since `u R_C v` fails |
+| verdict | `K[a] h`, `K[b] h` | `!K[c] h & !K[c] !h`, and `B[c] h` |
 
-So A and B know the coin is heads; C considers both possible and leans — wrongly — toward tails.
-Note this falls out of the *shape* of the relation, with no extra machinery.
+So A and B *know* the coin is heads; C does not know, but correctly *leans* toward heads. Note this
+falls out of the *shape* of the relation, with no extra machinery.
+
+**Arrow direction matters, and it is easy to get backwards.** `u Rᵢ v` means *v* is the preferred
+world, so an arrow drawn `x ──► y` puts the agent's belief at `y`. In `s0` the arrow runs `v ──► u`,
+so C believes `h`. Applying `announce_not_heads` **reverses it** to `u' ──► v'` ([T] Fig. 5.6),
+which is precisely what makes the lie land: C moves from correctly believing `h` to wrongly
+believing `!h`. §8.5 traces the consequence. A spec draft of this table had the edge reversed and
+concluded `B[c] !h` at `s0`, which would have made the lie a no-op and seeded a wrong expected value
+into the figure tests — the reason §9 snapshots every figure rather than trusting prose.
 
 ### 8.2 The five attitudes, in plain terms
 
@@ -1009,7 +1135,7 @@ construction does not quite manage it, which is why this is a test rather than a
 **Not available in mB+:** *common belief* — the transitive closure over `Belᵢ` rather than `~ᵢ`.
 [KR24] uses `C_g` for exactly that, so the same symbol means different things across the two
 papers (§4.2). It would be cheap to add — one more closure over a derived relation — but it is a
-genuine sixth primitive rather than sugar, so it is recorded as an open question (§12) rather than
+genuine seventh primitive rather than sugar, so it is recorded as an open question (§12) rather than
 slipped in.
 
 ### 8.5 A full trace: the Coin Lie scenario
@@ -1248,7 +1374,14 @@ seriality, Euclideanness. Two uses:
 - KB1 (`Kᵢφ ⇒ Bᵢφ`), KB2, seriality of belief
 - contraction preserves entailment: `s ⊨ φ ⟺ contract(s) ⊨ φ`
 - bisimilar states agree on random formulas
-- canonical key soundness: `key(s) == key(s')` ⇒ `bisimilar(s, s')`
+- canonical keys, **both directions** — they mean different things and both are needed:
+  - `key(s) == key(s')` ⇒ `bisimilar(s, s')` — **soundness**. Failure means wrongly merging distinct
+    states, which corrupts results.
+  - `bisimilar(s, s')` ⇒ `key(s) == key(s')` — **no false negatives**. Failure only costs
+    performance (duplicate entries), but silently defeats the entire point of §5.1.
+- `→ᵢ` non-emptiness precondition (§4.1): assert `→ᵢ C ≠ ∅` for single-class `C`, and assert it
+  *can* be empty for a generated multi-class `C` — the latter guards against reintroducing [T]'s
+  unqualified claim
 - the tier-1 oracle as a differential test
 
 **Generators** are the real work: producing *valid* locally-well-preordered frames with useful
@@ -1294,8 +1427,8 @@ being a picture.
 |---|---|---|
 | 1 | No tests whatsoever | §9 |
 | 2 | `Depl.g4` action syntax matches none of the ~90 corpus files | §7, new language |
-| 3 | `PlausibilityState.hashCode()` returns `1`; `equals()` returns `false` unconditionally | §5.1 canonical keys |
-| 4 | Event models built without the edge conditions Defs. 3–4 require | §4.6 |
+| 3 | `PlausibilityState.hashCode()` returns `1`; `equals()` returns `false` for any two distinct objects | §5.1 canonical keys |
+| ~~4~~ | ~~Event models built without the edge conditions Defs. 3–4 require~~ — **retracted, this was wrong.** `EventModel.addEdge(agent, from, to, Formula)` stores a per-`(agent, from, to)` condition, and `Action.buildEventModel` passes `full.negate()` (= `PN`), `Literal(true)` (= `FPN`), and `AndFormula.make(full.negate(), aware.negate())` (= `N`). All three constructions match [T] Def. 3, Fig. 5.2, and Def. 4 edge-for-edge. | — |
 | 5 | Dead commented-out mA-revise code in `Action.java` | not ported; its idea reused in §4.7(b) |
 | 6 | Well-formedness as runtime `assert`, often disabled | §4.3 lowering-time diagnostics |
 | 7 | Environment models as compiled Java classes | deferred to v0.2 with a registry design |
@@ -1339,3 +1472,10 @@ stronger candidate — and it is the one with a published supplementary proof ap
   (`Belᵢ` is derived, so its closure is derived twice over). Deliberately not slipped into v0.1.
 - Whether mB+'s announcement `ψ ∈ L^P_GB` (§4.3) interacts badly with `Hᵢ`, since a modal
   announcement precondition evaluated across hypothetical sub-models may not be well defined.
+- **Formula-valued postconditions** — generalising `causes l if φ` to `causes f <- φ` as
+  `[J] Depl.g4` and `[J] Assignment` already do (§4.3). Strictly more expressive, but [KR21] §4.1's
+  observer machinery is specified for the conditional form, so what a full observer should *learn*
+  from an assignment needs deriving before it can be adopted.
+- **§6 must be settled before it is built.** §6.1.2 identifies that the causal account of the
+  incompleteness is incoherent as written and that tier 2's completeness claim may be refuted by an
+  ordering argument. This is the one open item that blocks implementation rather than deferring it.
