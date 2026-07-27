@@ -3,5 +3,7 @@
 #![deny(missing_docs)]
 
 pub mod bits;
+pub mod model;
 
 pub use bits::Bits;
+pub use model::{FrameError, Model, State, WorldId};
