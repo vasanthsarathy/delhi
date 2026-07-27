@@ -26,6 +26,7 @@ impl Interner {
     /// # Panics
     /// If `i` was not produced by this interner.
     pub fn name(&self, i: u32) -> &str {
+        debug_assert!((i as usize) < self.names.len(), "id not produced by this interner");
         &self.names[i as usize]
     }
 
