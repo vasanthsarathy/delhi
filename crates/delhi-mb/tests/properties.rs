@@ -160,6 +160,61 @@ proptest! {
         }
     }
 
+    /// [T] Prop. 5.2.3 — a full observer of a sensing action learns the value of the
+    /// sensed formula. This checks post-update relation CONTENT: a degenerate update
+    /// that emitted the identity relation would fail it.
+    #[test]
+    fn sensing_confers_knowledge_to_full_observers(m in model_strategy(4, 2, 2)) {
+        let st = State { model: m, designated: 0 };
+        let mut s = Store::default();
+        let t = s.tru();
+        let p = s.atom(0);
+        let am = build(
+            &ActionDef {
+                name: "sense_p".into(),
+                pre: t,
+                kind: Kind::Sensing(p),
+                observes: vec![(0, t)],
+                aware: vec![],
+            },
+            &mut s,
+            2,
+        );
+        if let Some(out) = st.apply(&s, &am) {
+            let kw = s.knows_whether(0, p);
+            prop_assert!(out.entails(&s, kw), "full observer must know whether p after sensing it");
+        }
+    }
+
+    /// [T] Prop. 5.2.8 — an agent who neither observes nor is aware of an action does
+    /// not change her beliefs about the task environment. Also checks post-update
+    /// content: an update that rewired an oblivious agent's relation would fail it.
+    #[test]
+    fn oblivious_agents_keep_their_propositional_beliefs(m in model_strategy(4, 2, 2)) {
+        let st = State { model: m, designated: 0 };
+        let mut s = Store::default();
+        let t = s.tru();
+        let p = s.atom(0);
+        // Agent 0 observes; agent 1 is neither observer nor aware, so oblivious.
+        let am = build(
+            &ActionDef {
+                name: "sense_p".into(),
+                pre: t,
+                kind: Kind::Sensing(p),
+                observes: vec![(0, t)],
+                aware: vec![],
+            },
+            &mut s,
+            2,
+        );
+        if let Some(out) = st.apply(&s, &am) {
+            let b1 = s.believes(1, p);
+            let before = st.entails(&s, b1);
+            let after = out.entails(&s, b1);
+            prop_assert_eq!(before, after, "oblivious agent's belief about p must not change");
+        }
+    }
+
     /// Contraction preserves entailment, and keys are sound in both directions (§9 L4).
     #[test]
     fn contraction_and_keys_agree(m in model_strategy(4, 2, 2)) {

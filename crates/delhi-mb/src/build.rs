@@ -270,4 +270,29 @@ mod tests {
         assert_eq!(am.n_events, 5, "4 outcome events + e^top");
         assert_eq!(am.designated.len(), 4);
     }
+
+    #[test]
+    fn mixed_conditional_and_unconditional_effects_split_only_on_the_conditional_ones() {
+        // One unconditional effect and one conditional: 2^1 outcomes + e^top = 3 events.
+        // The unconditional literal must appear in BOTH outcome events' add sets.
+        let mut s = Store::default();
+        let t = s.tru();
+        let guard = s.atom(2);
+        let a = ActionDef {
+            name: "mixed".into(),
+            pre: t,
+            kind: Kind::Ontic(vec![
+                Effect { lits: vec![(0, true)], cond: t },      // unconditional
+                Effect { lits: vec![(1, true)], cond: guard },  // conditional
+            ]),
+            observes: vec![(0, t)],
+            aware: vec![],
+        };
+        let am = build(&a, &mut s, 1);
+        assert_eq!(am.n_events, 3, "2 outcomes + e^top");
+        assert_eq!(am.designated.len(), 2);
+        for &e in &am.designated {
+            assert!(am.add[e].contains(&0), "unconditional effect must apply in every outcome");
+        }
+    }
 }

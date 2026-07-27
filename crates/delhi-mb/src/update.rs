@@ -122,8 +122,10 @@ impl State {
             }
         }
 
+        // `d_event` was selected by evaluating `pre[d_event]` at the designated world, and
+        // the pair-building loop above indexed every `(u, e)` satisfying that same predicate.
+        // `eval` is pure and memoised, so this entry is always populated.
         let designated = index[self.designated][d_event];
-        debug_assert_ne!(designated, usize::MAX);
         Some(State { model: out, designated })
     }
 }

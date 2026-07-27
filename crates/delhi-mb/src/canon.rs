@@ -1,7 +1,7 @@
 //! Canonical byte keys for states, so equality is a memcmp and states can be hashed (§5.1).
 
 use crate::{rels_full, Model, State};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 fn encode(m: &Model, order: &[usize], designated_pos: usize) -> Vec<u8> {
     let mut out = Vec::new();
@@ -85,7 +85,7 @@ fn canonical_order(m: &Model) -> Vec<usize> {
         colour = next;
     }
     debug_assert!(
-        colour.iter().collect::<std::collections::HashSet<_>>().len() == m.n_worlds,
+        colour.iter().collect::<HashSet<_>>().len() == m.n_worlds,
         "canonical_order: model was not contracted — two worlds share a colour"
     );
     let mut order: Vec<usize> = (0..m.n_worlds).collect();

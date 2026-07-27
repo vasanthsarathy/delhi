@@ -2,6 +2,11 @@
 //! (over worlds), per §5.1.
 
 /// A fixed-capacity bitset over `0..n`.
+///
+/// # Equality and ordering
+/// The derived `PartialEq`, `Hash`, and `Ord` all compare the backing word vector
+/// directly, including its length. Both operands must share the same capacity
+/// (the `n` given to [`Bits::new`]) or the comparison is meaningless.
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, PartialOrd, Ord)]
 pub struct Bits(Vec<u64>);
 
@@ -112,5 +117,35 @@ mod tests {
 
         assert!(u.contains_all(&a));
         assert!(!a.contains_all(&u));
+    }
+
+    #[test]
+    fn set_algebra_crosses_a_word_boundary() {
+        // Capacity 130 spans three u64 words (bits 0-63, 64-127, 128-191).
+        // Members at 1, 64, 65, 129 exercise the boundary between every pair of words.
+        let mut a = Bits::new(130);
+        a.set(1);
+        a.set(64);
+        a.set(129);
+        let mut b = Bits::new(130);
+        b.set(64);
+        b.set(65);
+
+        let mut u = a.clone();
+        u.union_with(&b);
+        assert_eq!(u.ones(), vec![1, 64, 65, 129]);
+
+        let mut i = a.clone();
+        i.intersect_with(&b);
+        assert_eq!(i.ones(), vec![64]);
+
+        let mut d = a.clone();
+        d.subtract(&b);
+        assert_eq!(d.ones(), vec![1, 129]);
+
+        assert!(u.contains_all(&a));
+        assert!(u.contains_all(&b));
+        assert!(!a.contains_all(&b), "a lacks 65");
+        assert!(!b.contains_all(&a), "b lacks 1 and 129");
     }
 }

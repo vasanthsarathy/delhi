@@ -6,6 +6,12 @@ use crate::Bits;
 pub type WorldId = usize;
 
 /// A plausibility model `⟨W, R, V⟩` (§4.1).
+///
+/// # Equality
+/// The derived `PartialEq` compares raw structure, including the backing width of
+/// each [`Bits`]. Two models with the same worlds and valuations but different
+/// `n_atoms`/`n_worlds` capacities therefore compare UNEQUAL. For semantic
+/// comparison use [`State::equivalent`] (modal equivalence) or [`State::key`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Model {
     /// `|W|`.
@@ -21,6 +27,12 @@ pub struct Model {
 }
 
 /// A pointed model `⟨M, u⟩`.
+///
+/// # Equality
+/// The derived `PartialEq` compares raw structure, including the backing width of
+/// each [`Bits`]. Two models with the same worlds and valuations but different
+/// `n_atoms`/`n_worlds` capacities therefore compare UNEQUAL. For semantic
+/// comparison use [`State::equivalent`] (modal equivalence) or [`State::key`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct State {
     /// The model.
