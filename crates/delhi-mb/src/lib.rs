@@ -8,9 +8,11 @@ pub mod canon;
 pub mod derived;
 pub mod eval;
 pub mod model;
+pub mod theory;
 
 pub use bisim::{blocks_dynamic, blocks_full, refine, rels_dynamic, rels_full};
 pub use bits::Bits;
 pub use derived::{common_closure, maxima, Derived};
 pub use eval::Evaluator;
 pub use model::{FrameError, Model, State, WorldId};
+pub use theory::{ActionDef, Effect, Kind, TheoryError};
