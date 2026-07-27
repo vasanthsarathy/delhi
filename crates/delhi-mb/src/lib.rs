@@ -4,6 +4,7 @@
 
 pub mod bisim;
 pub mod bits;
+pub mod build;
 pub mod canon;
 pub mod derived;
 pub mod eval;
@@ -12,6 +13,7 @@ pub mod theory;
 
 pub use bisim::{blocks_dynamic, blocks_full, refine, rels_dynamic, rels_full};
 pub use bits::Bits;
+pub use build::{build, ActionModel, EV_NPHI, EV_PHI, EV_TOP};
 pub use derived::{common_closure, maxima, Derived};
 pub use eval::Evaluator;
 pub use model::{FrameError, Model, State, WorldId};
