@@ -81,6 +81,11 @@ fn coin_lie_full_trace() {
     assert!(st0.entails(&s, kb), "s0: B knows h");
     assert!(st0.entails(&s, ig_c), "s0: C does not know which way");
     assert!(st0.entails(&s, ck), "s0: common knowledge that A knows whether h");
+    // Pins the plausibility arrow direction. Knowledge is symmetric and cannot
+    // distinguish `relate(2,1,0)` from its reverse; only belief can. Without this,
+    // a flipped convention would make the s1 "lie worked" assertion vacuous.
+    let b_c_h = s.believes(2, h);
+    assert!(st0.entails(&s, b_c_h), "s0: C does not know, but correctly believes h");
 
     // ---- s1 ----
     let st1 = st0.apply(&s, &acts.announce).expect("announce applicable");
