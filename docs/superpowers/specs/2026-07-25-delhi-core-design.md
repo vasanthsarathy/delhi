@@ -519,7 +519,33 @@ Full formula-satisfiability model synthesis is out of scope — it is satisfiabi
 doxastic logic, PSPACE-complete even for plain KD45, more delicate over locally-well-preordered
 frames, and finding a canonical minimal model is harder still.
 
-### 6.4 Compiler structure
+### 6.4 Formula sugar
+
+The core query language (§3.2) has six operators and gains none. Everything in the attitude
+catalogue (§7.4) is a boolean combination of those six, and the parser desugars each one before
+lowering, so `delhi-mb` implements six entailment cases and no more.
+
+| surface | desugars to | name |
+|---|---|---|
+| `K'[a]φ` | `!K[a]!φ` | considers possible |
+| `B'[a]φ` | `!B[a]!φ` | does not rule out |
+| `S'[a]φ` | `!□[a]!φ` | safe-belief dual |
+| `Kw[a]φ` | `K[a]φ \| K[a]!φ` | knows whether |
+| `Bw[a]φ` | `B[a]φ \| B[a]!φ` | believes whether |
+| `?[a]φ` | `!K[a]φ & !K[a]!φ` | ignorant whether |
+| `¿[a]φ` | `!B[a]φ & !B[a]!φ` | suspends judgement |
+| `C[*]φ` | `C[g]φ` over all declared agents | common knowledge, everyone |
+| `K[a,b]φ` | `K[a]φ & K[b]φ` | agent lists distribute over `K`, `B`, `□`, `Kw`, `Bw`, `?`, `¿` |
+
+`K'`, `B'`, and `S'` already exist in `[J] Depl.g4` with no implementing class (§10 row 9); here
+they cost one parser rule each. Agent-list distribution matches the `[J]` corpus, which writes
+`K[alice, bob] φ`. The `?[a]φ` form generalises the `initially`-only usage of §6.3 to any formula
+position.
+
+An ASCII alternative is accepted for every non-ASCII operator (`[]` for `□`, `??` for `¿`), since
+requiring `□` and `¿` at the keyboard would be hostile.
+
+### 6.5 Compiler structure
 
 Distinct stages — `lex → parse → AST → typecheck/ground → IR` — not `[J]`'s 996-line one-pass
 `DeplToProblem` visitor. Diagnostics carry source spans. A second front-end can be added against
@@ -532,40 +558,122 @@ the IR without touching the semantics.
 This section is normative for the surface syntax and illustrative for the semantics. Every formula
 here is a query delhi must accept and answer.
 
-### 7.1 The five epistemic attitudes, in plain terms
+### 7.1 Reading the model: `Rᵢ`, `~ᵢᵘ`, and `→ᵢᵘ`
+
+Every attitude is a quantifier over some set of worlds, so the notation is worth ten lines.
+
+There is **one relation per agent**, `Rᵢ`, and everything else is derived from it.
+`u Rᵢ v` means *"agent i considers world v **at least as plausible as** world u."* It is a
+preorder — reflexive (`u Rᵢ u`) and transitive — but deliberately **not symmetric**, because that
+asymmetry is what encodes preference: if `u Rᵢ v` but not `v Rᵢ u`, then `i` strictly prefers `v`.
+
+Three derived sets, all read at a world `u` (the superscript is *where you're standing*, the
+subscript is *whose mind you're in*):
+
+| notation | definition | what it is |
+|---|---|---|
+| `Rᵢ(u)` | `{v \| u Rᵢ v}` | worlds `i` ranks **at least as plausible as** `u` |
+| `~ᵢᵘ` | `{v \| u Rᵢ v` **or** `v Rᵢ u}` | worlds `i` can **compare** with `u` at all — her *epistemic range*, everything she hasn't ruled out |
+| `→ᵢᵘ` | the most plausible worlds inside `~ᵢᵘ` | her **best guess** |
+
+`~ᵢ` is the one that looks strange, so: two worlds are `~ᵢ`-related when `i` can rank them against
+each other *in either direction*. Worlds she cannot rank at all are ones she has excluded outright.
+So "comparable" and "still considered possible" are the same thing, and `~ᵢᵘ` is her whole picture
+of what might be the case. It is an equivalence relation, which is why `K` behaves like S5
+knowledge.
+
+These three sets are **nested**, and that single fact generates the whole attitude hierarchy:
+
+```
+~ᵢᵘ   ─ everything i considers possible ───────────── K[i] quantifies here
+ └─ Rᵢ(u)  ─ ...at least as plausible as now ──────── □[i] quantifies here
+     └─ →ᵢᵘ  ─ ...the very most plausible ─────────── B[i] quantifies here
+```
+
+`→ᵢᵘ ⊆ Rᵢ(u)` because `u` itself is in `~ᵢᵘ`, so anything maximal in that class is in particular
+at least as plausible as `u`. `Rᵢ(u) ⊆ ~ᵢᵘ` by definition. Hence `K[i]φ → □[i]φ → B[i]φ`: the
+smaller the set you quantify over, the weaker the claim.
+
+**Worked instance** — Coin Lie `s0` ([T] Fig. 5.4), two worlds `u` (where `h`) and `v` (where
+`!h`), with one drawn edge `u R_C v` plus the reflexive edges every figure omits:
+
+| | A and B | C |
+|---|---|---|
+| `~ᵢᵘ` | `{u}` — no edges out, so nothing to compare | `{u, v}` — she can rank them, so both are live |
+| `Rᵢ(u)` | `{u}` | `{u, v}` |
+| `→ᵢᵘ` | `{u}` | `{v}` — only `v` is ranked at-least-as-good by *everything* in the class |
+| verdict | `K[a] h`, `K[b] h` | `!K[c] h & !K[c] !h`, and `B[c] !h` |
+
+So A and B know the coin is heads; C considers both possible and leans — wrongly — toward tails.
+Note this falls out of the *shape* of the relation, with no extra machinery.
+
+### 7.2 The five attitudes, in plain terms
 
 | you write | it means | can it be wrong? |
 |---|---|---|
 | `h` | the coin *is* heads-up | — it's the fact itself |
-| `K[a] h` | **a knows** the coin is heads | **No.** Knowledge is correct by construction. |
-| `□[a] h` | **a safely believes** it: she believes it, and no *true* information could ever dislodge that | No — but it's weaker than knowledge |
+| `K[a] h` | **a knows** it | **No** — `K[a]φ → φ` |
+| `□[a] h` | **a safely believes** it | **No** — `□[a]φ → φ` as well; see below |
 | `B[a] h` | **a believes** it | **Yes.** This is the point of the system. |
-| `B^ψ[a] h` | **if a learned ψ**, she would believe it | Yes — it's a hypothetical |
-| `C[g] h` | it is **common knowledge** in group `g`: everyone knows it, everyone knows everyone knows, forever | No |
+| `B^ψ[a] h` | **if a learned ψ**, she would believe it | it's a hypothetical, so neither |
+| `C[g] h` | **common knowledge** in `g`: all know it, all know all know it, forever | No |
 
-The three unconditional attitudes form a chain, `K[a]φ → □[a]φ → B[a]φ`, which follows from the
-model structure: `K` quantifies over the whole comparability class `~ᵢᵘ`, `□` over the worlds `Rᵢ`
-reaches from `u`, and `B` over the most plausible worlds in `~ᵢᵘ` — each a subset of the last.
-Reading it backwards is the useful direction: a belief may be false; a *safe* belief may still be
-false but nothing true will fix it; knowledge cannot be false at all.
+**Why belief is not just "weak knowledge."** `B[c] !h & h` says C believes tails while it is in
+fact heads. No amount of `K` can express that, because `K[c] !h` would entail `!h`. Every
+false-belief task in the literature lives in that gap.
 
-**Why belief is not just "weak knowledge."** `B[c] !h & h` says C believes the coin is tails while
-it is in fact heads. No amount of `K` can express that, because `K[c] !h` would entail `!h`. Every
-false-belief task in the literature lives in this gap.
+#### Knowledge vs. safe belief — the difference is *lying*
 
-**Why safe belief earns its place.** Consider a robot deciding whether to correct a human:
+The natural objection: if no truth can dislodge a safe belief, hasn't the agent effectively got
+knowledge? Both are factive — `□[a]φ` really does entail `φ`, because `Rᵢ` is reflexive so `u`
+itself is among the worlds `□` quantifies over. So the difference is **not** that one can be false.
+
+The difference is *which* worlds get ignored. `K` looks at **all** of `~ᵢᵘ`. `□` looks only at
+`Rᵢ(u)` — the worlds at least as plausible as the current one — and therefore **ignores the worlds
+the agent considers possible but less likely**. Safe belief is what you get by disregarding your
+own long shots.
+
+That gap is exactly where deception lives:
+
+- **`K[a]φ`** — there is no `!φ` world anywhere in `a`'s picture. Nothing anyone says, true or
+  false, can make her believe `!φ`. She will simply reject it. (This is why mB's announcement
+  construction has full observers discard announcements contradicting prior knowledge, §7.7.)
+- **`□[a]φ`** — `φ` is true and `a` believes it, and no *honest* information will change that,
+  because conditioning on anything true can only ever move her among worlds at least as plausible
+  as the actual one. But she *does* still carry a live `!φ` world, ranked below. **A lie can
+  promote it.**
+
+There is a formula that makes this exact, and it is the cleanest way to see the distinction:
 
 ```
-B[human] safe & !safe          // the human wrongly believes it's safe
-!□[human] safe                 // ...and that belief IS dislodgeable by true information
+B^{!φ}[a] φ   ≡   K[a] φ
 ```
 
-The second line is what tells the robot intervening will work. If `□[human] safe` held instead,
-the human's error is entrenched and no truthful announcement will shift it — the robot needs a
-different plan. Plain `B` cannot distinguish these two cases.
+*"a would still believe φ even if she were told the opposite"* is precisely *"a knows φ."* The
+proof is one line: `B^ψ` quantifies over the most plausible `ψ`-worlds in `~ᵢᵘ`; with `ψ = !φ`
+those are `!φ`-worlds, so `φ` fails there — **unless there are none**, i.e. unless every world in
+`~ᵢᵘ` satisfies `φ`, which is `K[a]φ`.
+
+Safe belief satisfies the weaker version, quantified over true news only:
+
+```
+□[a]φ   holds iff   B^ψ[a]φ  for every ψ that is actually true
+```
+
+So, in one line each: **knowledge is immune to any message; safe belief is immune to honest
+messages but flippable by a lie; plain belief is flippable by anything.**
+
+The useful predicate that falls out:
+
+```
+□[a] φ & !K[a] φ        // a is right about φ, and only a LIE could change that
+```
+
+which is the deception-exposure test — the set of an agent's correct beliefs that an adversary
+could still overturn. `K[a]φ` marks the ones that are safe from that.
 
 **Why conditional belief earns its place.** `B^ψ[a] φ` asks what `a` *would* believe on learning
-`ψ`, which is a look at the plausibility ordering *underneath* the top layer. Its practical use is
+`ψ`, reading the plausibility ordering *underneath* the top layer. Its practical use is
 **previewing belief revision before acting**:
 
 ```
@@ -576,7 +684,7 @@ B^{!heads}[carol] distracted_alice
 this *before* choosing to announce, rather than announcing and inspecting the wreckage. Note
 `B[a]φ ≡ B^⊤[a]φ`, which §8 records as a property test.
 
-### 7.2 Nesting: the attitudes that actually matter
+### 7.3 Nesting: the attitudes that actually matter
 
 Nesting is where this system does work nothing simpler can:
 
@@ -598,24 +706,73 @@ In English: *"I want to find out how the coin lies without the human realising I
 That single formula is the entire justification for higher-order modalities — you cannot state that
 goal at all in a system with only first-order belief.
 
-### 7.3 Query idioms
+### 7.4 The full attitude catalogue
 
-Common things people want to say, and how they're written:
+Only the six operators of §3.2 are primitive. Everything below is a **boolean combination of
+them** — which matters, because it means the surface language can grow without the semantics
+growing at all. Entries marked **sugar** are desugared by the parser (§6) into the middle column;
+`delhi-mb` never sees them, and §3.2 stays exactly as specified.
 
-| intent | formula |
-|---|---|
-| a is uncertain whether φ | `!K[a]φ & !K[a]!φ` — or `?[a]φ` in an `initially` block |
-| a knows whether φ (but you don't care which) | `K[a]φ \| K[a]!φ` |
-| a has a **false belief** that φ | `B[a]φ & !φ` |
-| a believes φ but isn't certain | `B[a]φ & !K[a]φ` |
-| a considers φ possible | `K'[a]φ` — sugar for `!K[a]!φ` |
-| a doesn't rule out φ | `B'[a]φ` — sugar for `!B[a]!φ` |
-| a is **wrong about b's beliefs** (2nd-order false belief) | `B[a]B[b]φ & !B[b]φ` |
-| a's belief in φ is entrenched | `□[a]φ` |
-| telling a that ψ would make her believe φ | `B^ψ[a]φ` |
-| everyone in the room knows, and knows they all know | `C[alice,bob,carol] φ` — `C[*]` for all agents |
+#### Ignorance and certainty
 
-### 7.4 A full trace: the Coin Lie scenario
+| attitude | formula | sugar | plain reading |
+|---|---|---|---|
+| knows whether | `K[a]φ \| K[a]!φ` | `Kw[a]φ` | she has settled the question, either way |
+| **ignorant of whether** | `!K[a]φ & !K[a]!φ` | `?[a]φ` | she genuinely does not know which — the standard uncertainty idiom |
+| believes whether | `B[a]φ \| B[a]!φ` | `Bw[a]φ` | she is committed one way or the other |
+| **suspends judgement** | `!B[a]φ & !B[a]!φ` | `¿[a]φ` | stronger than ignorance: she cannot even lean. Her most-plausible worlds disagree. |
+| considers possible | `!K[a]!φ` | `K'[a]φ` | compatible with everything she knows |
+| does not rule out | `!B[a]!φ` | `B'[a]φ` | compatible with what she believes |
+
+Note `?[a]φ` and `¿[a]φ` are different and the gap between them is real: an agent can be ignorant
+*whether* φ while still believing φ — that is ordinary uncertain opinion, `?[a]φ & B[a]φ`.
+Suspension of judgement is the rarer case where she has no opinion at all. `?[a]φ` already exists
+in `initially` blocks (§6.3); this generalises it to any formula position.
+
+#### Getting it right and getting it wrong
+
+| attitude | formula | plain reading |
+|---|---|---|
+| **false belief** | `B[a]φ & !φ` | she believes something untrue — the core phenomenon |
+| correct belief | `B[a]φ & φ` | she happens to be right |
+| true belief that is not knowledge | `B[a]φ & φ & !K[a]φ` | right, but for all she knows she might not have been |
+| **wrong about whether** | `(B[a]φ & !φ) \| (B[a]!φ & φ)` | she has taken a definite position and it is the wrong one |
+| believes but isn't certain | `B[a]φ & !K[a]φ` | committed, but could be mistaken |
+| **vulnerable to deception** | `□[a]φ & !K[a]φ` | right, immune to honest correction, but a lie would flip her (§7.2) |
+| immune to deception | `K[a]φ` | no message of any kind can move her off φ |
+
+#### Attitudes about other agents
+
+| attitude | formula | plain reading |
+|---|---|---|
+| **2nd-order false belief** | `B[a]B[b]φ & !B[b]φ` | a is wrong about what b believes — the Sally-Anne shape |
+| knows that b knows whether | `K[a](K[b]φ \| K[b]!φ)` | "she knows I found out, but not what I found" |
+| knows that b is ignorant | `K[a](!K[b]φ & !K[b]!φ)` | a is sure b is still in the dark |
+| **wrongly thinks b is ignorant** | `B[a](?[b]φ) & K[b]φ` | the classic setup for being outmanoeuvred |
+| mutual knowledge, one level | `K[a]φ & K[b]φ` | both know — but neither need know that the other does |
+| **common knowledge** | `C[a,b]φ` | strictly stronger: infinitely many levels. `C[*]` for all agents |
+
+The distinction in the last two rows is the one people most often collapse. `K[a]φ & K[b]φ` is
+consistent with each believing the other is ignorant; `C[a,b]φ` rules that out at every depth. A
+public announcement is *supposed* to produce the latter — and §3.7(a) records that mB's
+construction does not quite manage it, which is why this is a test rather than an assumption.
+
+#### Hypothetical and dynamic
+
+| attitude | formula | plain reading |
+|---|---|---|
+| would be persuaded by ψ | `!B[a]φ & B^ψ[a]φ` | telling her ψ would win her over to φ |
+| would be unmoved by ψ | `B[a]φ & B^ψ[a]φ` | φ survives learning ψ |
+| **would still believe φ if told otherwise** | `B^{!φ}[a]φ` | **equivalent to `K[a]φ`** (§7.2) |
+| entrenched against honest news | `□[a]φ` | no true information changes her mind |
+
+**Not available in mB+:** *common belief* — the transitive closure over `Belᵢ` rather than `~ᵢ`.
+[KR24] uses `C_g` for exactly that, so the same symbol means different things across the two
+papers (§3.2). It would be cheap to add — one more closure over a derived relation — but it is a
+genuine sixth primitive rather than sugar, so it is recorded as an open question (§11) rather than
+slipped in.
+
+### 7.5 A full trace: the Coin Lie scenario
 
 Three agents (A, B, C), two propositions: `h` (coin is heads-up) and `d` (A is distracted). The
 coin *is* heads. The story: A lies that it isn't; B distracts A; C peeks and learns the truth; A
@@ -669,9 +826,9 @@ version of C. That is the recipe for second-order false belief:
 
 Note also line `s1`: **A's lie does not shift B's or A's own knowledge.** Announcements are soft
 information — they are rejected outright when they contradict what an agent *knows*. That is the
-whole reason `announces` confers belief rather than knowledge (§7.6).
+whole reason `announces` confers belief rather than knowledge (§7.7).
 
-### 7.5 Observability: `observes`, `aware`, and neither
+### 7.6 Observability: `observes`, `aware`, and neither
 
 Every action assigns each agent to exactly one of three classes, per world:
 
@@ -704,7 +861,7 @@ accessible, so an oblivious agent knows the action *could* have occurred while b
 not. See [T] Prop. 5.2.8 — and §3.8 for the limitation that she does not consider *other* actions
 that might have occurred instead.
 
-### 7.6 The three action types, and when to use which
+### 7.7 The three action types, and when to use which
 
 **`causes` — ontic. Changes the world.**
 
@@ -902,7 +1059,7 @@ being a picture.
 | 5 | Dead commented-out mA-revise code in `Action.java` | not ported; its idea reused in §3.7(b) |
 | 6 | Well-formedness as runtime `assert`, often disabled | §3.3 lowering-time diagnostics |
 | 7 | Environment models as compiled Java classes | deferred to v0.2 with a registry design |
-| 8 | 996-line one-pass parser visitor | §6.4 staged compiler |
+| 8 | 996-line one-pass parser visitor | §6.5 staged compiler |
 | 9 | `C[g]` documented in the README but absent from both `Depl.g4` and `formulae/`; `S'` (safe belief) reserved in the grammar with no implementing class. `[J] todo` lists "common knowledge" as future work | §3.2 |
 | 10 | No visualisation | §9 `delhi dot` |
 | 11 | `[J]` treats repeated `precondition{…}` clauses as a **conjunction** while [T] eq. 5.1 defines `a_pre` as a **disjunction** — the implementation and the paper contradict each other | §3.3 D8: one `pre` clause, explicit `&` |
@@ -935,5 +1092,10 @@ stronger candidate — and it is the one with a published supplementary proof ap
 - Cooperation-agnostic search ([T] Ch. 6) generic over `delhi-core` traits.
 - Whether to build the DEPL importer for the EFP benchmark corpus.
 - Tier-3 bounded-depth merging (§5.4).
+- **Common belief** as a seventh primitive: the transitive closure over `Belᵢ` rather than `~ᵢ`
+  (§7.4). mB has only common *knowledge*; [KR24] uses `C_g` for common belief, so the symbol is
+  overloaded across the two papers. Implementation is one more closure over a derived relation, but
+  it is a genuine new operator rather than sugar, and it interacts with §5's completeness analysis
+  (`Belᵢ` is derived, so its closure is derived twice over). Deliberately not slipped into v0.1.
 - Whether mB+'s announcement `ψ ∈ L^P_GB` (§3.3) interacts badly with `Hᵢ`, since a modal
   announcement precondition evaluated across hypothetical sub-models may not be well defined.
