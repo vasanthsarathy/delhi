@@ -2,6 +2,7 @@
 #![deny(missing_docs)]
 
 pub mod formula;
+pub mod sugar;
 pub mod symbol;
 
 pub use formula::{AgentId, AgentMask, AtomId, FormulaId, Node, Store};
