@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = ["crates/delhi-syntax", "crates/delhi-core", "crates/delhi-mb"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
