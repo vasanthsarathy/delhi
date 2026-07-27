@@ -143,4 +143,41 @@ mod tests {
             Err(TheoryError::ObserverClassOverlap { agent: 0 })
         );
     }
+
+    #[test]
+    fn sensing_rejects_a_modal_formula() {
+        // `determines` confers knowledge, which cannot be false, so it is
+        // restricted to propositional formulas.
+        let mut s = Store::default();
+        let t = s.tru();
+        let p = s.atom(0);
+        let modal = s.knows(0, p);
+        let a = ActionDef {
+            name: "peek".into(),
+            pre: t,
+            kind: Kind::Sensing(modal),
+            observes: vec![(0, t)],
+            aware: vec![],
+        };
+        assert_eq!(a.validate(&s), Err(TheoryError::ModalSensingFormula));
+    }
+
+    #[test]
+    fn announcement_accepts_a_modal_formula() {
+        // `announces` confers belief and may be a lie, so agents can talk about
+        // each other's mental states. Rejecting this would forbid exactly the
+        // announcements this system exists to model.
+        let mut s = Store::default();
+        let t = s.tru();
+        let p = s.atom(0);
+        let modal = s.knows(0, p);
+        let a = ActionDef {
+            name: "tell".into(),
+            pre: t,
+            kind: Kind::Announce(modal),
+            observes: vec![(0, t)],
+            aware: vec![],
+        };
+        assert_eq!(a.validate(&s), Ok(()));
+    }
 }
