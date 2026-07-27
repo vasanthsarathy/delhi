@@ -64,6 +64,9 @@ pub fn common_closure(m: &Model, g: AgentMask) -> Vec<Bits> {
     for (u, c_u) in c.iter_mut().enumerate() {
         c_u.set(u);
     }
+    // Jacobi iteration: collect all updates in a pass, then apply them together.
+    // This avoids in-place mutation while iterating (which would conflict with the
+    // borrow checker) and repeats until the closure reaches a fixed point.
     loop {
         let mut changed = false;
         let mut updates = Vec::new();
@@ -133,5 +136,19 @@ mod tests {
         assert_eq!(c[0].ones(), vec![0, 1, 2]);
         let only_first = common_closure(&m, 0b01);
         assert_eq!(only_first[0].ones(), vec![0, 1]);
+    }
+
+    #[test]
+    fn common_closure_iterates_to_a_fixpoint_not_just_one_pass() {
+        // 0~1 (agent 0), 1~2 (agent 1), 2~3 (agent 2). Reaching world 3 from
+        // world 0 takes three hops, so a single collect-and-apply pass is not
+        // enough — this pins the repeat-until-stable loop.
+        let mut m = Model::new(4, 3, 1);
+        m.relate(0, 0, 1);
+        m.relate(1, 1, 2);
+        m.relate(2, 2, 3);
+        let c = common_closure(&m, 0b111);
+        assert_eq!(c[0].ones(), vec![0, 1, 2, 3]);
+        assert_eq!(c[3].ones(), vec![0, 1, 2, 3]);
     }
 }
