@@ -21,7 +21,7 @@ surface syntax, and a test suite derived from the papers' own correctness claims
 
 - **[T]** Buckingham, D. *Dissertation* (`refs/Buckingham - In partial fulfillment...pdf`).
   Ch. 3 mA-local, Ch. 4 mA-revise, **Ch. 5 mB** (the semantics delhi implements),
-  Ch. 6 cooperation-agnostic search, §9.2–9.3 proofs.
+  Ch. 6 cooperation-agnostic search, [T] §9.2–9.3 proofs.
 - **[KR24]** Buckingham, Scheutz, Son, Fabiano. *Action Language mA\* with Higher-Order Action
   Observability*, KR 2024 (`refs/kr2024-0020-buckingham-et-al.pdf`). = [T] Ch. 3, mA-local.
 - **[KR21]** Buckingham, **Sarathy**, Scheutz, Son. *A Multi-Agent Epistemic and Doxastic Action
@@ -29,7 +29,7 @@ surface syntax, and a test suite derived from the papers' own correctness claims
   (`refs/buckingham_kr2021.pdf`), with **[KR21-S]** its supplementary appendix
   (`refs/buckingham_kr2021_supplement.pdf`). = [T] Ch. 4, mA-revise.
 - **[MBD]** *mB*, working draft dated 2022-02-21 (`refs/mb_draft_1.pdf`). An **earlier and
-  non-equivalent** version of [T] Ch. 5; see §3.5 and §3.3. Incomplete (placeholder
+  non-equivalent** version of [T] Ch. 5; see §4.5 and §4.3. Incomplete (placeholder
   "Intuitively, …" sections, no propositions). [T] Ch. 5 supersedes it.
 - **[J]** The mecaPlanner Java source (`refs/mecaPlanner-main/`), used as a reference
   implementation and as a catalogue of defects to avoid.
@@ -38,6 +38,10 @@ surface syntax, and a test suite derived from the papers' own correctness claims
 separately [KR24] mA-local. Where documents conflict, **[T] is authoritative** as the latest and
 most complete, with conflicts recorded explicitly below rather than silently resolved.
 
+**Citation convention.** A bare `§N` always refers to a section of *this* document. Every reference
+into a source document carries its tag — `[T] §5.3`, `[KR21] §4.1`. Untagged references to source
+sections are errors; they have already caused one round of them.
+
 ### 1.2 Non-goals for v0.1
 
 - No planner, no search, no environment-agent behavior models.
@@ -45,7 +49,7 @@ most complete, with conflicts recorded explicitly below rather than silently res
 - No probabilistic or graded-degree belief.
 - No awareness logic (agents unaware that a proposition exists).
 - No general formula-satisfiability-driven model synthesis.
-- No hypothetical actions ([KR21] eq. 23). Known limitation, pinned by a failing test — see §3.8.
+- No hypothetical actions ([KR21] eq. 23). Known limitation, pinned by a failing test — see §4.8.
 
 ---
 
@@ -54,19 +58,255 @@ most complete, with conflicts recorded explicitly below rather than silently res
 | # | Decision | Rationale |
 |---|---|---|
 | D1 | **mB as the semantic base**, with backend-agnostic traits so mA-local can be added later | mB is the only language in the family covering all required features, notably untruthful announcements. [T] §6.4 already specifies the representation-agnostic interface. |
-| D2 | **mB+**: add conditional belief `B^ψ` and safe belief `□`; fix the [T] §5.3 announcement defect; add conditional effects | Cheap expressivity gain over the same models; §5.3 is an acknowledged defect in exactly the higher-order machinery that matters. |
+| D2 | **mB+**: add conditional belief `B^ψ` and safe belief `□`; fix the [T] §5.3 announcement defect; add conditional effects | Cheap expressivity gain over the same models; [T] §5.3 is an acknowledged defect in exactly the higher-order machinery that matters. |
 | D3 | **Rust** | Enums + exhaustive matching fit formula ASTs and event models; fast hash sets; the search parallelises in v0.2. The semantics are already pinned down by proofs, so iteration speed matters less than usual. |
 | D4 | **New surface language** with a type/object/grounding front-end | DEPL's grammar has drifted from its own corpus; grounding and constant folding earn their keep; the new modalities have no DEPL syntax. |
 | D5 | **Initial states**: declarative form + explicit escape hatch | The declarative form is what people write; the explicit form reproduces published figures exactly and is what the pretty-printer emits. |
 | D6 | **Incompleteness: tiers 1 + 2** — measure the gap, and ship complete equivalence for the K/B/□/C fragment | Bounded-depth merging (tier 3) has no consumer until the planner and carries unsoundness risk. |
-| D7 | **Hypothetical actions: test and document, do not fix in v0.1** | mB+ appears to inherit the defect [KR21] §7 exists to fix. Pin it with a failing test before changing Def. 2, the one part of mB with published proofs. See §3.8. |
-| D8 | **At most one `pre` clause per action**; conjunction written explicitly | [T], [MBD], [KR21], and the `[J]` corpus disagree three ways on how multiple executability statements combine. Removing multiplicity removes the ambiguity instead of picking a side. See §3.3. |
+| D7 | **Hypothetical actions: test and document, do not fix in v0.1** | mB+ appears to inherit the defect [KR21] §7 exists to fix. Pin it with a failing test before changing Def. 2, the one part of mB with published proofs. See §4.8. |
+| D8 | **At most one `pre` clause per action**; conjunction written explicitly | [T], [MBD], [KR21], and the `[J]` corpus disagree three ways on how multiple executability statements combine. Removing multiplicity removes the ambiguity instead of picking a side. See §4.3. |
 
 ---
 
-## 3. Semantics (mB+)
+## 3. Background: Kripke frames and the named systems
 
-### 3.1 Plausibility models — [T] §5.1.1
+*Orientation only — nothing here is a delhi design decision. Skip if `S5`, `KD45`, and "Euclidean"
+are already familiar. §4 assumes this vocabulary throughout.*
+
+### 3.1 What a Kripke model is
+
+Three ingredients: **worlds** (complete ways things might be), **arrows** (one set per agent,
+saying which worlds look possible from where), and a **valuation** (which propositions hold in
+which world). One world is **designated** — that's what is actually the case.
+
+```
+       ┌─────────┐    a     ┌─────────┐
+       │    u    │ ───────► │    v    │
+       │    p    │          │   ¬p    │
+       └─────────┘          └─────────┘
+        (actual)
+```
+
+From `u`, agent `a` considers `v` possible. Since `p` holds at `u` but not `v`, `a` **does not
+know** `p` — she cannot rule out a world where it fails.
+
+That is the whole idea: **a modality is a quantifier over arrows.** `□φ` holds at `u` when `φ`
+holds at every world `u` points to. Change which arrows exist and you change what the modality
+means. All the named systems below are just constraints on the arrows.
+
+### 3.2 The five frame properties
+
+Each property forces a corresponding axiom. The axiom is the *behaviour*; the property is the
+*shape of the picture* that produces it.
+
+**Reflexive** — `u R u`. Every world points to itself.
+
+```
+        ⟲         ⟲
+      ┌─────┐   ┌─────┐
+      │  u  │──►│  v  │
+      └─────┘   └─────┘
+```
+
+*Plain reading:* you never rule out reality — the actual world is always among those you consider
+possible. Validates **T**: `□φ → φ`. This is what makes knowledge **factive**: if you know it, it's
+true. Drop reflexivity and `□` can hold at a world where `φ` is false.
+
+**Transitive** — `u R v` and `v R w` implies `u R w`.
+
+```
+      ┌─────┐   ┌─────┐   ┌─────┐
+      │  u  │──►│  v  │──►│  w  │
+      └──┬──┘   └─────┘   └──▲──┘
+         │                   │
+         └───────────────────┘     ← this arrow is forced
+```
+
+*Plain reading:* no surprises two steps out. Validates **4**: `□φ → □□φ`, **positive
+introspection** — if you know something, you know that you know it.
+
+**Symmetric** — `u R v` implies `v R u`.
+
+```
+      ┌─────┐◄────►┌─────┐
+      │  u  │      │  v  │
+      └─────┘      └─────┘
+```
+
+*Plain reading:* possibility is mutual. Validates **B**: `φ → □◇φ` — whatever is actually true,
+you don't rule out that you're right about it.
+
+**Serial** — every world has at least one outgoing arrow.
+
+```
+   SERIAL                     NOT SERIAL
+   ┌─────┐   ┌─────┐          ┌─────┐
+   │  u  │──►│  v  │          │  u  │     ← dead end
+   └─────┘   └─────┘          └─────┘
+```
+
+*Plain reading:* you always consider *something* possible. Validates **D**: `□φ → ◇φ`, equivalently
+`¬□⊥` — **your beliefs are never outright contradictory**. From a dead-end world, `□φ` holds
+vacuously for *every* `φ`, so the agent would "believe" both `φ` and `¬φ`.
+
+**Euclidean** — `u R v` and `u R w` implies `v R w`.
+
+```
+             ┌─────┐
+          ┌─►│  v  │
+          │  └─────┘
+       ┌─────┐  ▲│
+       │  u  │  ││    ← v and w must see each other
+       └─────┘  │▼
+          │  ┌─────┐
+          └─►│  w  │
+             └─────┘
+```
+
+*Plain reading:* every world you consider possible agrees with every other about what you consider
+possible — you have perfect access to your own state of mind. Validates **5**: `◇φ → □◇φ`,
+**negative introspection** — if you *don't* believe something, you know that you don't.
+
+### 3.3 The named systems
+
+A system is just a bundle of these properties. Two matter here.
+
+| system | frame properties | axioms | models |
+|---|---|---|---|
+| K | none | K | the bare minimum |
+| T | reflexive | K, T | |
+| S4 | reflexive, transitive | K, T, 4 | |
+| **S5** | reflexive, transitive, symmetric (equivalently: reflexive + Euclidean) | K, T, 4, 5, B | **knowledge** |
+| **KD45** | **serial**, transitive, Euclidean | K, **D**, 4, 5 | **belief** |
+
+**S5 and KD45 differ in exactly one property, and that one difference is the entire distinction
+between knowing and believing.** S5 is reflexive and so validates `T`: `Kφ → φ`. KD45 replaces
+reflexivity with the weaker seriality and so validates only `D`: belief must be *consistent*, not
+*true*.
+
+```
+   S5  —  KNOWLEDGE                     KD45  —  BELIEF
+
+      ⟲          ⟲                     ┌────────────┐
+   ┌──────┐   ┌──────┐                 │   u    p   │  ← ACTUAL world,
+   │ u  p │◄─►│ v  p │                 └──────┬─────┘    with NO self-loop
+   └──────┘   └──────┘                        │
+                                              ▼      ⟲
+   u is inside its own                 ┌────────────┐
+   accessible set, so                  │   v   ¬p   │
+   K p holds AND p is true             └────────────┘
+
+                                       B ¬p holds — but p is actually true.
+                                       A FALSE BELIEF.
+```
+
+Reflexivity is precisely what forbids the right-hand picture. Seriality permits it, which is why
+belief can be wrong and knowledge cannot.
+
+### 3.4 Two relations: the bimodal approach ([KR21] / mA-revise)
+
+The traditional way to get both ([KR21] §2, after Hintikka) is to carry **two relations per
+agent** — an S5 `Kᵢ` and a KD45 `Bᵢ` — plus bridge axioms tying them together:
+
+- **KB1**: `Bᵢ ⊆ Kᵢ` as relations, i.e. `Kᵢφ → Bᵢφ` — you believe what you know.
+- **KB2**: `(u,v) ∈ Kᵢ, (v,w) ∈ Bᵢ ⇒ (u,w) ∈ Bᵢ`, i.e. `Bᵢφ → KᵢBᵢφ` — you know what you believe.
+
+```
+   ═══►  knowledge (S5)        ┌──────┐ ═════► ┌──────┐
+   ───►  belief (KD45)         │  u   │        │  v   │
+                               │  p   │ ─────► │  ¬p  │
+                               └──────┘        └──────┘
+                               knows nothing, believes ¬p
+```
+
+The cost is that **nothing keeps the two relations coherent as actions occur**. After an
+announcement, `Bᵢ` can lose seriality, so [KR21] needs a three-stage repair ([KR21] eqs. 18–20,
+`B^α1 → B^α2 → B^α`) that falls back on the knowledge relation to rebuild a serial belief relation.
+That repair is what [T] §5 calls "ad-hoc state transitions."
+
+### 3.5 mB's move: one preorder that generates both
+
+mB carries **one relation per agent**, `Rᵢ`, meaning *"v is at least as plausible as u."* It is:
+
+- reflexive ✓ and transitive ✓ — so a **preorder**,
+- **not symmetric** — deliberately, since the asymmetry is what encodes preference,
+- **locally connected** — see below.
+
+`Rᵢ` is not an accessibility relation at all. It is a **ranking**. Knowledge and belief are then
+*read off* it rather than stipulated:
+
+```
+                plausibility increases ──────────────►
+
+   ┌────────────┐                          ┌────────────┐
+   │     u      │ ───────────────────────► │     v      │
+   │     p      │                          │    ¬p      │
+   │  (ACTUAL)  │                          │            │
+   └────────────┘                          └────────────┘
+        (reflexive self-loops on both, omitted as always)
+
+   ~ᵢᵘ   = {u, v}   comparable at all     →  !K[i]p  and  !K[i]!p
+   Rᵢ(u) = {u, v}   at least as plausible →  ![][i]p
+   →ᵢᵘ   = {v}      the maximum           →  B[i]!p    ← FALSE BELIEF
+```
+
+One picture, three readings. And the derived relations land exactly where they should:
+
+- `~ᵢ := Rᵢ ∪ Rᵢ⁻¹` is reflexive, symmetric, transitive — an equivalence relation, hence **S5**.
+  → knowledge.
+- `Belᵢ := {(u,v) | v ∈ →ᵢᵘ}` is serial, transitive, Euclidean — hence **KD45**. → belief.
+  It is *not* reflexive (a world need not be among its own most-plausible), which is exactly what
+  licenses false belief.
+
+**KB1 and KB2 now hold by construction.** `→ᵢᵘ ⊆ ~ᵢᵘ` gives KB1 immediately. For KB2: if `u ~ᵢ v`
+then `~ᵢᵛ = ~ᵢᵘ`, so `→ᵢᵛ = →ᵢᵘ`. You cannot build an incoherent state, because there is only one
+relation to get wrong. §9 records both as property tests rather than axioms.
+
+**Local connectedness**, the unusual condition: whenever two worlds are joined by *any* undirected
+chain of `Rᵢ` edges, they must be directly comparable.
+
+```
+   FORBIDDEN:      ┌───┐        ┌───┐        u and v are linked through w,
+                   │ u │───►┌───┐◄───│ v │   so they must be comparable —
+                   └───┘    │ w │    └───┘   but neither u──►v nor v──►u exists
+                            └───┘
+```
+
+This is what makes `~ᵢ` transitive (hence an equivalence relation, hence `K` is S5) and what
+guarantees `→ᵢᵘ` is never empty (hence `Belᵢ` is serial, hence `B` is KD45). Both of mB's derived
+systems depend on it, so **product update must preserve it** — that is what [T] §9.2.1 proves and
+what §9's property suite checks.
+
+**What mB gives up.** `Rᵢ` itself is neither S5 nor KD45; it is S4 plus local connectedness. So the
+standard bisimulation and expressivity results for S5/KD45 do not transfer to it, which is the
+root of the incompleteness discussed in §6.
+
+### 3.6 Which properties hold where
+
+| relation | refl | trans | symm | serial | Eucl | system | gives you |
+|---|:---:|:---:|:---:|:---:|:---:|---|---|
+| mB `Rᵢ` — **primitive** | ✓ | ✓ | ✗ | ✓ | ✗ | S4 + local connectedness | the plausibility ranking; `□` safe belief, `B^ψ` conditional belief |
+| mB `~ᵢ` — derived | ✓ | ✓ | ✓ | ✓ | ✓ | **S5** | `K` knowledge |
+| mB `Belᵢ` — derived | ✗ | ✓ | ✗ | ✓ | ✓ | **KD45** | `B` belief |
+| [KR21] `Kᵢ` — primitive | ✓ | ✓ | ✓ | ✓ | ✓ | S5 | knowledge |
+| [KR21] `Bᵢ` — primitive | ✗ | ✓ | ✗ | ✓ | ✓ | KD45 | belief |
+| [KR24] `Rᵢ` — primitive | ✗ | — | ✗ | ✓ | — | serial; KD45 *assumed* | belief only — no knowledge modality |
+
+The last row is worth noting: [KR24] requires only seriality outright and states that whether its
+new semantics **preserves** KD45 across action occurrences "will be a topic of our future
+investigation." mB's analogous obligation — preservation of local well-preorderedness — *is*
+proved, in [T] §9.2.1. That is a point in mB's favour and a reason §9 treats those proofs as the
+specification for the frame property tests.
+
+---
+
+## 4. Semantics (mB+)
+
+### 4.1 Plausibility models — [T] §5.1.1
+
+*Frame vocabulary — reflexive, transitive, serial, Euclidean, preorder, S5, KD45 — is explained
+with diagrams in §3. §3.5 in particular shows how the single relation below yields both knowledge
+and belief.*
 
 Given finite sets of propositions `P` and agents `G`, a **plausibility model** is
 `M = ⟨W, R, V⟩`:
@@ -86,7 +326,7 @@ Derived:
 - `→ᵢ C := {u ∈ C | u' Rᵢ u for all u' ∈ C}` — the most-plausible elements of `C`.
   `→ᵢᵘ := →ᵢ ~ᵢᵘ`. Non-empty whenever `C` is.
 
-### 3.2 The query language `L_GB` — extends [T] Def. 1
+### 4.2 The query language `L_GB` — extends [T] Def. 1
 
 ```
 φ ::= p | ¬φ | φ ∧ φ | Kᵢφ | Bᵢφ | C_g φ | Bᵢ^ψ φ | □ᵢ φ
@@ -104,7 +344,7 @@ Derived:
 `∨`, `→`, `⊤`, `⊥` and the duals (`K'`, `B'`, `S'`) are sugar. The last two rows are new in mB+;
 `Bᵢφ ≡ Bᵢ^⊤ φ` must hold and is a property test.
 
-### 3.3 Action theories — extends [T] §5.2
+### 4.3 Action theories — extends [T] §5.2
 
 An action theory `T` is a set of statements. **Formula typing is load-bearing** and was omitted
 from [MBD] (which restricts everything to `L^P`); [T] §5.2 and [KR21] §3 agree on the following:
@@ -119,7 +359,7 @@ from [MBD] (which restricts everything to `L^P`); [T] §5.2 and [KR21] §3 agree
 | 6 | `i aware_of a if φ` | `φ ∈ L^P` |
 
 Form 4 taking a modal `ψ` has real consequences: announcement event preconditions
-(`a_pre ∧ ψ`, §3.6) are modal, so `pre` evaluation requires full modal entailment against the
+(`a_pre ∧ ψ`, §4.6) are modal, so `pre` evaluation requires full modal entailment against the
 *pre-update* model, and no consistency check on announcements may assume propositional formulas.
 [KR21] §3 is explicit: "ψ may be a belief formula, admitting announcements about beliefs and
 knowledge, and that ψ need not be true."
@@ -149,7 +389,7 @@ diagnostic with a source span):
   ([KR21] eq. 2 states the same requirement; eq. 6 derives `F(α,u) ∩ P(α,u) = ∅` from it.)
 - no `causes` list containing both `p` and `¬p` ([KR21] eq. 1 states the same requirement).
 
-### 3.4 Action plausibility models — [T] §5.1.2
+### 4.4 Action plausibility models — [T] §5.1.2
 
 `⟨E, Q, pre, add, del, Γ⟩` with `Q : E × E → (G → L^P)` the edge conditions,
 `pre : E → L^P`, `add, del : E → 2^P`, `Γ ⊆ E` designated.
@@ -163,7 +403,7 @@ Edge labels:
 Implicit throughout: every event has a reflexive `FPN` edge for every agent; every unlisted
 edge is `⊥`; every world has a reflexive `Rᵢ` edge.
 
-### 3.5 State transition — [T] Def. 2
+### 4.5 State transition — [T] Def. 2
 
 With `e ⟶^{iuv} f := ⟨M,u⟩ ⊨ Q(e,f)(i)` **and** `⟨M,v⟩ ⊨ Q(e,f)(i)`:
 
@@ -178,7 +418,7 @@ This is Baltag–Smets action-priority update: event plausibility overrides stat
 (first disjunct), so incoming information takes precedence over prior belief unless it
 contradicts prior knowledge.
 
-#### 3.5.1 [MBD] gives a different, non-equivalent rule
+#### 4.5.1 [MBD] gives a different, non-equivalent rule
 
 [MBD] line 129:
 
@@ -202,10 +442,10 @@ it is the reading consistent with action priority (a strict event preference mus
 out by the state order).
 
 *Test obligation:* implement both rules behind a feature flag, assert they agree on every worked
-example in §8, and assert the divergent configuration is reachable by at least one constructed
+example in §9, and assert the divergent configuration is reachable by at least one constructed
 case. This guards against having transcribed the wrong rule.
 
-### 3.6 The three constructions
+### 4.6 The three constructions
 
 **Ontic** ([T] Def. 4), with conditional effects. Base case (`P⁺`, `P⁻` the positive and
 negative literals of the `causes` list):
@@ -222,9 +462,9 @@ contradiction is a diagnostic, not a silent precedence rule. ([MBD] also carries
 With conditional effects, `e^c` splits into one event per realizable outcome, with mutually
 exclusive preconditions `a_pre ∧ (condition combination yielding that outcome)`, each with an
 `N` edge to `e^⊤`. Mutual exclusivity preserves the "exactly one designated event" applicability
-requirement. **This is the highest-risk part of the spec**; see §3.7.
+requirement. **This is the highest-risk part of the spec**; see §4.7.
 
-**Announcement** ([T] Def. 3), *pending the §5.3 fix*:
+**Announcement** ([T] Def. 3), *pending the [T] §5.3 fix*:
 
 `E = {e^φ, e^¬φ, e^⊤}`,
 `Q = {⟨⟨e^φ,e^¬φ⟩, PN⟩, ⟨⟨e^¬φ,e^φ⟩, FPN⟩, ⟨⟨e^φ,e^⊤⟩, N⟩, ⟨⟨e^¬φ,e^⊤⟩, N⟩}`,
@@ -234,9 +474,9 @@ requirement. **This is the highest-risk part of the spec**; see §3.7.
 **Sensing** ([T] Fig. 5.2): as announcement but `⟨⟨e^¬φ,e^φ⟩, PN⟩` instead of `FPN`, so full
 observers can epistemically distinguish the two events and thereby come to *know* whether `φ`.
 
-### 3.7 The two known defects and their acceptance criteria
+### 4.7 The two known defects and their acceptance criteria
 
-**(a) The §5.3 announcement defect.** [T] §5.3 states: given `a announces φ`, full observer `j`,
+**(a) The [T] §5.3 announcement defect.** [T] §5.3 states: given `a announces φ`, full observer `j`,
 partial observer `i`, "we have that `j` comes to know that `i` believes *that* `φ` (and not just
 *whether* `φ`)."
 
@@ -280,7 +520,7 @@ of exactly these equations (its comments cite "equation 4.6" … "equation 4.12"
 value only where the effect made it discernible; (iii) when two conditions could each have caused
 the same change, the observer learns the *disjunction* and not either disjunct.
 
-### 3.8 Hypothetical actions — a gap in mB (D7)
+### 4.8 Hypothetical actions — a gap in mB (D7)
 
 [KR21] §7 identifies its "most significant difference" from KR2020 as the treatment of oblivious
 agents: an agent oblivious to an action must consider **every** action she could not have ruled
@@ -315,11 +555,11 @@ limitation. Do **not** modify Def. 2 in v0.1: Def. 2 is the one part of mB with 
 frame-preservation proofs ([T] §9.2.1), extending it to `Hᵢ` would require re-establishing them,
 and it would widen the transition interface from one action to an action *set*.
 
-Options deferred to v0.2, in §11.
+Options deferred to v0.2, in §12.
 
 ---
 
-## 4. Architecture
+## 5. Architecture
 
 ```
 delhi/
@@ -339,7 +579,7 @@ though the model representation is not.
 `⊨g`, `⊨p`, the perspective shift `sⁱ`, the transition `×`, `app`, `β` — so v0.2's search is
 generic over it without touching the semantics.
 
-### 4.1 Representation decisions
+### 5.1 Representation decisions
 
 **Hash-consed formulas.** Formulas live in an arena; identical subterms share a `FormulaId`.
 Structural equality is an integer compare. Entailment memoizes on `(FormulaId, WorldId)` per
@@ -367,14 +607,14 @@ calls.
 3. State equality is a key comparison.
 
 **Claim boundary:** this gives hash-speed equality *up to bisimilarity*. It does not repair the
-incompleteness of §5 below. That conservatism is sound and is what [T] §6.1 already assumes
+incompleteness of §6 below. That conservatism is sound and is what [T] §6.1 already assumes
 ("it is not assumed that the bisimulation operators are complete").
 
 ---
 
-## 5. Incompleteness
+## 6. Incompleteness
 
-### 5.1 Where it comes from
+### 6.1 Where it comes from
 
 [T] p. 68 notes that bisimulation for multi-agent plausibility models is sound but not complete:
 two states may be modally equivalent without being bisimilar. The cause is localised.
@@ -391,7 +631,7 @@ two states may be modally equivalent without being bisimilar. The cause is local
 over a set that changes with the formula, so no fixed-relation bisimulation can be complete for
 it.
 
-### 5.2 Tier 1 — measure the gap (v0.1)
+### 6.2 Tier 1 — measure the gap (v0.1)
 
 Build a brute-force modal-equivalence oracle: enumerate formulas to bounded depth over the ground
 atom set and compare truth sets. Property-test the discordance rate on random small model pairs —
@@ -401,7 +641,7 @@ how often is `bisimilar = false` while `equivalent = true`?
 downstream decision depends on whether it bites on 40% of pairs or 0.1%, and the number is not
 published. The oracle is also a first-class correctness test in its own right.
 
-### 5.3 Tier 2 — complete equivalence for K/B/□/C (v0.1)
+### 6.3 Tier 2 — complete equivalence for K/B/□/C (v0.1)
 
 **Claim to be proved or refuted as the first task:** bisimulation over the *derived* relations
 `{~ᵢ, Belᵢ, Rᵢ, C-closure}` is complete for the `K/B/□/C` fragment, by Hennessy–Milner on finite
@@ -421,7 +661,7 @@ section exists to prevent, and it would be miserable to debug.
 
 `Bᵢ^ψ` queries are documented as the boundary where completeness is unavailable.
 
-### 5.4 Tier 3 — bounded-depth merging (deferred to v0.2)
+### 6.4 Tier 3 — bounded-depth merging (deferred to v0.2)
 
 For a fixed problem, states need only be distinguished up to the modal depth its formulas can
 observe: roughly `goal depth + horizon × max condition depth`. `d`-bisimulation is exactly
@@ -433,7 +673,7 @@ from "conservative, merges too little" to **"unsound, merges too much"** — wor
 it solves. It also has no consumer until the planner exists. When built: behind a flag, with
 differential testing against exact bisimulation.
 
-### 5.5 Explicitly not attempted
+### 6.5 Explicitly not attempted
 
 A canonical possibilities-style representation ([KR24] refs: Le, Fabiano, Son, Pontelli) would
 dissolve the problem rather than manage it, but possibilities are defined for KD45/S5 relations
@@ -441,9 +681,9 @@ and extending them to preorders with conditional-belief semantics is an open res
 
 ---
 
-## 6. Surface language
+## 7. Surface language
 
-### 6.1 Structure
+### 7.1 Structure
 
 A delhi file has sections: `types`, `objects`, `agents`, `props`, `constants?`,
 (`initially` | `state`), `goal?`, `actions`. Whitespace-insensitive; `//` and `/* */` comments.
@@ -456,7 +696,7 @@ information reaches the semantics. Constant folding matters for scale: declaring
 `!adjacent(Location, Location)` then overriding specific pairs means impossible actions are never
 generated, rather than being generated and repeatedly failing their preconditions.
 
-### 6.2 Actions
+### 7.2 Actions
 
 Action bodies are written as mB statements so they read like theory `T` in the papers:
 
@@ -484,7 +724,7 @@ action move(?a - Actor, ?f - Location, ?t - Location) {
 }
 ```
 
-### 6.3 Initial states
+### 7.3 Initial states
 
 Declarative form, compiled to a plausibility model by a direct total construction with no search:
 
@@ -519,10 +759,10 @@ Full formula-satisfiability model synthesis is out of scope — it is satisfiabi
 doxastic logic, PSPACE-complete even for plain KD45, more delicate over locally-well-preordered
 frames, and finding a canonical minimal model is harder still.
 
-### 6.4 Formula sugar
+### 7.4 Formula sugar
 
-The core query language (§3.2) has six operators and gains none. Everything in the attitude
-catalogue (§7.4) is a boolean combination of those six, and the parser desugars each one before
+The core query language (§4.2) has six operators and gains none. Everything in the attitude
+catalogue (§8.4) is a boolean combination of those six, and the parser desugars each one before
 lowering, so `delhi-mb` implements six entailment cases and no more.
 
 | surface | desugars to | name |
@@ -537,15 +777,15 @@ lowering, so `delhi-mb` implements six entailment cases and no more.
 | `C[*]φ` | `C[g]φ` over all declared agents | common knowledge, everyone |
 | `K[a,b]φ` | `K[a]φ & K[b]φ` | agent lists distribute over `K`, `B`, `□`, `Kw`, `Bw`, `?`, `¿` |
 
-`K'`, `B'`, and `S'` already exist in `[J] Depl.g4` with no implementing class (§10 row 9); here
+`K'`, `B'`, and `S'` already exist in `[J] Depl.g4` with no implementing class (§11 row 9); here
 they cost one parser rule each. Agent-list distribution matches the `[J]` corpus, which writes
-`K[alice, bob] φ`. The `?[a]φ` form generalises the `initially`-only usage of §6.3 to any formula
+`K[alice, bob] φ`. The `?[a]φ` form generalises the `initially`-only usage of §7.3 to any formula
 position.
 
 An ASCII alternative is accepted for every non-ASCII operator (`[]` for `□`, `??` for `¿`), since
 requiring `□` and `¿` at the keyboard would be hostile.
 
-### 6.5 Compiler structure
+### 7.5 Compiler structure
 
 Distinct stages — `lex → parse → AST → typecheck/ground → IR` — not `[J]`'s 996-line one-pass
 `DeplToProblem` visitor. Diagnostics carry source spans. A second front-end can be added against
@@ -553,12 +793,12 @@ the IR without touching the semantics.
 
 ---
 
-## 7. Using delhi: worked examples
+## 8. Using delhi: worked examples
 
 This section is normative for the surface syntax and illustrative for the semantics. Every formula
 here is a query delhi must accept and answer.
 
-### 7.1 Reading the model: `Rᵢ`, `~ᵢᵘ`, and `→ᵢᵘ`
+### 8.1 Reading the model: `Rᵢ`, `~ᵢᵘ`, and `→ᵢᵘ`
 
 Every attitude is a quantifier over some set of worlds, so the notation is worth ten lines.
 
@@ -607,7 +847,7 @@ smaller the set you quantify over, the weaker the claim.
 So A and B know the coin is heads; C considers both possible and leans — wrongly — toward tails.
 Note this falls out of the *shape* of the relation, with no extra machinery.
 
-### 7.2 The five attitudes, in plain terms
+### 8.2 The five attitudes, in plain terms
 
 | you write | it means | can it be wrong? |
 |---|---|---|
@@ -637,7 +877,7 @@ That gap is exactly where deception lives:
 
 - **`K[a]φ`** — there is no `!φ` world anywhere in `a`'s picture. Nothing anyone says, true or
   false, can make her believe `!φ`. She will simply reject it. (This is why mB's announcement
-  construction has full observers discard announcements contradicting prior knowledge, §7.7.)
+  construction has full observers discard announcements contradicting prior knowledge, §8.7.)
 - **`□[a]φ`** — `φ` is true and `a` believes it, and no *honest* information will change that,
   because conditioning on anything true can only ever move her among worlds at least as plausible
   as the actual one. But she *does* still carry a live `!φ` world, ranked below. **A lie can
@@ -682,9 +922,9 @@ B^{!heads}[carol] distracted_alice
 
 "If Carol were told the coin is tails, she would conclude Alice was distracted." A planner can ask
 this *before* choosing to announce, rather than announcing and inspecting the wreckage. Note
-`B[a]φ ≡ B^⊤[a]φ`, which §8 records as a property test.
+`B[a]φ ≡ B^⊤[a]φ`, which §9 records as a property test.
 
-### 7.3 Nesting: the attitudes that actually matter
+### 8.3 Nesting: the attitudes that actually matter
 
 Nesting is where this system does work nothing simpler can:
 
@@ -706,12 +946,12 @@ In English: *"I want to find out how the coin lies without the human realising I
 That single formula is the entire justification for higher-order modalities — you cannot state that
 goal at all in a system with only first-order belief.
 
-### 7.4 The full attitude catalogue
+### 8.4 The full attitude catalogue
 
-Only the six operators of §3.2 are primitive. Everything below is a **boolean combination of
+Only the six operators of §4.2 are primitive. Everything below is a **boolean combination of
 them** — which matters, because it means the surface language can grow without the semantics
-growing at all. Entries marked **sugar** are desugared by the parser (§6) into the middle column;
-`delhi-mb` never sees them, and §3.2 stays exactly as specified.
+growing at all. Entries marked **sugar** are desugared by the parser (§7) into the middle column;
+`delhi-mb` never sees them, and §4.2 stays exactly as specified.
 
 #### Ignorance and certainty
 
@@ -727,7 +967,7 @@ growing at all. Entries marked **sugar** are desugared by the parser (§6) into 
 Note `?[a]φ` and `¿[a]φ` are different and the gap between them is real: an agent can be ignorant
 *whether* φ while still believing φ — that is ordinary uncertain opinion, `?[a]φ & B[a]φ`.
 Suspension of judgement is the rarer case where she has no opinion at all. `?[a]φ` already exists
-in `initially` blocks (§6.3); this generalises it to any formula position.
+in `initially` blocks (§7.3); this generalises it to any formula position.
 
 #### Getting it right and getting it wrong
 
@@ -738,7 +978,7 @@ in `initially` blocks (§6.3); this generalises it to any formula position.
 | true belief that is not knowledge | `B[a]φ & φ & !K[a]φ` | right, but for all she knows she might not have been |
 | **wrong about whether** | `(B[a]φ & !φ) \| (B[a]!φ & φ)` | she has taken a definite position and it is the wrong one |
 | believes but isn't certain | `B[a]φ & !K[a]φ` | committed, but could be mistaken |
-| **vulnerable to deception** | `□[a]φ & !K[a]φ` | right, immune to honest correction, but a lie would flip her (§7.2) |
+| **vulnerable to deception** | `□[a]φ & !K[a]φ` | right, immune to honest correction, but a lie would flip her (§8.2) |
 | immune to deception | `K[a]φ` | no message of any kind can move her off φ |
 
 #### Attitudes about other agents
@@ -754,7 +994,7 @@ in `initially` blocks (§6.3); this generalises it to any formula position.
 
 The distinction in the last two rows is the one people most often collapse. `K[a]φ & K[b]φ` is
 consistent with each believing the other is ignorant; `C[a,b]φ` rules that out at every depth. A
-public announcement is *supposed* to produce the latter — and §3.7(a) records that mB's
+public announcement is *supposed* to produce the latter — and §4.7(a) records that mB's
 construction does not quite manage it, which is why this is a test rather than an assumption.
 
 #### Hypothetical and dynamic
@@ -763,16 +1003,16 @@ construction does not quite manage it, which is why this is a test rather than a
 |---|---|---|
 | would be persuaded by ψ | `!B[a]φ & B^ψ[a]φ` | telling her ψ would win her over to φ |
 | would be unmoved by ψ | `B[a]φ & B^ψ[a]φ` | φ survives learning ψ |
-| **would still believe φ if told otherwise** | `B^{!φ}[a]φ` | **equivalent to `K[a]φ`** (§7.2) |
+| **would still believe φ if told otherwise** | `B^{!φ}[a]φ` | **equivalent to `K[a]φ`** (§8.2) |
 | entrenched against honest news | `□[a]φ` | no true information changes her mind |
 
 **Not available in mB+:** *common belief* — the transitive closure over `Belᵢ` rather than `~ᵢ`.
 [KR24] uses `C_g` for exactly that, so the same symbol means different things across the two
-papers (§3.2). It would be cheap to add — one more closure over a derived relation — but it is a
-genuine sixth primitive rather than sugar, so it is recorded as an open question (§11) rather than
+papers (§4.2). It would be cheap to add — one more closure over a derived relation — but it is a
+genuine sixth primitive rather than sugar, so it is recorded as an open question (§12) rather than
 slipped in.
 
-### 7.5 A full trace: the Coin Lie scenario
+### 8.5 A full trace: the Coin Lie scenario
 
 Three agents (A, B, C), two propositions: `h` (coin is heads-up) and `d` (A is distracted). The
 coin *is* heads. The story: A lies that it isn't; B distracts A; C peeks and learns the truth; A
@@ -826,9 +1066,9 @@ version of C. That is the recipe for second-order false belief:
 
 Note also line `s1`: **A's lie does not shift B's or A's own knowledge.** Announcements are soft
 information — they are rejected outright when they contradict what an agent *knows*. That is the
-whole reason `announces` confers belief rather than knowledge (§7.7).
+whole reason `announces` confers belief rather than knowledge (§8.7).
 
-### 7.6 Observability: `observes`, `aware`, and neither
+### 8.6 Observability: `observes`, `aware`, and neither
 
 Every action assigns each agent to exactly one of three classes, per world:
 
@@ -838,7 +1078,7 @@ Every action assigns each agent to exactly one of three classes, per world:
 | `i aware a if φ` | **partial observer** | knows *that* something happened, not what |
 | neither clause fires | **oblivious** | believes nothing happened at all |
 
-`observes` and `aware` must never both hold for the same agent in the same world — §3.3 makes that
+`observes` and `aware` must never both hold for the same agent in the same world — §4.3 makes that
 a lowering-time diagnostic. An agent with no clause at all is oblivious everywhere.
 
 The `if` is the important part. **Static observability cannot produce false beliefs about
@@ -858,10 +1098,10 @@ What each class actually learns:
 
 "Believes nothing happened" is a *belief*, not knowledge: the action-worlds remain epistemically
 accessible, so an oblivious agent knows the action *could* have occurred while believing it did
-not. See [T] Prop. 5.2.8 — and §3.8 for the limitation that she does not consider *other* actions
+not. See [T] Prop. 5.2.8 — and §4.8 for the limitation that she does not consider *other* actions
 that might have occurred instead.
 
-### 7.7 The three action types, and when to use which
+### 8.7 The three action types, and when to use which
 
 **`causes` — ontic. Changes the world.**
 
@@ -876,7 +1116,7 @@ action move(?a - Actor, ?f - Location, ?t - Location) {
 ```
 
 The `?o` is scoped to its clause and expands over `Actor` — one `observes` statement per actor,
-each conditioned on that actor's location. Note the single `pre` with an explicit `&` (D8, §3.3).
+each conditioned on that actor's location. Note the single `pre` with an explicit `&` (D8, §4.3).
 
 With conditional effects:
 
@@ -893,7 +1133,7 @@ action flip_switch {
 Here an observer who sees the light come on thereby learns `!broken` — they observed an effect that
 only fires under that condition. When two different conditions could each have caused the *same*
 change, the observer learns only the **disjunction**, not which one fired. That is the "discernible
-conditions" machinery of §3.7(b), specified in [KR21] §4.1.
+conditions" machinery of §4.7(b), specified in [KR21] §4.1.
 
 **`determines` — sensing. Hard information: confers knowledge, cannot be wrong.**
 
@@ -907,7 +1147,7 @@ action peek_c {
 
 Use for looking, measuring, reading a sensor. A full observer ends up with `K[carol] h` or
 `K[carol] !h` depending on the actual value. Because it yields knowledge, `determines` takes a
-**propositional** formula only (§3.3).
+**propositional** formula only (§4.3).
 
 **`announces` — communication. Soft information: confers belief, may be false.**
 
@@ -925,7 +1165,7 @@ forced. If announcements conferred knowledge, a lie would make an agent know som
 is impossible by definition. So an announcement reorders plausibility instead, which is exactly
 what a plausibility model is for.
 
-Unlike `determines`, `announces` takes a **modal** formula (§3.3), so agents can talk about mental
+Unlike `determines`, `announces` takes a **modal** formula (§4.3), so agents can talk about mental
 states:
 
 ```
@@ -942,7 +1182,7 @@ and may be a lie.
 
 ---
 
-## 8. Testing
+## 9. Testing
 
 The strongest available lever: **the papers' correctness claims are universally quantified
 statements**, i.e. property tests written in prose. `[J]` has no test suite at all
@@ -964,8 +1204,8 @@ statements**, i.e. property tests written in prose. `[J]` has no test suite at a
 | [KR24] Figs 5–7 | Eavesdropping |
 | [KR21] Figs 1–3 | Bicycle (mA-revise reference values) |
 | [KR21] Figs 4–6 | Bicycle-2 — local observability; Fig. 6 is mA\*'s *wrong* answer |
-| **[KR21] Figs 7–8** | **Bicycle-3 — `#[should_panic]`, the §3.8 gap** |
-| [MBD] Figs 4–10 | Coin Lie under the [MBD] transition rule (§3.5.1 differential) |
+| **[KR21] Figs 7–8** | **Bicycle-3 — `#[should_panic]`, the §4.8 gap** |
+| [MBD] Figs 4–10 | Coin Lie under the [MBD] transition rule (§4.5.1 differential) |
 
 Each asserts both the entailments the text claims and a pretty-printed model snapshot, so a
 semantics change surfaces as a readable diff.
@@ -975,7 +1215,7 @@ they must be **re-derived**, and any divergence from the published figure is its
 record, not a test failure to suppress. [KR21] Fig. 6 and Fig. 8 are deliberately *incorrect*
 outputs of prior formalisms — they are negative tests, asserting mB+ does **not** reproduce them.
 And [MBD] Figs 4–10 depict the same Coin Lie scenario as [T] Figs 5.4–5.10, so running both is the
-§3.5.1 differential test.
+§4.5.1 differential test.
 
 **L3 — Propositions as `proptest` properties.**
 
@@ -988,7 +1228,7 @@ And [MBD] Figs 4–10 depict the same Coin Lie scenario as [T] Figs 5.4–5.10, 
 - [T] Prop. 5.2.5 — `a causes l` ⇒ result entails `l`.
 - [T] Props. 5.2.6–5.2.7 — observers learn ontic effects, and learn that observers learn them.
 - [T] Prop. 5.2.8 — non-observers' beliefs unchanged on the K-free fragment.
-- [KR21] Theorem 1 — all acquired knowledge is true: `∀α, i, u. ⟨M,u⟩ ⊨ 𝒦^α_iu` (§3.7(b)).
+- [KR21] Theorem 1 — all acquired knowledge is true: `∀α, i, u. ⟨M,u⟩ ⊨ 𝒦^α_iu` (§4.7(b)).
 
 **[KR21-S] as a ready-made frame suite.** The supplementary appendix proves, for mA-revise's
 *separate* `Kᵢ`/`Bᵢ`, that update preserves S5 (Thm. 2), KD45 (Thms. 5, Lemma 6), KB1 (Thm. 3), and
@@ -999,7 +1239,7 @@ seriality, Euclideanness. Two uses:
    (`(u,v) ∈ ~ᵢ ∧ (v,w) ∈ Belᵢ ⇒ (u,w) ∈ Belᵢ`) should hold **by construction**. That makes them
    theorems to *verify*, not axioms to assert — cheap property tests with the exact statements
    given by [KR21-S] lines 7–9.
-2. **If mA-revise becomes a backend (§11):** Thms. 2–5 transcribe directly into its property suite.
+2. **If mA-revise becomes a backend (§12):** Thms. 2–5 transcribe directly into its property suite.
 
 **L4 — Algebraic and metamorphic properties.**
 
@@ -1017,7 +1257,7 @@ relations and rejecting), bounded-depth random formulas, and well-formed random 
 
 ---
 
-## 9. Interfaces
+## 10. Interfaces
 
 Library API as the primary surface:
 
@@ -1048,28 +1288,28 @@ being a picture.
 
 ---
 
-## 10. Defects in mecaPlanner this design addresses
+## 11. Defects in mecaPlanner this design addresses
 
 | # | Defect | Addressed by |
 |---|---|---|
-| 1 | No tests whatsoever | §8 |
-| 2 | `Depl.g4` action syntax matches none of the ~90 corpus files | §6, new language |
-| 3 | `PlausibilityState.hashCode()` returns `1`; `equals()` returns `false` unconditionally | §4.1 canonical keys |
-| 4 | Event models built without the edge conditions Defs. 3–4 require | §3.6 |
-| 5 | Dead commented-out mA-revise code in `Action.java` | not ported; its idea reused in §3.7(b) |
-| 6 | Well-formedness as runtime `assert`, often disabled | §3.3 lowering-time diagnostics |
+| 1 | No tests whatsoever | §9 |
+| 2 | `Depl.g4` action syntax matches none of the ~90 corpus files | §7, new language |
+| 3 | `PlausibilityState.hashCode()` returns `1`; `equals()` returns `false` unconditionally | §5.1 canonical keys |
+| 4 | Event models built without the edge conditions Defs. 3–4 require | §4.6 |
+| 5 | Dead commented-out mA-revise code in `Action.java` | not ported; its idea reused in §4.7(b) |
+| 6 | Well-formedness as runtime `assert`, often disabled | §4.3 lowering-time diagnostics |
 | 7 | Environment models as compiled Java classes | deferred to v0.2 with a registry design |
-| 8 | 996-line one-pass parser visitor | §6.5 staged compiler |
-| 9 | `C[g]` documented in the README but absent from both `Depl.g4` and `formulae/`; `S'` (safe belief) reserved in the grammar with no implementing class. `[J] todo` lists "common knowledge" as future work | §3.2 |
-| 10 | No visualisation | §9 `delhi dot` |
-| 11 | `[J]` treats repeated `precondition{…}` clauses as a **conjunction** while [T] eq. 5.1 defines `a_pre` as a **disjunction** — the implementation and the paper contradict each other | §3.3 D8: one `pre` clause, explicit `&` |
-| 12 | `intermediateTransition` in `Action.java` is an abandoned transcription of [KR21] eqs. 4.6–4.12, containing the typo `m.get(m).add(c)` (should be `m.get(f)`), which is why it never worked | §3.7(b), ported properly from [KR21] §4.1 |
+| 8 | 996-line one-pass parser visitor | §7.5 staged compiler |
+| 9 | `C[g]` documented in the README but absent from both `Depl.g4` and `formulae/`; `S'` (safe belief) reserved in the grammar with no implementing class. `[J] todo` lists "common knowledge" as future work | §4.2 |
+| 10 | No visualisation | §10 `delhi dot` |
+| 11 | `[J]` treats repeated `precondition{…}` clauses as a **conjunction** while [T] eq. 5.1 defines `a_pre` as a **disjunction** — the implementation and the paper contradict each other | §4.3 D8: one `pre` clause, explicit `&` |
+| 12 | `intermediateTransition` in `Action.java` is an abandoned transcription of [KR21] eqs. 4.6–4.12, containing the typo `m.get(m).add(c)` (should be `m.get(f)`), which is why it never worked | §4.7(b), ported properly from [KR21] §4.1 |
 
 ---
 
-## 11. Open questions for v0.2
+## 12. Open questions for v0.2
 
-**Hypothetical actions (§3.8)** — the live one, informed by whatever the Bicycle-3 test shows:
+**Hypothetical actions (§4.8)** — the live one, informed by whatever the Bicycle-3 test shows:
 
 1. *Extend mB+*: port `Hᵢ` ([KR21] eq. 23) into product update, unioning in the action models of
    every action an oblivious agent could not rule out, plus `No-op`. Widens the transition
@@ -1091,11 +1331,11 @@ stronger candidate — and it is the one with a published supplementary proof ap
 - Environment-agent behavior model registry (replacing named Java classes).
 - Cooperation-agnostic search ([T] Ch. 6) generic over `delhi-core` traits.
 - Whether to build the DEPL importer for the EFP benchmark corpus.
-- Tier-3 bounded-depth merging (§5.4).
+- Tier-3 bounded-depth merging (§6.4).
 - **Common belief** as a seventh primitive: the transitive closure over `Belᵢ` rather than `~ᵢ`
-  (§7.4). mB has only common *knowledge*; [KR24] uses `C_g` for common belief, so the symbol is
+  (§8.4). mB has only common *knowledge*; [KR24] uses `C_g` for common belief, so the symbol is
   overloaded across the two papers. Implementation is one more closure over a derived relation, but
-  it is a genuine new operator rather than sugar, and it interacts with §5's completeness analysis
+  it is a genuine new operator rather than sugar, and it interacts with §6's completeness analysis
   (`Belᵢ` is derived, so its closure is derived twice over). Deliberately not slipped into v0.1.
-- Whether mB+'s announcement `ψ ∈ L^P_GB` (§3.3) interacts badly with `Hᵢ`, since a modal
+- Whether mB+'s announcement `ψ ∈ L^P_GB` (§4.3) interacts badly with `Hᵢ`, since a modal
   announcement precondition evaluated across hypothetical sub-models may not be well defined.
