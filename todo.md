@@ -43,9 +43,26 @@ Design spec: **`docs/superpowers/specs/2026-07-25-delhi-core-design.md`**
 
 ## Plan 2 — surface language and CLI (`delhi-lang`, `delhi-cli`)
 
-- [ ] Plan not yet written. Lexer, recursive-descent parser, type/object/grounding front-end,
-      `initially`/`state` lowering, sugar desugaring, and the six `delhi` subcommands
-      including `dot`. Depends only on Plan 1's public API.
+Plan: **`docs/superpowers/plans/2026-07-27-delhi-v0.1-surface-language.md`** — written, not yet executed.
+
+- [ ] **Task 1** — crate skeleton, spans, diagnostics
+- [ ] **Task 2** — lexer, with ASCII alternatives for `□` and `¿`
+- [ ] **Task 3** — formula expression parser
+- [ ] **Task 4** — section parser
+- [ ] **Task 5** — types, objects, predicate expansion
+- [ ] **Task 6** — constant folding
+- [ ] **Task 7** — formula lowering into `delhi-syntax`
+- [ ] **Task 8** — action grounding
+- [ ] **Task 9** — declarative `initially` construction
+- [ ] **Task 10** — explicit `state` form
+- [ ] **Task 11** — pretty-printer, round-tripping through Task 10
+- [ ] **Task 12** — `Problem` / `load`; **the gate**: `examples/coin_lie.delhi` must reproduce
+      Plan 1's `coin_lie.rs` assertions exactly
+- [ ] **Task 13** — CLI `check`, `show`, `eval`
+- [ ] **Task 14** — CLI `step`, `dot`
+- [ ] **Task 15** — CLI `repl`
+
+Depends only on Plan 1's public API; `delhi-mb` and `delhi-syntax` are not modified.
 
 ---
 
