@@ -62,7 +62,7 @@ sections are errors; they have already caused one round of them.
 | D3 | **Rust** | Enums + exhaustive matching fit formula ASTs and event models; fast hash sets; the search parallelises in v0.2. The semantics are already pinned down by proofs, so iteration speed matters less than usual. |
 | D4 | **New surface language** with a type/object/grounding front-end | DEPL's grammar has drifted from its own corpus; grounding and constant folding earn their keep; the new modalities have no DEPL syntax. |
 | D5 | **Initial states**: declarative form + explicit escape hatch | The declarative form is what people write; the explicit form reproduces published figures exactly and is what the pretty-printer emits. |
-| D6 | **Incompleteness: tiers 1 + 2** — measure the gap, and ship complete equivalence for the K/B/□/C fragment | Bounded-depth merging (tier 3) has no consumer until the planner and carries unsoundness risk. |
+| D6 | **Incompleteness: tiers 1 + 2**. Both resolved ahead of implementation (§6, `research/bisimulation/`): `~R` is sound but incomplete at ~10% of 4-world models; the cause is refining against `Rᵢ⁻¹`; `~D` is exactly modal equivalence and merges more. | Tier 3 (bounded-depth) still deferred — no consumer until the planner, and it carries unsoundness risk. |
 | D7 | **Hypothetical actions: test and document, do not fix in v0.1** | mB+ appears to inherit the defect [KR21] §7 exists to fix. Pin it with a failing test before changing Def. 2, the one part of mB with published proofs. See §4.8. |
 | D8 | **At most one `pre` clause per action**; conjunction written explicitly | [T], [MBD], [KR21], and the `[J]` corpus disagree three ways on how multiple executability statements combine. Removing multiplicity removes the ambiguity instead of picking a side. See §4.3. |
 
@@ -295,9 +295,10 @@ guarantees `→ᵢᵘ` is never empty (hence `Belᵢ` is serial, hence `B` is KD
 systems depend on it, so **product update must preserve it** — that is what [T] §9.2.1 proves and
 what §9's property suite checks.
 
-**What mB gives up.** `Rᵢ` itself is neither S5 nor KD45; it is S4 plus local connectedness. So the
-standard bisimulation and expressivity results for S5/KD45 do not transfer to it, which is the
-root of the incompleteness discussed in §6.
+**What mB gives up.** `Rᵢ` itself is neither S5 nor KD45; it is S4 plus local connectedness, so the
+standard results for S5/KD45 do not transfer to it directly. *(An earlier draft called this "the
+root of the incompleteness discussed in §6." It is not — §6.1.3 traces that to the contraction
+algorithm refining against `Rᵢ⁻¹`, a relation no operator is a box over. The two are unrelated.)*
 
 ### 3.6 Which properties hold where
 
@@ -432,12 +433,17 @@ Two features of mB sit outside the Hennessy–Milner setting:
 
 **`Bᵢ` is defined by *maximality*, which is a global property.** `→ᵢᵘ` is "the worlds that
 *everything* in the comparability class points to." Bisimulation's conditions are **local** — one
-edge at a time. Matching every edge individually does not self-evidently preserve a property
-quantified over an entire class. Whether it does anyway is precisely what §6.1.2 flags as unsettled.
+edge at a time — so it is not obvious that matching every edge preserves a property quantified over
+an entire class. **It does**, as it turns out: §6.1.2 proves it, using local connectedness (each
+class is a *total* preorder, so "top level" is well defined) plus finiteness. This one looked like a
+problem and is not.
 
 **`Bᵢ^ψ` maximises over a set that depends on the formula.** There is no fixed relation for a
 bisimulation to be *about*, so no fixed-relation bisimulation can be complete for it (§6.1.1). This
-one is not a gap in the proof — it is a genuine obstruction.
+one is a genuine obstruction, not a gap in a proof.
+
+Neither of these is what actually makes mB incomplete. That turns out to be an artefact of the
+contraction *algorithm* — refining against `Rᵢ⁻¹`, which no operator is a box over (§6.1.3).
 
 #### 3.7.6 Contraction: the algorithm delhi actually runs
 
@@ -850,19 +856,16 @@ incompleteness of §6 below. That conservatism is sound and is what [T] §6.1 al
 
 ## 6. Incompleteness
 
-### 6.1 Where it comes from
+### 6.1 Where it comes from — **resolved**
 
-> **Status: this section states conjectures, not results.** Everything below marked ⚠ must be
-> proved or refuted before any code depends on it. An earlier draft asserted these as fact; a
-> review found the causal story incoherent (§6.1.2). Treat §6 as a work item, not a specification.
->
-> **§3.7 is a prerequisite** — it defines bisimulation, the soundness/completeness split, the
-> Hennessy–Milner theorem this section tries to invoke, and why maximality-based `Bᵢ` sits outside
-> it. This section is unreadable without it.
+> **Status: settled.** Investigated 2026-07-27; full write-up and reproducible programs in
+> `research/bisimulation/` (`FINDINGS.md`, `soundness_probe.rs`, `gap_measurement.rs`).
+> An earlier draft of this section carried three mutually inconsistent conjectures; all three were
+> wrong, and are replaced below. §3.7 is the prerequisite for reading it.
 
-[T] p. 68: "the algorithm is not complete in the multi-agent case. Thus, when using mB we may
-compute that two states are not bisimilar even when they are semantically equivalent." Note [T]
-attributes this to *the algorithm*, citing Andersen, Bolander, van Ditmarsch et al. (2013).
+Notation: **`~R`** is bisimilarity over `{Rᵢ, Rᵢ⁻¹}` — what [T] describes and `[J]` implements.
+**`~D`** is bisimilarity over `{Rᵢ, ~ᵢ, Belᵢ, C-closure}` — one relation per operator. **`≡`** is
+modal equivalence for `K/B/□/C`.
 
 #### 6.1.1 Which operators factor through a fixed relation
 
@@ -874,76 +877,108 @@ attributes this to *the algorithm*, citing Andersen, Bolander, van Ditmarsch et 
 | `C_g` | `(∪_{i∈g} ~ᵢ)*` | yes (derived) |
 | `Bᵢ^ψ` | maxima of `~ᵢᵘ ∩ ⟦ψ⟧` | **no — varies with ψ** |
 
-This table is sound: `Bᵢ` maximises over a *fixed* class, so it factors through a derived relation;
-`Bᵢ^ψ` maximises over a set that changes with the formula, so no fixed-relation bisimulation can be
-complete for it.
+The last row stands: no fixed-relation bisimulation can be complete for conditional belief. The
+rest of the table is what makes §6.3 work.
 
-#### 6.1.2 ⚠ Why the obvious diagnosis cannot be right
+#### 6.1.2 `~R` is sound — `[J]` does not produce wrong answers
 
-An earlier draft concluded from that table that the incompleteness "is localised in `Bᵢ^ψ`." **That
-cannot explain [T]'s observation**, for a simple reason: **mB as published has no `Bᵢ^ψ`.** [T]
-Def. 1's language is `K`, `B`, `C` only. Conditional belief is a mB+ *addition* (D2). So whatever
-causes [T]'s incompleteness, it is not an operator [T] does not have.
+The dangerous possibility was that bisimulation fails to preserve `Bᵢ`, which would make
+contraction *unsound* and mecaPlanner's outputs wrong rather than merely slow. **It does not.**
 
-Two further tensions, both unresolved:
+*Proof.* Local connectedness makes each comparability class a total preorder, so `→ᵢᵘ` is its top
+level. Let `Z` be an `Rᵢ`-bisimulation, `u Z u'`, `w ∈ →ᵢᵘ`. Forth gives `w'` with `u' Rᵢ w'`,
+`w Z w'`. If `w'` is not maximal, take `y'` strictly above it; back gives `y` with `w Rᵢ y`,
+`y Z y'`; maximality of `w` puts `y` at the top level, so `y Rᵢ w`; forth on `y Z y'` gives `w''`
+with `y' Rᵢ w''` and `w Z w''`, whence `level(w'') ≥ level(y') > level(w')`. Iterate — levels are
+finite, so this terminates at a maximal `w*` with `w Z w*`. Symmetric in the other direction. ∎
 
-**⚠ (i) The ordering may be inverted.** [T]/`[J]` compute bisimulation over `{Rᵢ, Rᵢ⁻¹}`
-(`[J] splitBlocks` refines against both `lessToMorePlausible` and `moreToLessPlausible`). §6.3
-proposes bisimulation over `{~ᵢ, Belᵢ, Rᵢ, C-closure}`. Since `□` forces `Rᵢ` to be respected
-anyway, that set *adds* a back-and-forth requirement on `Belᵢ` — making it **finer**, so it merges
-**fewer** states, not more. But a finer relation cannot be *complete* for a language on which a
-coarser one is already *sound*: both would then sit on the same side of modal equivalence. Either
-`{Rᵢ, Rᵢ⁻¹}`-bisimulation is **not** sound for `B` (plausible — maximality is a global property
-that local back-and-forth need not preserve), or §6.3's claim is wrong. **Settle this first.**
+Only `Rᵢ` forth/back is used; the converse is needed for `Kᵢ`, not `Bᵢ`. Checked exhaustively for
+n ≤ 4 (451 730 models) and on 24 000 000 random models at n = 5…8 with 2–3 agents: **zero
+violations**.
 
-**⚠ (ii) mB+ changes the picture from [T]'s.** Adding `□ᵢ` — a box over `Rᵢ` itself — makes the
-plausibility *ordering* directly observable in the object language, which [T]'s `K`/`B`/`C`
-language cannot see. Two models that differ in ordering but agree on every maximal set are
-`K`/`B`-equivalent yet `□`-distinguishable. So mB+ is **closer** to `Rᵢ`-bisimulation than mB is,
-and [T]'s incompleteness analysis does not transfer to mB+ unmodified. This may shrink the gap;
-it may also mean tier 1's measurement differs between the two languages, which is itself worth
-measuring.
+#### 6.1.3 The real cause: refining against `Rᵢ⁻¹`, which no operator uses
 
-**§3.5's remark** that "`Rᵢ` is neither S5 nor KD45 … which is the root of the incompleteness" is a
-third distinct conjecture and is likewise unproven. The three should be reconciled, not left
-side by side.
+`[J] splitBlocks` refines against `lessToMorePlausible` **and** `moreToLessPlausible` — i.e. `Rᵢ`
+and `Rᵢ⁻¹` as separate relations. But **no operator in `L_GB` is a box over `Rᵢ⁻¹`.** `Kᵢ` is a box
+over the *union* `~ᵢ`, never over the converse alone. Refining against the converse separately
+discriminates on structure the language cannot express, so `~R` over-refines.
 
-### 6.2 Tier 1 — measure the gap (v0.1)
+Smallest witness (n=3, **one** agent), from `gap_measurement.rs`:
 
-Build a brute-force modal-equivalence oracle: enumerate formulas to bounded depth over the ground
-atom set and compare truth sets. Property-test the discordance rate on random small model pairs —
-how often is `bisimilar = false` while `equivalent = true`?
+```
+   worlds 0,1,2      valuations:  0 ↦ a,   1 ↦ b,   2 ↦ b
 
-"Incomplete in the multi-agent case" is currently a footnote with no magnitude attached. Every
-downstream decision depends on whether it bites on 40% of pairs or 0.1%, and the number is not
-published. The oracle is also a first-class correctness test in its own right.
+   Rᵢ:  0 ⇄ 1                    levels:  {2} < {0,1}
+        2 → 0,  2 → 1            →ᵢ = {0,1} at every world
+```
 
-### 6.3 Tier 2 — ⚠ conjectured complete equivalence for K/B/□/C (v0.1)
+Worlds 1 and 2 agree on valuation, on `~ᵢ` class (`{0,1,2}` both), and on `→ᵢ` (`{0,1}` both).
+`Rᵢ(1) = {0,1}` while `Rᵢ(2) = {0,1,2}` — but the extra world *is* 2, equivalent to 1, so no
+formula sees it. `~D` merges them; `~R` splits them, because `Rᵢ⁻¹(1) = {0,1,2}` and
+`Rᵢ⁻¹(2) = {2}`.
 
-**⚠ Claim to be proved or refuted as the first task:** bisimulation over the *derived* relations
-`{~ᵢ, Belᵢ, Rᵢ, C-closure}` is complete for the `K/B/□/C` fragment, by Hennessy–Milner on finite
-models. This is reasoned, not cited, and §6.1.2(i) identifies a tension that may refute it. **Nothing
-may depend on it until it is settled.** If it fails, tier 2 reduces to whatever fragment survives —
-possibly `K`/`□`/`C` without `B`, since `Belᵢ` is the problematic relation.
+**It is not about conditional belief.** An earlier draft blamed `Bᵢ^ψ` — which cannot be right,
+since mB as published has no `Bᵢ^ψ`. **Nor is it about `Rᵢ` failing to be S5 or KD45**, as §3.5
+once suggested. Both remarks have been removed.
 
-**Tier 2 is a decision procedure, not a performance measure.** Being *finer* than
-`{Rᵢ, Rᵢ⁻¹}`-bisimulation (§6.1.2(i)), it merges at most as many states and probably fewer. It does
-**not** shrink the search space and must not be sold as an optimisation. Its value is answering
-"are these two states equivalent?" correctly for the user, and dedup at terminal points.
+**It is also not a multi-agent phenomenon**, contrary to [T] p. 68. The single-agent rate (§6.2) is
+as high as the multi-agent one. [T] cites Andersen, Bolander, van Ditmarsch et al. (2013), whose
+notion *is* complete for a single agent — so `[J]` is **not implementing the technique [T] says it
+uses**; it runs plain Kripke partition refinement. Corroborating: `[J] reduce()` opens with
+`//normalize();`, commented out, where `normalize()` rebuilds relations from per-class minima.
 
-**Critical constraint.** Derived-relation bisimilarity is **not a congruence for product update**.
-Two states can agree on `~ᵢ`, `Belᵢ`, `C` yet differ on `Rᵢ`, and Def. 2 reads `Rᵢ` directly, so
-they diverge after an action. Therefore:
+### 6.2 Tier 1 — the gap, measured
 
-- `equivalent_static(s, s')` — derived relations, complete for K/B/□/C, for the user-facing
-  question and for dedup where nothing further will be applied.
-- `bisimilar(s, s')` and `contract(s)` — `Rᵢ` only, sound, incomplete, preserved by update. Used
-  inside the dynamics.
+Done ahead of implementation, since it decided §6.3. Fraction of models in which `~R` separates at
+least one pair that `≡` identifies:
 
-These are separate functions with names that say so. Conflating them is the failure mode this
-section exists to prevent, and it would be miserable to debug.
+| n | agents | models | incomplete | rate |
+|---|---|---|---|---|
+| 2 | 1 | 8 | 0 | 0 % |
+| 2 | 2 | 32 | 0 | 0 % |
+| 3 | 1 | 115 | 6 | **5.22 %** |
+| 3 | 2 | 2 645 | 144 | **5.44 %** |
+| 4 | 1 | 2 595 | 264 | **10.17 %** |
+| 4 | 2 | 448 935 | 42 120 | **9.38 %** |
 
-`Bᵢ^ψ` queries are documented as the boundary where completeness is unavailable.
+The rate roughly doubles from n=3 to n=4, and product update grows models — so this is the regime
+that matters. `[T]` attaches no number to "not complete"; this appears to be the first measurement.
+
+`gap_measurement.rs` becomes a v0.1 regression test: it must keep reporting **0 unsound** for `~R`,
+and delhi's own `~D` implementation must reproduce these merge counts.
+
+### 6.3 Tier 2 — `~D` is exactly modal equivalence (v0.1)
+
+**Established.** Every operator in the fragment is a box over a relation in `~D`'s set — `□ᵢ` over
+`Rᵢ`, `Kᵢ` over `~ᵢ`, `Bᵢ` over `Belᵢ`, `C_g` over the closure — and models are finite, hence
+image-finite. Hennessy–Milner (§3.7.4) then gives `~D = ≡` directly. The claim turned out duller
+than expected: it is that theorem applied to the right set of relations, not a new result.
+
+**Correction: `~D` merges MORE than `~R`, not fewer.** An earlier draft argued `~D` must be *finer*
+and therefore could only ever be a decision procedure. That was backwards. The error was assuming
+`~D` respects `Rᵢ⁻¹` because it respects `~ᵢ` — but back-and-forth on a *union* does not imply
+back-and-forth on each part. Measured across 451 730 exhaustive models, `~R ⊆ ~D` with zero
+exceptions, and `~D` admits a merge in ~10 % more models at n=4 (§6.2).
+
+So tier 2 is a **correctness fix and a performance win at once**: it is the complete notion, *and*
+it contracts harder than what `[J]` does.
+
+**The one thing still open: is `~D` a congruence for product update?** Required before `~D` may
+replace `~R` *inside* the dynamics. [T] Def. 2 reads `u ~ᵢ v`, `u Rᵢ v`, and `Q(e,f)(i)` at both
+`u` and `v`. The first two are `~D` relations; the third is propositional and therefore preserved,
+since `~D ⊆ ≡`. It plausibly holds, but proving it needs product update implemented, so it is a
+v0.1 work item rather than a precondition for starting.
+
+Until it is settled, ship both, named so they cannot be confused:
+
+- `bisimilar_dynamic(s, s')` / `contract_dynamic(s)` — `~R`. Sound (§6.1.2), a congruence by the
+  standard DEL argument, incomplete. Used inside the dynamics.
+- `equivalent(s, s')` / `contract_full(s)` — `~D`. Complete for `K/B/□/C`. Used for the user-facing
+  question and for dedup where nothing further is applied.
+
+If the congruence result goes through, `contract_dynamic` becomes `contract_full` and the ~10 %
+improvement applies to search as well. `Bᵢ^ψ` remains outside any fixed-relation bisimulation
+(§6.1.1); that boundary is unaffected and is documented as such.
 
 ### 6.4 Tier 3 — bounded-depth merging (deferred to v0.2)
 
@@ -1651,6 +1686,8 @@ stronger candidate — and it is the one with a published supplementary proof ap
   `[J] Depl.g4` and `[J] Assignment` already do (§4.3). Strictly more expressive, but [KR21] §4.1's
   observer machinery is specified for the conditional form, so what a full observer should *learn*
   from an assignment needs deriving before it can be adopted.
-- **§6 must be settled before it is built.** §6.1.2 identifies that the causal account of the
-  incompleteness is incoherent as written and that tier 2's completeness claim may be refuted by an
-  ordering argument. This is the one open item that blocks implementation rather than deferring it.
+- **Is `~D` a congruence for product update?** (§6.3) The last piece of the bisimulation story.
+  Resolving it turns `contract_dynamic` into `contract_full` and applies the ~10 % merge
+  improvement to search. Needs product update implemented first, so it is a v0.1 task, not a
+  precondition. *(§6 as a whole was the previous blocker; it was resolved on 2026-07-27 —
+  `research/bisimulation/FINDINGS.md`.)*
