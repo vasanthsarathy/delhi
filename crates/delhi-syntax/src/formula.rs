@@ -55,7 +55,11 @@ impl Store {
     }
 
     /// The node behind an id.
+    ///
+    /// # Panics
+    /// If `f` was not produced by this store.
     pub fn node(&self, f: FormulaId) -> &Node {
+        debug_assert!((f as usize) < self.nodes.len(), "id not produced by this store");
         &self.nodes[f as usize]
     }
 
@@ -172,5 +176,14 @@ mod tests {
             },
             other => panic!("expected Not, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn empty_conjunction_is_true_and_empty_disjunction_is_false() {
+        let mut s = Store::default();
+        let t = s.tru();
+        let f = s.fls();
+        assert_eq!(s.all(&[]), t, "empty conjunction must be verum");
+        assert_eq!(s.any(&[]), f, "empty disjunction must be falsum");
     }
 }
