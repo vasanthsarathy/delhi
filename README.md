@@ -560,6 +560,8 @@ rendered text, so clicking one selects exactly that span in the editor and scrol
 That matters more for authoring than the `check` button does, though there is one of those
 too. Every error is reported at once, as on the command line.
 
+A `clear` button sits on the results tab, and `:clear` does the same from the prompt.
+
 `new` starts from a small template, and `save` writes to a gitignored `scratch/` directory
 that the file dropdown lists alongside `examples/`. Only `scratch/` is writable, so the UI
 cannot overwrite a curated example; names are restricted to plain `.delhi` filenames, since

@@ -84,6 +84,13 @@
     letter-spacing: .1em; text-transform: uppercase;
   }
   .tabs button.on { color: var(--ink); border-bottom-color: var(--a0); }
+  /* Shown only while the results tab is active — on the model or explicit tabs there
+     would be nothing for it to clear, and a button that does nothing is worse than no
+     button. */
+  #clear { border: 1px solid var(--line); border-radius: 4px; padding: 1px 7px;
+           font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+           color: var(--dim); background: none; margin-left: 10px; }
+  #clear:hover { color: var(--ink); border-color: #4a525f; }
   .pane { display: none; }
   .pane.on { display: block; }
 
@@ -161,6 +168,7 @@
           <button data-tab="explicit">explicit</button>
           <button data-tab="errors">errors</button>
         </span>
+        <button id="clear" title="clear the results (:clear)">clear</button>
         <span class="note legend" id="legend"></span>
       </h2>
       <div class="body" style="padding:0">
@@ -176,7 +184,7 @@
 <div id="promptRow">
   <span class="caret">&gt;</span>
   <input id="prompt" spellcheck="false" autocomplete="off"
-         placeholder="a formula — B[alice] B[carol] !h — or :ask B[alice] _ · :do action · :state · :help">
+         placeholder="a formula — B[alice] B[carol] !h — or :ask B[alice] _ · :do action · :clear · :help">
 </div>
 
 <script>
@@ -225,8 +233,14 @@ function query() { return trace.map(a => 'a=' + encodeURIComponent(a)).join('&')
 function showTab(name) {
   for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.tab === name);
   for (const p of document.querySelectorAll('.pane')) p.classList.toggle('on', p.id === 'pane-' + name);
+  $('clear').style.display = name === 'results' ? '' : 'none';
 }
 for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => showTab(b.dataset.tab);
+
+function clearResults() {
+  $('results').innerHTML = '';
+}
+$('clear').onclick = () => { clearResults(); showTab('results'); };
 
 // ---- highlighting -----------------------------------------------------------
 // Rules in order: the first that matches at the cursor wins, so the sequence encodes
@@ -434,10 +448,14 @@ async function runCommand(line) {
     say('a formula evaluates in the current state — K B [] B^psi C Kw Bw ? ?? K\' B\' S\'', 'm');
     say(':ask [d] <pat>  which formulas of a shape hold; `_` is the hole', 'm');
     say('                :ask B[alice] _   ·   :ask ?[alice] _   ·   :ask 2 B[alice] _', 'm');
-    say(':do <action>    apply one      :undo  drop the last      :reset  clear', 'm');
+    say(':do <action>    apply one      :undo  drop the last      :reset  clear the trace', 'm');
     say(':state          re-show the state panel', 'm');
+    say(':clear          empty this panel', 'm');
     return;
   }
+  // Cleared *after* the echo above, so the panel ends genuinely empty rather than
+  // holding the `> :clear` that emptied it.
+  if (line === ':clear') { clearResults(); return; }
   if (line === ':reset') { trace = []; await refresh(); say('trace cleared', 'm'); return; }
   if (line === ':undo') {
     if (!trace.length) { say('nothing to undo', 'm'); return; }
