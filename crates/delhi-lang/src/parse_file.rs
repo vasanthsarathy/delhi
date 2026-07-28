@@ -409,9 +409,15 @@ mod tests {
     fn parses_every_section_of_a_realistic_file() {
         let a = parse(COIN);
         assert_eq!(a.types.len(), 1);
+        assert_eq!(a.types[0].name, "Actor", "the subtype must be `Actor`, not swapped with its parent");
+        assert_eq!(a.types[0].parent, "Object", "the supertype must be `Object`, not swapped with the subtype");
         assert_eq!(a.objects.len(), 3, "one declaration per object even when comma-grouped");
         assert_eq!(a.agents.len(), 3);
+        let agent_names: Vec<&str> = a.agents.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(agent_names, vec!["alice", "bob", "carol"], "agent names must be preserved, not blanked");
         assert_eq!(a.props.len(), 2);
+        let prop_names: Vec<&str> = a.props.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(prop_names, vec!["h", "d"], "prop names must be preserved, not blanked");
         assert_eq!(a.actions.len(), 2);
         assert!(matches!(a.init, Some(Init::Declarative(_, _))));
     }
@@ -446,6 +452,7 @@ mod tests {
                  v <- { }
                 carol: u ~ v
                 carol: v < u
+                carol: u <= v
             }
             actions{}
         "#;
@@ -455,13 +462,89 @@ mod tests {
                 assert_eq!(worlds.len(), 2);
                 assert!(worlds[0].designated, "`*` marks the designated world");
                 assert!(!worlds[1].designated);
-                assert_eq!(edges.len(), 2);
+                assert_eq!(edges.len(), 3);
                 assert_eq!(edges[0].cmp, Cmp::Equi);
                 assert_eq!(edges[1].cmp, Cmp::Lt);
                 assert_eq!((edges[1].from.as_str(), edges[1].to.as_str()), ("v", "u"));
+                // `<=` must parse to its own variant, not collapse onto `<`.
+                assert_eq!(edges[2].cmp, Cmp::Le);
+                assert_eq!((edges[2].from.as_str(), edges[2].to.as_str()), ("u", "v"));
             }
             other => panic!("expected an explicit state, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn causes_and_pre_clauses_carry_their_literals_and_guard() {
+        let src = r#"
+            types{} objects{} agents{ alice } props{ h, d }
+            initially{ h }
+            actions {
+                flip(?c - Object) {
+                    actor alice
+                    pre !d
+                    causes h, !d if d
+                }
+            }
+        "#;
+        let a = parse(src);
+        let act = &a.actions[0];
+        match &act.clauses[1] {
+            Clause::Pre(Expr::Not(inner, _)) => {
+                assert!(matches!(**inner, Expr::Atom(ref t) if t.pred == "d"), "`pre !d` must negate `d`, not something else");
+            }
+            other => panic!("expected Pre(!d), got {other:?}"),
+        }
+        match &act.clauses[2] {
+            Clause::Causes { lits, cond, .. } => {
+                assert_eq!(lits.len(), 2, "both `causes` literals must be kept");
+                assert_eq!(lits[0].0.pred, "h");
+                assert!(lits[0].1, "`h` (unmarked) must be positive");
+                assert_eq!(lits[1].0.pred, "d");
+                assert!(!lits[1].1, "`!d` must be negative");
+                match cond {
+                    Some(Expr::Atom(t)) => assert_eq!(t.pred, "d", "the `if` guard must be kept, not dropped"),
+                    other => panic!("expected the `if d` guard, got {other:?}"),
+                }
+            }
+            other => panic!("expected Causes, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn constants_section_parses_negation_and_term() {
+        let src = r#"
+            types{} objects{} agents{} props{ h, d }
+            constants { h, !d }
+            initially{}
+            actions{}
+        "#;
+        let a = parse(src);
+        assert_eq!(a.constants.len(), 2);
+        assert!(!a.constants[0].negated, "`h` (unmarked) must not be negated");
+        assert_eq!(a.constants[0].term.pred, "h");
+        assert!(a.constants[1].negated, "`!d` must be negated");
+        assert_eq!(a.constants[1].term.pred, "d", "the negated entry's term must still be `d`, not dropped");
+    }
+
+    #[test]
+    fn action_parameters_parse_variable_name_and_type() {
+        let src = r#"
+            types{} objects{} agents{} props{ h }
+            initially{}
+            actions {
+                flip(?c - Object, ?x - Actor) {
+                    actor alice
+                }
+            }
+        "#;
+        let a = parse(src);
+        let act = &a.actions[0];
+        assert_eq!(act.params.len(), 2, "both parameters must be kept");
+        assert_eq!(act.params[0].name, "c", "parameter name must not be swapped with its type");
+        assert_eq!(act.params[0].ty, "Object", "parameter type must not be swapped with its name");
+        assert_eq!(act.params[1].name, "x");
+        assert_eq!(act.params[1].ty, "Actor");
     }
 
     #[test]
