@@ -66,6 +66,57 @@ fn attitudes(p: &mut Problem, state: &State) -> String {
     out
 }
 
+/// Runs an enumeration and formats it, shared by `delhi ask` and the REPL's `:ask`.
+fn render_ask(p: &mut Problem, state: &State, pattern: &str, depth: usize, out: &mut String) -> i32 {
+    match delhi_lang::ask(p, state, pattern, depth) {
+        Err(e) => {
+            let _ = write!(out, "{}", style::bad(&e));
+            2
+        }
+        Ok(a) => {
+            for m in &a.matches {
+                let _ = writeln!(out, "  {m}");
+            }
+            let note = format!(
+                "{} of {} candidates at depth {depth}{}",
+                a.matches.len(),
+                a.considered,
+                if a.truncated { " (truncated — lower the depth for a complete answer)" } else { "" }
+            );
+            let _ = writeln!(out, "{}", style::dim(&note));
+            i32::from(a.matches.is_empty())
+        }
+    }
+}
+
+/// `delhi ask` — enumerate the formulas of a given shape that hold.
+///
+/// Exit code is `0` when something matched and `1` when nothing did, so a shell can
+/// branch on "is this agent ignorant of anything at all".
+pub fn cmd_ask(src: &str, actions: &[String], pattern: &str, depth: usize, out: &mut String) -> i32 {
+    let Some(mut p) = open(src, out) else {
+        return 1;
+    };
+    let n_agents = p.sig.n_agents();
+    let mut state = p.state.clone();
+    for name in actions {
+        let Some(g) = p.actions.iter().find(|a| &a.name == name) else {
+            let _ = writeln!(out, "no action `{name}`");
+            return 2;
+        };
+        let def = g.def.clone();
+        let model = delhi_mb::build(&def, &mut p.store, n_agents);
+        match state.apply(&p.store, &model) {
+            Some(next) => state = contracted(&next),
+            None => {
+                let _ = writeln!(out, "`{name}` is not applicable in the current state");
+                return 1;
+            }
+        }
+    }
+    render_ask(&mut p, &state, pattern, depth, out)
+}
+
 /// `delhi state` — the actual world's facts and every agent's attitude to every
 /// proposition. The readable counterpart to `show`, which prints the model itself.
 pub fn cmd_state(src: &str, out: &mut String) -> i32 {
@@ -257,6 +308,22 @@ pub fn repl_step(
                 let text = attitudes(p, &snapshot);
                 let _ = write!(out, "{text}");
             }
+            // `:ask [depth] <pattern>` — a leading integer sets the depth, else 0.
+            "ask" => {
+                let (depth, pattern) = match arg.split_once(char::is_whitespace) {
+                    Some((head, rest)) => match head.parse::<usize>() {
+                        Ok(d) => (d, rest.trim()),
+                        Err(_) => (0, arg),
+                    },
+                    None => (0, arg),
+                };
+                if pattern.is_empty() {
+                    let _ = writeln!(out, "usage: :ask [depth] <pattern with `_`>");
+                } else {
+                    let snapshot = state.clone();
+                    render_ask(p, &snapshot, pattern, depth, out);
+                }
+            }
             "reset" => {
                 *state = p.state.clone();
                 let _ = writeln!(out, "reset to the initial state");
@@ -293,6 +360,7 @@ pub fn repl_step(
                     "<formula>     evaluate in the current state — any operator:\n\
                      \x20                K B [] B^psi C Kw Bw ? ?? K' B' S'\n\
                      :state        facts, and each agent's attitude to each proposition\n\
+                     :ask [d] <p>  which formulas of a shape hold — `:ask 1 B[alice] _`\n\
                      :do <action>  apply an action and keep the result\n\
                      :actions      list the ground actions\n\
                      :show         print the model itself, in the explicit form\n\
@@ -819,6 +887,39 @@ mod tests {
         let knows = out.matches("knows h").count();
         assert_eq!(believes, 1, "only the first snapshot has a believing: {out}");
         assert!(knows >= 2, "after look(), a knows h too: {out}");
+    }
+
+    #[test]
+    fn ask_enumerates_after_the_trace_and_exits_on_whether_anything_matched() {
+        // `a` believes h only after being told, so this pins that `ask` replays the
+        // trace rather than answering about the initial state.
+        let (code, out) = run(|o| cmd_ask(COIN, &[], "B[a] _", 0, o));
+        assert_eq!(code, 0, "a believes h from the start here: {out}");
+        assert!(out.contains("B[a] (h)"), "got: {out}");
+
+        let (code, out) = run(|o| cmd_ask(COIN, &["tell()".to_string()], "B[a] _", 0, o));
+        assert_eq!(code, 0);
+        assert!(out.contains("B[a] (!h)"), "the lie landed: {out}");
+        assert!(!out.contains("B[a] (h)\n"), "and displaced the old belief: {out}");
+    }
+
+    #[test]
+    fn ask_exits_nonzero_when_nothing_matches_so_a_script_can_branch() {
+        // `b` knows h outright, so there is nothing he is ignorant of.
+        let (code, out) = run(|o| cmd_ask(COIN, &[], "?[b] _", 0, o));
+        assert_eq!(code, 1, "no matches must be distinguishable from matches: {out}");
+        assert!(out.contains("0 of"), "got: {out}");
+    }
+
+    #[test]
+    fn ask_reports_a_bad_pattern_as_a_usage_error() {
+        let (code, out) = run(|o| cmd_ask(COIN, &[], "B[a] h", 0, o));
+        assert_eq!(code, 2, "a pattern with no hole is a usage error, not an empty result");
+        assert!(out.contains('_'), "got: {out}");
+
+        let (code, out) = run(|o| cmd_ask(COIN, &[], "B[nobody] _", 0, o));
+        assert_eq!(code, 2);
+        assert!(out.contains("nobody"), "got: {out}");
     }
 
     #[test]

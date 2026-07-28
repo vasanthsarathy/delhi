@@ -267,7 +267,8 @@ does not know it.
 delhi check <FILE>                        parse, ground, and validate
 delhi state <FILE>                        facts, and each agent's attitudes
 delhi show  <FILE>                        the model itself, in the explicit form
-delhi eval  <FILE> -f <FORMULA>           evaluate a formula
+delhi eval  <FILE> -f <FORMULA>           evaluate one formula
+delhi ask   <FILE> -q <PATTERN>           enumerate what holds; `_` is the hole
 delhi step  <FILE> -a <ACTION>…           apply actions in sequence
 delhi dot   <FILE>                        Graphviz
 delhi repl  <FILE>                        explore interactively
@@ -276,6 +277,42 @@ delhi bench <FILE> [-n CYCLES] -a <ACTION>…   model growth and timing
 
 Exit codes are scriptable: `0` success or the formula holds, `1` the file was rejected or
 the formula is false, `2` a usage error or a malformed formula.
+
+### Asking what holds, rather than checking one thing
+
+`eval` answers "is this true?". `ask` answers "which of these are true?" — what does an
+agent believe, what is it ignorant of, what holds two levels down. That is the question you
+have when you are debugging a scenario and do not yet know what to look for.
+
+Write a pattern with `_` for the hole:
+
+```bash
+$ delhi ask examples/coin_lie.delhi -q "?[carol] _"
+  ?[carol] (h)                       # what carol cannot settle
+
+$ delhi ask examples/coin_lie.delhi -q "B[alice] B[carol] _" \
+      -a "announce_not_heads()" "distract_a()" "peek_c()"
+  B[alice] B[carol] (d)
+  B[alice] B[carol] (!h)             # the second-order false belief, found not guessed
+```
+
+`-d` sets how deeply the hole may nest, so `-d 1 -q "B[alice] _"` reaches
+`B[alice] (B[carol] !h)` without your having to name `B[carol]` yourself. In the REPL and
+the browser console it is `:ask [depth] <pattern>`.
+
+**What gets enumerated** is *modal literals* — a literal under some sequence of `K`/`B`
+modalities. Not "all formulas", of which there are infinitely many, since conjunction alone
+generates without bound. That restriction is not arbitrary: it is the representation
+Muise et al.'s PDKB planner is built on, chosen there for the reason it is chosen here, that
+the set is finite and its size follows from the signature and the depth. The count is
+`Σ_{k≤d} (2·agents)^k · 2·atoms`, which reaches ~3,900 at depth 3 with three agents and nine
+atoms, so there is a ceiling and you are told when it bites.
+
+Two details worth knowing. The pattern is itself the filter — `B[alice] _` at depth 1 also
+returns introspective truths like `B[alice] (B[alice] d)`, and naming the inner agent
+(`B[alice] B[carol] _`) is how you cut them out. And when a pattern cannot see polarity —
+ignorance of `h` *is* ignorance of `!h`, likewise `Kw`/`Bw` — only the positive form is
+listed, since printing both twins reads as two findings when there is one.
 
 ### Reading a state
 
@@ -652,7 +689,7 @@ things down. It also never once produced a wrong answer at runtime.
 
 ## What validates it
 
-217 tests, plus 2 that fail by design and are marked ignored — they pin known gaps rather
+246 tests, plus 2 that fail by design and are marked ignored — they pin known gaps rather
 than pretending they are absent.
 
 The load-bearing one is `examples/coin_lie.delhi`, which reproduces the published figures

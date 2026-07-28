@@ -139,6 +139,10 @@ fn main() {
             },
             "/api/state" => ("application/json", api::state(&body, &trace)),
             "/api/eval" => ("application/json", api::eval(&body, &trace, &get("f"))),
+            "/api/ask" => {
+                let depth = get("d").parse().unwrap_or(0);
+                ("application/json", api::ask(&body, &trace, &get("f"), depth))
+            }
             _ => ("text/plain; charset=utf-8", "not found".to_string()),
         };
 

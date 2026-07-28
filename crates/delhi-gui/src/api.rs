@@ -268,6 +268,50 @@ pub fn eval(src: &str, trace: &[String], formula: &str) -> String {
     serde_json::to_string(&reply).expect("serialises")
 }
 
+/// The result of an enumeration.
+#[derive(Serialize)]
+pub struct AskReply {
+    pub ok: bool,
+    pub matches: Vec<String>,
+    pub considered: usize,
+    pub truncated: bool,
+    pub error: Option<String>,
+}
+
+fn ask_error(e: String) -> String {
+    serde_json::to_string(&AskReply {
+        ok: false,
+        matches: Vec::new(),
+        considered: 0,
+        truncated: false,
+        error: Some(e),
+    })
+    .expect("serialises")
+}
+
+/// `POST /api/ask` — which formulas of the given shape hold in the state the trace reaches.
+pub fn ask(src: &str, trace: &[String], pattern: &str, depth: usize) -> String {
+    let mut p = match Problem::parse(src) {
+        Ok(p) => p,
+        Err(e) => return ask_error(e),
+    };
+    let (state, _, trace_error) = replay(&mut p, trace);
+    if let Some(e) = trace_error {
+        return ask_error(e);
+    }
+    match delhi_lang::ask(&mut p, &state, pattern, depth) {
+        Err(e) => ask_error(e),
+        Ok(a) => serde_json::to_string(&AskReply {
+            ok: true,
+            matches: a.matches,
+            considered: a.considered,
+            truncated: a.truncated,
+            error: None,
+        })
+        .expect("serialises"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -356,6 +400,33 @@ mod tests {
             .map(|s| s.to_string())
             .collect();
         assert_eq!(json(&eval(COIN, &trace, f))["value"], true);
+    }
+
+    #[test]
+    fn ask_enumerates_against_the_state_the_trace_reaches() {
+        // The second-order false belief is found rather than guessed — which is the
+        // reason to enumerate at all — and only after the trace, so this also pins
+        // that `ask` uses the replayed state.
+        let trace: Vec<String> = ["announce_not_heads()", "distract_a()", "peek_c()"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let v = json(&ask(COIN, &trace, "B[alice] B[carol] _", 0));
+        assert_eq!(v["ok"], true);
+        let ms: Vec<&str> = v["matches"].as_array().unwrap().iter().map(|m| m.as_str().unwrap()).collect();
+        assert!(ms.iter().any(|m| m.contains("(!h)")), "got {ms:?}");
+        assert!(!ms.contains(&"B[alice] B[carol] (h)"), "got {ms:?}");
+
+        let before = json(&ask(COIN, &[], "B[alice] B[carol] _", 0));
+        let bs: Vec<&str> = before["matches"].as_array().unwrap().iter().map(|m| m.as_str().unwrap()).collect();
+        assert!(!bs.iter().any(|m| m.contains("(!h)")), "not yet true initially: {bs:?}");
+    }
+
+    #[test]
+    fn ask_reports_a_pattern_without_a_hole_rather_than_returning_nothing() {
+        let v = json(&ask(COIN, &[], "B[alice] h", 0));
+        assert_eq!(v["ok"], false);
+        assert!(v["error"].as_str().unwrap().contains('_'));
     }
 
     #[test]

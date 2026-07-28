@@ -13,6 +13,7 @@ USAGE:
     delhi state <FILE>              facts, and each agent's attitudes
     delhi show  <FILE>              the model itself, in the explicit form
     delhi eval  <FILE> -f <FORMULA>
+    delhi ask   <FILE> [-d DEPTH] [-a ACTION]... -q <PATTERN>
     delhi step  <FILE> -a <ACTION>...
     delhi dot   <FILE>
     delhi repl  <FILE>
@@ -86,6 +87,61 @@ fn main() {
                 c
             }
         },
+        // `ask <FILE> [-d N] [-a ACTION]... -q <PATTERN>`. Flags are scanned rather than
+        // positional, because `-a` takes a variable number of values and `-q` must be
+        // able to follow them.
+        Some("ask") if args.len() >= 4 => {
+            let mut depth = 0usize;
+            let mut pattern = String::new();
+            let mut acts: Vec<String> = Vec::new();
+            let mut i = 2;
+            let mut bad = None;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "-d" if i + 1 < args.len() => match args[i + 1].parse() {
+                        Ok(d) => {
+                            depth = d;
+                            i += 2;
+                        }
+                        Err(_) => {
+                            bad = Some(format!("-d needs a number, got `{}`", args[i + 1]));
+                            break;
+                        }
+                    },
+                    "-q" if i + 1 < args.len() => {
+                        pattern = args[i + 1].clone();
+                        i += 2;
+                    }
+                    "-a" => {
+                        i += 1;
+                        while i < args.len() && !args[i].starts_with('-') {
+                            acts.push(args[i].clone());
+                            i += 1;
+                        }
+                    }
+                    other => {
+                        bad = Some(format!("unexpected argument `{other}`"));
+                        break;
+                    }
+                }
+            }
+            match (bad, pattern.is_empty()) {
+                (Some(msg), _) => {
+                    eprintln!("{msg}");
+                    2
+                }
+                (None, true) => usage(),
+                (None, false) => match read(&args[1]) {
+                    Err(c) => c,
+                    Ok(src) => {
+                        let mut out = String::new();
+                        let c = cmd::cmd_ask(&src, &acts, &pattern, depth, &mut out);
+                        print!("{out}");
+                        c
+                    }
+                },
+            }
+        }
         Some("repl") if args.len() == 2 => match read(&args[1]) {
             Err(c) => c,
             Ok(src) => cmd::cmd_repl(&src),

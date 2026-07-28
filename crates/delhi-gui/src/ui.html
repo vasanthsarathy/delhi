@@ -373,6 +373,10 @@ async function runCommand(line) {
 
   if (line === ':help') {
     log('a formula evaluates in the current state — K B [] B^psi C Kw Bw ? ?? K\' B\' S\'');
+    log(':ask [d] <pat> which formulas of a shape hold; `_` is the hole');
+    log('               e.g. :ask B[alice] _     what alice believes');
+    log('                    :ask ?[alice] _     what she is ignorant of');
+    log('                    :ask 2 B[alice] _   nested two levels deep');
     log(':do <action>   apply an action      :undo    drop the last one');
     log(':reset         clear the trace      :actions list them');
     return;
@@ -393,6 +397,23 @@ async function runCommand(line) {
     await refresh();
     if (latest && latest.trace_error) { log(latest.trace_error, 'e'); trace.pop(); await refresh(); }
     else log('applied ' + trace[trace.length - 1]);
+    return;
+  }
+  // `:ask [depth] <pattern>` — a leading integer sets the depth, otherwise 0.
+  if (line.startsWith(':ask')) {
+    let rest = line.slice(4).trim();
+    let depth = 0;
+    const m = rest.match(/^(\d+)\s+(.*)$/);
+    if (m) { depth = +m[1]; rest = m[2]; }
+    if (!rest) { log('usage: :ask [depth] <pattern with _>', 'e'); return; }
+    const res = await fetch(`/api/ask?${query()}&d=${depth}&f=${encodeURIComponent(rest)}`,
+                            { method: 'POST', body: $('editor').value });
+    const d = await res.json();
+    if (!d.ok) { log(d.error || 'error', 'e'); return; }
+    if (!d.matches.length) log('nothing matches', 'f');
+    for (const m2 of d.matches) log('  ' + m2, 't');
+    log(`${d.matches.length} of ${d.considered} candidates at depth ${depth}` +
+        (d.truncated ? ' (truncated — lower the depth)' : ''), 'q');
     return;
   }
   if (line.startsWith(':')) { log('unknown command — try :help', 'e'); return; }
