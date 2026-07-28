@@ -1,0 +1,68 @@
+// Grapevine — from the EFP benchmark suite.
+//
+// Ported from the mecaPlanner corpus (problems/efp/grapevine_config1.depl). Three
+// agents, two rooms, and one secret each. You may tell a secret you believe, and
+// whoever is in the room with you hears it. You may walk between rooms, and whoever is
+// in the room you leave sees you go.
+//
+// The goal is the interesting part, because one conjunct is *negative*:
+//
+//     B[a] secret(b)            a learns b's secret
+//     !B[c] secret(b)           and c does not
+//     B[b] B[a] !B[c] secret(b) and b knows that a knows c is out of the loop
+//
+// So it is not enough to spread information; you have to spread it to some agents and
+// not others, and then be sure the right agent knows about the gap. That is what makes
+// gossip domains a planning benchmark rather than a broadcast exercise.
+//
+// **On the port.** The original enumerates all 24 actions by hand — `share_a_sb_2`,
+// `left_c`, `right_a` and so on — because that encoding has no parameters. delhi does,
+// so the same domain is two action declarations that ground to the same 24. The
+// `same` constant is what makes `move` well formed: without it `move(a, r1, r1)`
+// grounds to an action causing `at(a,r1)` and `!at(a,r1)` at once, which is rejected as
+// contradictory. With it, the precondition folds to false at `?from == ?to` and those
+// six groundings are dropped before they are ever built.
+//
+// The original also names `god` as every action's owner, a dummy required by mA*'s
+// syntax; it observes nothing and appears in no goal, so the port drops it.
+
+types   { Actor - Object, Room - Object }
+objects { a, b, c - Actor
+          r1, r2 - Room }
+agents  { a, b, c }
+props   { at(Actor, Room), secret(Actor) }
+
+constants {
+    !same(Room, Room)              // two rooms differ unless they are the same one
+    same(r1, r1)
+    same(r2, r2)
+}
+
+initially {
+    secret(a) secret(b) secret(c)  // every secret is in fact true
+    at(a, r1) at(b, r1) at(c, r1)  // and everyone starts together in room 1
+
+    ?[b] secret(a)  ?[c] secret(a) // each agent knows her own secret and no other's:
+    ?[a] secret(b)  ?[c] secret(b) // declaring uncertainty for everyone *except* the
+    ?[a] secret(c)  ?[b] secret(c) // owner is what makes that true
+}
+
+goal { B[a] secret(b) & !B[c] secret(b) & B[b] B[a] !B[c] secret(b) }
+
+actions {
+    // Telling a secret you believe. Heard by whoever shares the room.
+    share(?who - Actor, ?whose - Actor, ?room - Room) {
+        actor     ?who
+        pre       B[?who] secret(?whose) & at(?who, ?room)
+        announces secret(?whose)
+        ?o observes if at(?o, ?room)
+    }
+
+    // Walking out. Seen by whoever is in the room being left — including the mover.
+    move(?who - Actor, ?from - Room, ?to - Room) {
+        actor  ?who
+        pre    at(?who, ?from) & !same(?from, ?to)
+        causes at(?who, ?to), !at(?who, ?from)
+        ?o observes if at(?o, ?from)
+    }
+}

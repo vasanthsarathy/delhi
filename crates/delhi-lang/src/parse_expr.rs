@@ -165,10 +165,18 @@ impl<'a> Parser<'a> {
                     match self.peek().clone() {
                         Tok::Lower(n) => {
                             self.bump();
-                            names.push(n);
+                            names.push(Arg::Obj(n));
+                        }
+                        // A variable is legal here so that a parameterised action can
+                        // speak about its own parameter's beliefs, as in
+                        // `share(?who) { pre B[?who] secret }`. It resolves through the
+                        // same bindings as any other argument.
+                        Tok::Var(n) => {
+                            self.bump();
+                            names.push(Arg::Var(n));
                         }
                         _ => {
-                            diags.push(self.span(), "expected an agent name");
+                            diags.push(self.span(), "expected an agent name or `?variable`");
                             break;
                         }
                     }
@@ -300,9 +308,29 @@ mod tests {
     fn agent_lists_are_preserved_for_lowering() {
         match parse("K[alice, bob] p()") {
             Expr::Modality { op: Modal::Knows, agents: Some(a), .. } => {
-                assert_eq!(a, vec!["alice".to_string(), "bob".to_string()]);
+                assert_eq!(a, vec![Arg::Obj("alice".into()), Arg::Obj("bob".into())]);
             }
             other => panic!("expected Knows with two agents, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_variable_may_stand_where_an_agent_name_does() {
+        // What makes `share(?who) { pre B[?who] secret(?whose) }` writable at all. The
+        // parser must keep the variable rather than demanding a literal name, so that
+        // grounding can substitute it like any other argument.
+        match parse("B[?who] p()") {
+            Expr::Modality { op: Modal::Believes, agents: Some(a), .. } => {
+                assert_eq!(a, vec![Arg::Var("who".into())]);
+            }
+            other => panic!("expected Believes with a variable agent, got {other:?}"),
+        }
+        // Mixed lists too — a group modality may name some agents and bind others.
+        match parse("C[alice, ?other] p()") {
+            Expr::Modality { op: Modal::Common, agents: Some(a), .. } => {
+                assert_eq!(a, vec![Arg::Obj("alice".into()), Arg::Var("other".into())]);
+            }
+            other => panic!("expected Common with a mixed list, got {other:?}"),
         }
     }
 

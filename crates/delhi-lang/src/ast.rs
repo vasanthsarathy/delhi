@@ -74,7 +74,12 @@ pub enum Expr {
         /// Which operator.
         op: Modal,
         /// The agent list, or `None` for `C[*]`.
-        agents: Option<Vec<String>>,
+        ///
+        /// `Arg` rather than `String` so an action parameter can appear here:
+        /// `share(?who) { pre B[?who] secret }` needs the modality's agent to be
+        /// resolved through the same bindings as the rest of the formula. `Arg::Ty` is
+        /// never legal in this position and is rejected at lowering.
+        agents: Option<Vec<Arg>>,
         /// The `ψ` of a conditional belief `B^ψ[a]φ`, otherwise `None`.
         cond: Option<Box<Expr>>,
         /// The operand.

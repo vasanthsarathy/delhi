@@ -133,7 +133,7 @@ state and paste the result back.
 
 ## Examples
 
-Seven domains in `examples/`, each runnable and each pinned by a test in
+Nine domains in `examples/`, each runnable and each pinned by a test in
 `crates/delhi-lang/tests/` so the file, the test, and this README cannot drift apart.
 
 | File | What it is for |
@@ -145,6 +145,14 @@ Seven domains in `examples/`, each runnable and each pinned by a test in
 | `bicycle.delhi` | The Birthday Bicycle — Sullivan, Zaitchik & Tager-Flusberg (1994); the story KR 2021 opens with |
 | `coin_in_the_box.delhi` | The standard epistemic-planning benchmark |
 | `muddy_children.delhi` | The canonical multi-agent puzzle |
+| `selective_communication.delhi` | SC_3_4 from the EFP suite — third-order goals, position-dependent audiences |
+| `grapevine.delhi` | Grapevine from the EFP suite — gossip, with a *negative* goal conjunct |
+
+The last two are ports of published benchmarks (from the mecaPlanner corpus in `refs/`), so
+delhi's numbers on them can be set against EFP's and PDKB's. Grapevine is also the compactness
+case: the original enumerates 24 actions by hand because that encoding has no parameters, and
+the port is two declarations that ground to the same 24 — a test asserts exactly that, including
+that the six `move(x, r, r)` groundings are pruned rather than built and rejected.
 
 **Sally-Anne** is the whole reason a system like this exists. Sally puts her marble in the
 basket and leaves; Anne moves it to the box; Sally returns. Asked where Sally will look,
@@ -304,12 +312,43 @@ sixteen at cycle 8. The trajectory is flat, and cost per cycle becomes constant 
 0.6 ms — so total time is linear in the number of actions rather than exponential.
 
 Muddy Children behaves the same way, settling at 32 worlds while the uncontracted run reaches
-8,192 and 8.8 seconds. Coin in the Box terminates on its own after two cycles, because
-`open_box()` requires `!opened`.
+8,192 and 8.8 seconds.
 
-So the honest answer to "how fast is this" is: **fast if you quotient, hopeless if you
-don't**, and the difference is thousands of times over a dozen actions rather than a
-constant factor.
+**But a fixed point is not the general case, and Grapevine shows it.** That domain's cycle —
+c leaves the room, b tells a secret, c comes back — creates a genuinely new distinction every
+time round, because each repetition adds another layer of who-was-present-for-what. Contraction
+cannot merge what is really different:
+
+```
+$ delhi bench examples/grapevine.delhi -n 6 \
+      -a "move(c,r1,r2)" "share(b,b,r1)" "move(c,r2,r1)"
+
+cycle      worlds      cumul   worlds ~R      cumul
+    0           8          -           8          -
+    1          36    378.6us          36    528.1us
+    2         160      5.1ms          92      5.1ms
+    3         756    103.6ms         188     26.1ms
+    4        3740      2.50s         588    123.0ms
+    5        6052      6.52s        2460      1.33s
+    6           -          -        7276      9.71s
+```
+
+Contraction still earns its place — roughly 2.5–5× fewer worlds at each depth, and it buys
+two extra cycles before the cap — but it converts an explosion into a slower explosion, not
+into a flat line.
+
+So the honest answer to "how fast is this" comes in two parts. **Quotient, always**: the
+difference is thousands of times over a dozen actions, not a constant factor. **And whether
+that is enough depends entirely on the domain**: when actions stop producing distinguishable
+events you get a fixed point and effectively unlimited depth; when they keep producing them,
+as in gossip domains, you get maybe five or six cycles before it stops being interesting. A
+planner over this will need more than contraction — depth bounds, heuristics, or a restricted
+representation of the kind PDKB uses.
+
+One incidental observation from these runs: `~R` and `~D` produced *identical* world counts at
+every step in every domain here. The 5–10 % merge gap measured over random models in
+`research/bisimulation/` did not show up on any real domain, which is worth knowing before
+anyone spends effort trying to exploit it.
 
 That finding changed the tool. `step` and the REPL now quotient by `~R` after every update,
 which took twelve Coin Lie actions from ~9.5 s and 8,192 worlds to **29 ms and 16 worlds**.
@@ -322,12 +361,10 @@ and reports a disagreement loudly — for `~R` that would mean a bug against a p
 congruence, and for `~D` it would be evidence on the open question. Across these domains all
 three agree, and `~R` and `~D` reach the same fixed point.
 
-Two caveats worth stating. These are wall-clock numbers from one release build on one laptop,
-so read the ratios and the shapes, not the absolute microseconds. And a fixed point is not
-guaranteed in general — it is what these domains do, because their actions stop producing
-distinguishable events. A domain whose actions keep introducing genuinely new distinctions
-will keep growing however you quotient it, and the underlying problem is hard for reasons no
-implementation detail can fix.
+These are wall-clock numbers from one release build on one laptop, so read the ratios and the
+shapes rather than the absolute microseconds. And none of this makes the underlying problem
+easy — epistemic plan existence is undecidable in general, and no implementation detail
+changes that.
 
 ## Layout
 
@@ -538,7 +575,7 @@ things down. It also never once produced a wrong answer at runtime.
 
 ## What validates it
 
-203 tests, plus 2 that fail by design and are marked ignored — they pin known gaps rather
+213 tests, plus 2 that fail by design and are marked ignored — they pin known gaps rather
 than pretending they are absent.
 
 The load-bearing one is `examples/coin_lie.delhi`, which reproduces the published figures

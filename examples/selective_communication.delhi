@@ -1,0 +1,96 @@
+// Selective Communication (SC_3_4) — from the EFP benchmark suite.
+//
+// Ported from the mecaPlanner corpus (problems/efp/SC_3_4.depl), which is the encoding
+// used to measure epistemic planners. Three agents and four positions.
+//
+// Agent `a` can sense the truth of `q`, but only from position 2. Everyone can walk
+// left and right along the four positions, and everyone sees them do it. Shouting `q`
+// is possible from any position, but *who hears it depends on where you are*:
+//
+//     position 1 -> a, b        position 3 -> b, c
+//     position 2 -> a, b, c     position 4 -> a, c
+//
+// That is the whole puzzle. To get a nested belief to a particular agent you have to
+// walk to the position whose audience is the one you need. The goals are third-order:
+//
+//     B[a] B[c] B[a] q     and     B[c] B[a] B[c] q
+//
+// Two notes on the port. The original names `god` as the owner of every action, a dummy
+// required by mA*'s syntax; `god` observes nothing and appears in no goal, so it is pure
+// scaffolding. delhi records an actor for display only — it never reaches the semantics —
+// so the port drops `god` and keeps the three agents that do epistemic work. And the
+// original's `shout_2` lists `observes{a}` twice, which is harmless and not reproduced.
+
+types   { Actor - Object }
+objects { a, b, c - Actor }
+agents  { a, b, c }
+props   { q, at_1, at_2, at_3, at_4 }
+
+initially {
+    q                              // q is in fact true
+    at_1                           // and everyone starts at position 1
+
+    ?[a] q                         // but nobody can see whether q holds
+    ?[b] q
+    ?[c] q
+}
+
+goal { B[a] B[c] B[a] q & B[c] B[a] B[c] q }
+
+actions {
+    // Walking is public: everyone sees the position change.
+    left() {
+        actor  a
+        pre    !at_1
+        causes at_3, !at_4 if at_4
+        causes at_2, !at_3 if at_3
+        causes at_1, !at_2 if at_2
+        a observes, b observes, c observes
+    }
+
+    right() {
+        actor  a
+        pre    !at_4
+        causes at_2, !at_1 if at_1
+        causes at_3, !at_2 if at_2
+        causes at_4, !at_3 if at_3
+        a observes, b observes, c observes
+    }
+
+    // Only `a`, and only from position 2, can find out whether q.
+    sense() {
+        actor      a
+        pre        at_2
+        determines q
+        a observes
+    }
+
+    // Shouting requires already believing q. The audience is the position's.
+    shout_1() {
+        actor     a
+        pre       B[a] q & at_1
+        announces q
+        a observes, b observes
+    }
+
+    shout_2() {
+        actor     a
+        pre       B[a] q & at_2
+        announces q
+        a observes, b observes, c observes
+    }
+
+    shout_3() {
+        actor     a
+        pre       B[a] q & at_3
+        announces q
+        b observes, c observes
+    }
+
+    shout_4() {
+        actor     a
+        pre       B[a] q & at_4
+        announces q
+        a observes, c observes
+    }
+}

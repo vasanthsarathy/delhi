@@ -1,7 +1,7 @@
 //! The declarative `initially` construction (§7.3).
 
 use crate::ast::{Expr, Modal};
-use crate::lower_formula::{lower_formula, Bindings};
+use crate::lower_formula::{lower_formula, resolve_agents, Bindings};
 use crate::{Ctx, Diagnostics};
 use delhi_mb::{Bits, Model, State};
 use delhi_syntax::{AgentId, AtomId, FormulaId, Node, Store};
@@ -67,22 +67,6 @@ fn relower(body: &Expr, ctx: &Ctx, binds: &Bindings, store: &mut Store) -> Formu
     f
 }
 
-/// Resolves an agent-name list, reporting any name that was never declared.
-fn agent_ids(
-    names: &[String],
-    ctx: &Ctx,
-    span: crate::Span,
-    diags: &mut Diagnostics,
-) -> Vec<AgentId> {
-    let mut out = Vec::with_capacity(names.len());
-    for n in names {
-        match ctx.sig.agent_id(n) {
-            Some(i) => out.push(i),
-            None => diags.push(span, format!("`{n}` is not a declared agent")),
-        }
-    }
-    out
-}
 
 /// Builds the initial state from a declarative block, then verifies every entry.
 ///
@@ -162,7 +146,7 @@ pub fn build_declarative(
                     Some(a) => {
                         drove[k] = true;
                         uncertain.extend(
-                            agent_ids(names, ctx, *span, diags).into_iter().map(|i| (i, a)),
+                            resolve_agents(names, ctx.sig, &Bindings::default(), *span, diags).into_iter().map(|i| (i, a)),
                         );
                     }
                     None => diags.push(
@@ -178,7 +162,7 @@ pub fn build_declarative(
                 if is_propositional(store, f) {
                     drove[k] = true;
                     beliefs
-                        .extend(agent_ids(names, ctx, *span, diags).into_iter().map(|i| (i, f)));
+                        .extend(resolve_agents(names, ctx.sig, &Bindings::default(), *span, diags).into_iter().map(|i| (i, f)));
                 }
             }
             _ => { /* assertion only */ }

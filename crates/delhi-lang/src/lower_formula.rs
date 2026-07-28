@@ -113,17 +113,36 @@ pub(crate) fn resolve_args(
 }
 
 /// Resolves an agent list to ids, reporting any that were never declared.
-fn resolve_agents(
-    names: &[String],
+///
+/// A variable resolves through `binds`, which is what lets a parameterised action say
+/// `pre B[?who] secret(?whose)`. A type name is never an agent, so `Arg::Ty` is
+/// rejected here rather than being looked up and reported as undeclared.
+pub(crate) fn resolve_agents(
+    names: &[Arg],
     sig: &Sig,
+    binds: &Bindings,
     span: Span,
     diags: &mut Diagnostics,
 ) -> Vec<AgentId> {
     let mut out = Vec::with_capacity(names.len());
-    for n in names {
-        match sig.agent_id(n) {
+    for a in names {
+        let name = match a {
+            Arg::Obj(o) => o.clone(),
+            Arg::Var(v) => match binds.get(v) {
+                Some(o) => o.to_string(),
+                None => {
+                    diags.push(span, format!("`?{v}` is not bound here"));
+                    continue;
+                }
+            },
+            Arg::Ty(t) => {
+                diags.push(span, format!("`{t}` is a type, not an agent"));
+                continue;
+            }
+        };
+        match sig.agent_id(&name) {
             Some(i) => out.push(i),
-            None => diags.push(span, format!("`{n}` is not a declared agent")),
+            None => diags.push(span, format!("`{name}` is not a declared agent")),
         }
     }
     out
@@ -209,7 +228,7 @@ pub fn lower_formula(
                         let n = sig.n_agents();
                         if n >= 32 { u32::MAX } else { (1u32 << n) - 1 }
                     }
-                    Some(names) => resolve_agents(names, sig, *span, diags)
+                    Some(names) => resolve_agents(names, sig, binds, *span, diags)
                         .into_iter()
                         .fold(0u32, |m, i| m | (1u32 << i)),
                 };
@@ -220,7 +239,7 @@ pub fn lower_formula(
                 diags.push(*span, "only `C` accepts `[*]`; name the agents explicitly");
                 return store.fls();
             };
-            let ids = resolve_agents(names, sig, *span, diags);
+            let ids = resolve_agents(names, sig, binds, *span, diags);
             if ids.is_empty() {
                 return store.fls();
             }

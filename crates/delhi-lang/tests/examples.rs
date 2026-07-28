@@ -206,6 +206,63 @@ fn coin_in_the_box_grounds_a_peek_per_actor_without_class_overlap() {
 }
 
 #[test]
+fn selective_communication_reaches_its_third_order_goals() {
+    // SC_3_4 from the EFP suite. `a` senses q at position 2, then shouts from a
+    // position whose audience is everyone — three actions for two third-order goals.
+    let mut p = run(
+        include_str!("../../../examples/selective_communication.delhi"),
+        &["right()", "sense()", "shout_2()"],
+    );
+    expect(
+        &mut p,
+        &[
+            ("B[a] q", true),
+            ("B[a] B[c] B[a] q", true),
+            ("B[c] B[a] B[c] q", true),
+        ],
+    );
+    let goal = p.goal.expect("the file declares a goal");
+    assert!(p.state.entails(&p.store, goal), "the declared goal holds");
+}
+
+#[test]
+fn grapevine_grounds_to_the_originals_action_count() {
+    // The port replaces 24 hand-enumerated actions with two parameterised ones. That is
+    // only faithful if it grounds to the same 24 — 3 actors x 3 secrets x 2 rooms for
+    // `share`, and 3 actors x 2 ordered distinct room pairs for `move`. The six
+    // same-room groundings must be pruned, not merely rejected later: `move(a,r1,r1)`
+    // would both add and delete `at(a,r1)`.
+    let p = Problem::parse(include_str!("../../../examples/grapevine.delhi"))
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(p.actions.len(), 24, "18 share + 6 move");
+    assert!(p.action("move(a,r1,r1)").is_none(), "same-room moves must be pruned");
+    assert!(p.action("move(a,r1,r2)").is_some());
+    assert!(p.action("share(b,b,r1)").is_some());
+}
+
+#[test]
+fn grapevine_spreads_a_secret_to_one_agent_and_not_another() {
+    // Two actions: c steps out, b tells the room. The negative conjunct is the point —
+    // it is not enough to spread information, you have to withhold it too, and then
+    // know that you withheld it.
+    let mut p = run(
+        include_str!("../../../examples/grapevine.delhi"),
+        &["move(c,r1,r2)", "share(b,b,r1)"],
+    );
+    expect(
+        &mut p,
+        &[
+            ("B[a] secret(b)", true),             // a hears it
+            ("B[c] secret(b)", false),            // c was out of the room
+            ("B[a] !B[c] secret(b)", true),       // a knows c missed it
+            ("B[b] B[a] !B[c] secret(b)", true),  // and b knows that a knows
+        ],
+    );
+    let goal = p.goal.expect("the file declares a goal");
+    assert!(p.state.entails(&p.store, goal), "the declared goal holds");
+}
+
+#[test]
 fn muddy_children_conclude_on_the_third_round_and_not_before() {
     let src = include_str!("../../../examples/muddy_children.delhi");
 
