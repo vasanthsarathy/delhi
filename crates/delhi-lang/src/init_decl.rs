@@ -6,8 +6,17 @@ use crate::{Ctx, Diagnostics};
 use delhi_mb::{Bits, Model, State};
 use delhi_syntax::{AgentId, AtomId, FormulaId, Node, Store};
 
-/// Refuse rather than allocate `2^n` worlds beyond this many uncertain atoms.
-const MAX_UNCERTAIN_ATOMS: usize = 16;
+/// Refuse rather than build a state this construction could not finish.
+///
+/// `n` uncertain atoms give `2ⁿ` worlds, and the cost is not the worlds themselves
+/// but what is quadratic in them: the comparability-and-score loop runs `2ⁿ × 2ⁿ`
+/// times with an inner walk over the uncertain atoms, `Model::validate` is worse
+/// still, and `rel` holds `n_agents × 2ⁿ` rows of `2ⁿ` bits. At 12 that is 4096
+/// worlds, ~17M iterations and ~2 MB of relation per agent — quick. Each further
+/// atom quadruples the loop: 16 would mean 65536 worlds, ~4.3 billion iterations
+/// and ~0.5 GB per agent, which does not complete, so a limit set there would
+/// refuse only inputs that were already hopeless while admitting ones that hang.
+const MAX_UNCERTAIN_ATOMS: usize = 12;
 
 /// Evaluates a purely propositional formula against a valuation.
 ///
@@ -20,6 +29,23 @@ fn eval_prop(store: &Store, f: FormulaId, val: &Bits) -> Option<bool> {
         Node::Not(g) => eval_prop(store, *g, val).map(|b| !b),
         Node::And(a, b) => Some(eval_prop(store, *a, val)? && eval_prop(store, *b, val)?),
         _ => None,
+    }
+}
+
+/// Whether `f` is free of modal operators, and so can be judged against a valuation
+/// alone.
+///
+/// This is a structural question, deliberately separate from [`eval_prop`]: asking
+/// whether `eval_prop` returned a value is *not* a purity test, because `&&`
+/// short-circuits, so a false left conjunct hides whatever modality sits on the
+/// right. Answering it here means the classification cannot depend on the valuation
+/// — least of all on the half-built one it would have during classification.
+fn is_propositional(store: &Store, f: FormulaId) -> bool {
+    match store.node(f) {
+        Node::True | Node::Atom(_) => true,
+        Node::Not(g) => is_propositional(store, *g),
+        Node::And(a, b) => is_propositional(store, *a) && is_propositional(store, *b),
+        _ => false,
     }
 }
 
@@ -97,8 +123,13 @@ pub fn build_declarative(
         })
         .collect();
 
+    // Which entries the construction actually acted on. An entry that drove nothing
+    // and then fails verification is a limit of the construction, not necessarily an
+    // error by the author, and the diagnostic has to say so.
+    let mut drove = vec![false; items.len()];
+
     // Classify. Every entry is also kept as an assertion, checked at the end.
-    for (item, &(id, clean)) in items.iter().zip(lowered.iter()) {
+    for (k, (item, &(id, clean))) in items.iter().zip(lowered.iter()).enumerate() {
         if !clean {
             continue;
         }
@@ -110,15 +141,21 @@ pub fn build_declarative(
             // verification pass. Rejecting those here would refuse entries that in
             // fact hold, and would be inconsistent with the un-negated shapes
             // (`p & q`, `p | q`), which are assertion-only already.
-            Expr::Atom(_) | Expr::Not(_, _) => {
-                if let Node::Atom(a) = store.node(id) {
-                    v0.set(*a as usize);
+            Expr::Atom(_) | Expr::Not(_, _) => match store.node(id) {
+                Node::Atom(a) => {
+                    let a = *a;
+                    v0.set(a as usize);
+                    drove[k] = true;
                 }
-            }
+                // A negative literal drives too: it confirms the default.
+                Node::Not(inner) => drove[k] = atom_of(store, *inner).is_some(),
+                _ => {}
+            },
             Expr::Modality { op: Modal::Ignorant, agents: Some(names), body, span, .. } => {
                 let f = relower(body, ctx, &binds, store);
                 match atom_of(store, f) {
                     Some(a) => {
+                        drove[k] = true;
                         uncertain.extend(
                             agent_ids(names, ctx, *span, diags).into_iter().map(|i| (i, a)),
                         );
@@ -133,7 +170,8 @@ pub fn build_declarative(
             Expr::Modality { op: Modal::Believes, agents: Some(names), cond: None, body, span } => {
                 let f = relower(body, ctx, &binds, store);
                 // Only propositional bodies can rank worlds before the model exists.
-                if eval_prop(store, f, &v0).is_some() {
+                if is_propositional(store, f) {
+                    drove[k] = true;
                     beliefs
                         .extend(agent_ids(names, ctx, *span, diags).into_iter().map(|i| (i, f)));
                 }
@@ -228,9 +266,16 @@ pub fn build_declarative(
     // Verify: every entry, whatever its shape, must hold in what we built. This is
     // what makes the construction trustworthy — the scoring heuristic is not
     // obviously complete, so the result proves itself rather than being assumed.
-    for (item, &(id, clean)) in items.iter().zip(lowered.iter()) {
+    for (k, (item, &(id, clean))) in items.iter().zip(lowered.iter()).enumerate() {
         if clean && !state.entails(store, id) {
-            diags.push(item.span(), "this declaration does not hold in the constructed state");
+            let mut msg = String::from("this declaration does not hold in the constructed state");
+            if !drove[k] {
+                msg.push_str(
+                    "; entries of this shape do not drive the construction — only bare \
+                     literals, `?[a] p`, and propositional `B[a] φ` do",
+                );
+            }
+            diags.push(item.span(), msg);
         }
     }
 
@@ -243,7 +288,9 @@ mod tests {
     use crate::{parse_file, Constants, Ctx, Diagnostics, Sig};
     use delhi_syntax::Store;
 
-    fn build(src: &str) -> (Sig, Store, State) {
+    /// Runs the construction and hands back whatever it produced, diagnostics and
+    /// all. Tests that expect errors use this; [`build`] wraps it for the rest.
+    fn raw(src: &str) -> (Sig, Store, Option<State>, Diagnostics) {
         let mut d = Diagnostics::default();
         let ast = parse_file(src, &mut d);
         let sig = Sig::build(&ast, &mut d);
@@ -254,8 +301,13 @@ mod tests {
             other => panic!("expected a declarative initial state, got {other:?}"),
         };
         let mut store = Store::default();
-        let st = build_declarative(&items, &ctx, &mut store, &mut d)
-            .unwrap_or_else(|| panic!("construction failed:\n{}", d.render(src)));
+        let st = build_declarative(&items, &ctx, &mut store, &mut d);
+        (sig, store, st, d)
+    }
+
+    fn build(src: &str) -> (Sig, Store, State) {
+        let (sig, store, st, d) = raw(src);
+        let st = st.unwrap_or_else(|| panic!("construction failed:\n{}", d.render(src)));
         assert!(d.is_empty(), "unexpected errors:\n{}", d.render(src));
         (sig, store, st)
     }
@@ -386,6 +438,33 @@ mod tests {
         );
     }
 
+    /// `initially { ?[a] p0, ?[a] p1, … }` over `n` atoms, and the diagnostics it draws.
+    fn uncertain_over(n: usize) -> Diagnostics {
+        let atoms: Vec<String> = (0..n).map(|i| format!("p{i}")).collect();
+        let src = format!(
+            "types{{ Actor - Object }} objects{{ a - Actor }} agents{{ a }} props{{ {} }}
+             initially {{ {} }} actions{{}}",
+            atoms.join(", "),
+            atoms.iter().map(|p| format!("?[a] {p}")).collect::<Vec<_>>().join(", ")
+        );
+        raw(&src).3
+    }
+
+    #[test]
+    fn the_uncertainty_limit_refuses_a_size_that_would_not_finish() {
+        // The bound has to sit where the construction is still quick, not merely
+        // where it still fits in memory: the relation loop is quadratic in worlds,
+        // so 13 uncertain atoms is 8192 worlds and ~67M iterations, and each further
+        // atom quadruples that. 16 — a plausible-looking "memory" limit — would
+        // permit 65536 worlds, ~4.3 billion iterations, and ~0.5 GB of `rel` per
+        // agent, so the refusal test below would pass while a *permitted* input hung.
+        let d = uncertain_over(13);
+        assert!(
+            d.items().iter().any(|x| x.message.contains("uncertain")),
+            "13 uncertain atoms must be refused"
+        );
+    }
+
     #[test]
     fn too_many_uncertain_atoms_is_refused_rather_than_hanging() {
         let atoms: Vec<String> = (0..25).map(|i| format!("p{i}")).collect();
@@ -421,6 +500,11 @@ mod tests {
             actions{}
         "#,
         );
+        // Two agents declare uncertainty about the *same* atom, so `U` must be
+        // deduplicated: one atom, two worlds. Without the dedup this is four
+        // worlds, two of each valuation, and every assertion below still holds.
+        assert_eq!(st.model.n_worlds, 2, "one distinct uncertain atom gives two worlds");
+
         let p = sig.atom_id("p", &[]).unwrap() as usize;
         let a = sig.agent_id("a").unwrap() as usize;
         let b = sig.agent_id("b").unwrap() as usize;
@@ -449,6 +533,62 @@ mod tests {
             actions{}
         "#,
         );
+    }
+
+    #[test]
+    fn a_failing_entry_says_whether_the_construction_even_tried() {
+        // Both entries below fail verification, but for different reasons, and the
+        // author cannot act on either unless the two are told apart. `B[a] q` is a
+        // shape the construction scores, so it genuinely does not hold. `p | q` is
+        // a shape the construction never attempts, so its failure says nothing
+        // about the author's intent — only that nothing was built to satisfy it.
+        let (_, _, st, d) = raw(r#"
+            types{ Actor - Object } objects{ a - Actor } agents{ a } props{ p, q }
+            initially { ?[a] p, B[a] q, p | q }
+            actions{}
+        "#);
+        assert!(st.is_some());
+        let msgs: Vec<&str> = d.items().iter().map(|x| x.message.as_str()).collect();
+        assert_eq!(msgs.len(), 2, "expected both entries reported, got {msgs:?}");
+
+        let drove = msgs.iter().find(|m| !m.contains("do not drive")).expect("B[a] q drove");
+        assert!(drove.contains("does not hold"));
+
+        let did_not = msgs.iter().find(|m| m.contains("do not drive")).expect("`p | q` did not");
+        assert!(did_not.contains("does not hold"), "still says what went wrong");
+        assert!(
+            did_not.contains("bare literals") && did_not.contains("`?[a] p`"),
+            "and says what would drive the construction: {did_not}"
+        );
+    }
+
+    #[test]
+    fn a_modal_belief_body_never_ranks_worlds_whatever_the_entry_order() {
+        // `B[a] (p | B[b] q)` has a modal body, so per §7.3 it must drive nothing.
+        // Deciding that by asking whether `eval_prop` returned a value gets it
+        // wrong: `|` desugars through `&`, whose `&&` short-circuits, so once `p`
+        // is already true in the half-built `v0` the modal conjunct is never
+        // visited and the entry is admitted as a scoring clause. The frame then
+        // depends on whether the fact `p` was written before or after the belief.
+        const BEFORE: &str = r#"
+            types{ Actor - Object } objects{ a, b - Actor } agents{ a, b } props{ p, q }
+            initially { p, ?[a] p, B[a] (p | B[b] q) }
+            actions{}
+        "#;
+        const AFTER: &str = r#"
+            types{ Actor - Object } objects{ a, b - Actor } agents{ a, b } props{ p, q }
+            initially { ?[a] p, B[a] (p | B[b] q), p }
+            actions{}
+        "#;
+        let (sig, _, before, _) = raw(BEFORE);
+        let (_, _, after, _) = raw(AFTER);
+        let before = before.expect("construction must still succeed");
+        let after = after.expect("construction must still succeed");
+        assert_eq!(before.model.rel, after.model.rel, "entry order must not change the frame");
+
+        // And nothing was ranked: `a`'s two worlds stay mutually plausible.
+        let a = sig.agent_id("a").unwrap() as usize;
+        assert!(before.model.rel[a][0].get(1) && before.model.rel[a][1].get(0));
     }
 
     #[test]
