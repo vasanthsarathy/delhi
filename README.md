@@ -26,16 +26,25 @@ arrives, the ordering shifts back.
 
 ## Quick start
 
+Put `delhi` on your `PATH` once and stop typing `cargo run`:
+
+```bash
+cargo install --path crates/delhi-cli
+delhi check examples/coin_lie.delhi
+```
+
+If you would rather not install, `cargo build --release` leaves the binary at
+`target/release/delhi` — that is the same thing without the copy, and it is what you want
+for timing anything, since `cargo run` defaults to an unoptimised build.
+
 ```bash
 cargo build --release
-cargo run -p delhi-cli -- check examples/coin_lie.delhi
+./target/release/delhi repl examples/coin_lie.delhi
 ```
 
-Or explore interactively:
-
-```bash
-cargo run -p delhi-cli -- repl examples/coin_lie.delhi
-```
+Output is coloured when stdout is a terminal, and plain otherwise — so
+`delhi dot … | dot -Tpng` stays byte-clean. `NO_COLOR=1` turns it off, `CLICOLOR_FORCE=1`
+turns it on through a pipe.
 
 ## The language
 
@@ -247,12 +256,13 @@ does not know it.
 ## The tool
 
 ```
-delhi check <FILE>              parse, ground, and validate
-delhi show  <FILE>              print the initial state
-delhi eval  <FILE> -f <FORMULA> evaluate a formula
-delhi step  <FILE> -a <ACTION>… apply actions in sequence
-delhi dot   <FILE>              Graphviz
-delhi repl  <FILE>              explore interactively
+delhi check <FILE>                        parse, ground, and validate
+delhi show  <FILE>                        print the initial state
+delhi eval  <FILE> -f <FORMULA>           evaluate a formula
+delhi step  <FILE> -a <ACTION>…           apply actions in sequence
+delhi dot   <FILE>                        Graphviz
+delhi repl  <FILE>                        explore interactively
+delhi bench <FILE> [-n CYCLES] -a <ACTION>…   model growth and timing
 ```
 
 Exit codes are scriptable: `0` success or the formula holds, `1` the file was rejected or
@@ -264,6 +274,60 @@ and obvious as a picture — the figures in the source papers *are* the debuggin
 ```bash
 delhi dot examples/coin_lie.delhi | dot -Tpng > state.png
 ```
+
+## How fast, and does it blow up
+
+Both questions have the same answer, and it is the most useful thing measurement turned up.
+
+`delhi bench` runs an action list repeatedly and reports model size and elapsed time three
+ways: never contracting, quotienting by `~R` after each update, and by `~D`. Coin Lie, one
+cycle being its three actions:
+
+```
+$ delhi bench examples/coin_lie.delhi -n 8 -a "announce_not_heads()" "distract_a()" "peek_c()"
+
+cycle      worlds      cumul   worlds ~R      cumul   worlds ~D      cumul
+    0           2          -           2          -           2          -
+    1          16     72.9us          14    205.7us          14    168.7us
+    2         128      2.2ms          16    797.7us          16    903.3us
+    3        1024    133.6ms          16      1.4ms          16      1.7ms
+    4        8192      9.47s          16      2.0ms          16      2.5ms
+```
+
+**Uncontracted, models grow without bound.** Product update crosses worlds with events, so
+each cycle multiplies size by the number of distinguishable events — ×8 here. Cost grows
+faster still, because the relation is `n_agents × n_worlds²` bits and almost every operation
+walks it: 73 µs, 2.2 ms, 134 ms, 9.5 s. Four cycles in it is already unusable.
+
+**Contracted, they reach a fixed point and stay there.** Sixteen worlds at cycle 2, and
+sixteen at cycle 8. The trajectory is flat, and cost per cycle becomes constant — about
+0.6 ms — so total time is linear in the number of actions rather than exponential.
+
+Muddy Children behaves the same way, settling at 32 worlds while the uncontracted run reaches
+8,192 and 8.8 seconds. Coin in the Box terminates on its own after two cycles, because
+`open_box()` requires `!opened`.
+
+So the honest answer to "how fast is this" is: **fast if you quotient, hopeless if you
+don't**, and the difference is thousands of times over a dozen actions rather than a
+constant factor.
+
+That finding changed the tool. `step` and the REPL now quotient by `~R` after every update,
+which took twelve Coin Lie actions from ~9.5 s and 8,192 worlds to **29 ms and 16 worlds**.
+`~R` is used rather than the coarser `~D` because it is proved sound *and* a congruence for
+product update, so it cannot change the answer to any query; `~D` merges more but its
+congruence status is open (§6.3), which makes it unsafe to apply between updates.
+
+`bench` checks that too. It evaluates the file's goal at the end of all three trajectories
+and reports a disagreement loudly — for `~R` that would mean a bug against a proved
+congruence, and for `~D` it would be evidence on the open question. Across these domains all
+three agree, and `~R` and `~D` reach the same fixed point.
+
+Two caveats worth stating. These are wall-clock numbers from one release build on one laptop,
+so read the ratios and the shapes, not the absolute microseconds. And a fixed point is not
+guaranteed in general — it is what these domains do, because their actions stop producing
+distinguishable events. A domain whose actions keep introducing genuinely new distinctions
+will keep growing however you quotient it, and the underlying problem is hard for reasons no
+implementation detail can fix.
 
 ## Layout
 
