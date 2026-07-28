@@ -1,0 +1,40 @@
+// The Coin Lie scenario. Reproduces [T] Figs 5.4-5.10.
+//
+// A lies that the coin is tails; B distracts A; C peeks and learns the truth.
+// Because A is distracted she never sees the peek, so her picture of C goes
+// stale and she ends up wrong about what C believes.
+
+types   { Actor - Object }
+objects { alice, bob, carol - Actor }
+agents  { alice, bob, carol }
+props   { h, d }
+
+initially {
+    h                    // the coin really is heads
+    ?[carol] h           // carol cannot tell
+    B[carol] h           // but she correctly leans that way
+}
+
+goal { B[alice] B[carol] !h & K[carol] h }
+
+actions {
+    announce_not_heads() {
+        actor     alice
+        announces !h                  // a lie; truth is not required
+        alice observes, bob observes, carol observes
+    }
+
+    distract_a() {
+        actor  bob
+        causes d
+        alice observes, bob observes, carol observes
+    }
+
+    peek_c() {
+        actor      carol
+        determines h
+        carol observes                // sees the coin: comes to KNOW
+        bob   aware                   // hears it: knows carol learned something
+        alice aware if !d             // only notices if she is not distracted
+    }
+}
