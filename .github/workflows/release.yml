@@ -25,8 +25,14 @@ jobs:
             os: ubuntu-latest
           - target: aarch64-apple-darwin
             os: macos-latest
+          # Cross-compiled from the Apple-silicon runner. GitHub retired macos-13, the
+          # last x86 macOS image, so this job would otherwise queue forever with no
+          # runner to claim it. Apple's linker targets both architectures from either
+          # host, so the only thing lost is the ability to run what was built — hence
+          # `cross`, which skips the smoke test rather than pretending it happened.
           - target: x86_64-apple-darwin
-            os: macos-13 # the last x86 runner; macos-latest is Apple silicon
+            os: macos-latest
+            cross: true
           - target: x86_64-pc-windows-msvc
             os: windows-latest
 
@@ -74,7 +80,9 @@ jobs:
           fi
 
       # Proves the packaged binary runs on a clean path before it is offered to anyone.
+      # Skipped only where the host cannot execute what it just built.
       - name: smoke test the packaged binary
+        if: ${{ !matrix.cross }}
         shell: bash
         run: |
           set -euo pipefail
