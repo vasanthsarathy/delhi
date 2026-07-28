@@ -1,0 +1,17 @@
+[package]
+name = "delhi-gui"
+edition.workspace = true
+version.workspace = true
+description = "Local web UI for exploring delhi files"
+
+[[bin]]
+name = "delhi-gui"
+path = "src/main.rs"
+
+[dependencies]
+delhi-lang = { path = "../delhi-lang" }
+delhi-mb = { path = "../delhi-mb" }
+delhi-syntax = { path = "../delhi-syntax" }
+tiny_http = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

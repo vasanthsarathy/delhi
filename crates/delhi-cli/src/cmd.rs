@@ -36,84 +36,32 @@ pub fn cmd_check(src: &str, out: &mut String) -> i32 {
     }
 }
 
-/// Renders what a state *means*: the facts of the actual world, and every agent's
-/// attitude to every proposition.
+/// Renders [`delhi_lang::state_view`] as aligned text.
 ///
-/// `print_state` shows the model — worlds and plausibility edges — which is exact and
-/// round-trips through the parser, but leaves the reader to work out what any of it
-/// implies. This is the complementary view, and the one worth having open while
-/// stepping through a scenario.
-///
-/// Each proposition falls into exactly one of the five cases the attitude table
-/// distinguishes: the agent knows it, knows its negation, believes it without knowing,
-/// believes its negation without knowing, or is undecided.
+/// The computation lives in `delhi-lang` so the web UI renders the same data as HTML
+/// without either front end growing its own copy. This function is only formatting.
 fn attitudes(p: &mut Problem, state: &State) -> String {
-    let n_atoms = p.sig.n_atoms();
-    let n_agents = p.sig.n_agents();
-
-    let names: Vec<String> = (0..n_atoms).map(|a| p.sig.atom_name(a as u32).to_string()).collect();
-    let agents: Vec<String> =
-        (0..n_agents).map(|i| p.sig.agent_name(i as u32).to_string()).collect();
-
+    let view = delhi_lang::state_view(p, state);
     let mut out = String::new();
-    let facts: Vec<String> = (0..n_atoms)
-        .map(|a| {
-            if state.model.val[state.designated].get(a) {
-                names[a].clone()
-            } else {
-                format!("!{}", names[a])
-            }
-        })
-        .collect();
-    let _ = writeln!(out, "{} {}", style::dim("actual world"), facts.join(", "));
-    if n_agents == 0 || n_atoms == 0 {
+    let _ = writeln!(out, "{} {}", style::dim("actual world"), view.facts.join(", "));
+    if view.agents.is_empty() || view.facts.is_empty() {
         return out;
     }
     let _ = writeln!(out);
 
-    // Build every query first: `entails` needs `&Store` while `knows`/`believes` need
-    // `&mut Store`, so the two phases cannot interleave.
-    let width = agents.iter().map(String::len).max().unwrap_or(0);
-    for (i, agent) in agents.iter().enumerate() {
-        let mut queries = Vec::with_capacity(n_atoms);
-        for a in 0..n_atoms {
-            let atom = p.store.atom(a as u32);
-            let neg = p.store.not(atom);
-            let kp = p.store.knows(i as u32, atom);
-            let kn = p.store.knows(i as u32, neg);
-            let bp = p.store.believes(i as u32, atom);
-            let bn = p.store.believes(i as u32, neg);
-            queries.push((kp, kn, bp, bn));
-        }
-
-        let (mut known, mut believed, mut undecided) = (Vec::new(), Vec::new(), Vec::new());
-        for (a, (kp, kn, bp, bn)) in queries.into_iter().enumerate() {
-            let pos = names[a].clone();
-            let neg = format!("!{}", names[a]);
-            if state.entails(&p.store, kp) {
-                known.push(pos);
-            } else if state.entails(&p.store, kn) {
-                known.push(neg);
-            } else if state.entails(&p.store, bp) {
-                believed.push(pos);
-            } else if state.entails(&p.store, bn) {
-                believed.push(neg);
-            } else {
-                undecided.push(pos);
-            }
-        }
-
+    let width = view.agents.iter().map(|a| a.agent.len()).max().unwrap_or(0);
+    for a in &view.agents {
         let mut parts = Vec::new();
-        if !known.is_empty() {
-            parts.push(format!("{} {}", style::dim("knows"), known.join(", ")));
+        if !a.knows.is_empty() {
+            parts.push(format!("{} {}", style::dim("knows"), a.knows.join(", ")));
         }
-        if !believed.is_empty() {
-            parts.push(format!("{} {}", style::key("believes"), believed.join(", ")));
+        if !a.believes.is_empty() {
+            parts.push(format!("{} {}", style::key("believes"), a.believes.join(", ")));
         }
-        if !undecided.is_empty() {
-            parts.push(format!("{} {}", style::dim("undecided"), undecided.join(", ")));
+        if !a.undecided.is_empty() {
+            parts.push(format!("{} {}", style::dim("undecided"), a.undecided.join(", ")));
         }
-        let _ = writeln!(out, "  {agent:<width$}  {}", parts.join("   "));
+        let _ = writeln!(out, "  {:<width$}  {}", a.agent, parts.join("   "));
     }
     out
 }

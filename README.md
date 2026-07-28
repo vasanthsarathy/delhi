@@ -315,6 +315,37 @@ instead. Every operator works there, against the current state:
 true
 ```
 
+### The browser UI
+
+For working through a scenario, `delhi-gui` is easier than the REPL: it shows the file, the
+state, and the model at once, and re-checks as you type.
+
+```bash
+cargo run -p delhi-gui        # then open http://127.0.0.1:8080
+cargo run -p delhi-gui 9000   # a different port
+```
+
+Editor on the left, attitudes and the plausibility graph on the right, console along the
+bottom. The example files are in a dropdown; the ground actions are buttons, so a trace is
+built by clicking; and the console takes the same input the REPL does — a formula, or `:do`,
+`:undo`, `:reset`. Diagnostics arrive with line, column and caret exactly as they do on the
+command line, and every error at once rather than the first.
+
+The graph labels each world with only the propositions that **differ between worlds**. In
+Grapevine that is the difference between nine atoms truncated to `at(a,r1),at…` and the three
+secrets, which is what the worlds actually disagree about.
+
+It binds to loopback and has no authentication, because it is a debugging tool for the
+machine it runs on. Do not expose it.
+
+**`delhi-gui` is the one crate exempt from the zero-dependency rule** — it uses `tiny_http`
+and `serde_json`. The rule exists so that the crates carrying the semantics and the language
+stay auditable and keep building years from now; a debugging UI makes no such claim, and
+hand-rolling HTTP to honour a rule whose reason does not reach it would buy nothing. The
+exemption is kept honest by giving the crate no logic of its own: every answer it renders
+comes from `delhi-lang`, where it is tested. `cargo build` and `cargo test` at the workspace
+root skip it, so the core stays fast to build.
+
 ### Pictures
 
 `dot` is not decoration. A model with four agents and sixteen worlds is unreadable as text

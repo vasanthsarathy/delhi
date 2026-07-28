@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>delhi</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1b1e24; --line: #2b3038; --ink: #d7dbe2;
+    --dim: #7d8593; --key: #e5b567; --good: #8fbf7f; --bad: #e07a6f;
+    --a0: #6fb3d2; --a1: #d18ec2; --a2: #8fbf7f; --a3: #e5b567; --a4: #b39ddb;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink); display: grid; grid-template-rows: auto 1fr auto;
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  header {
+    display: flex; gap: 12px; align-items: center; padding: 8px 12px;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header h1 { font-size: 13px; margin: 0; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+  select, button {
+    background: #232830; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 4px; padding: 4px 8px; font: inherit; cursor: pointer;
+  }
+  button:hover { border-color: #3c434e; }
+  #status { margin-left: auto; color: var(--dim); }
+  #status.bad { color: var(--bad); }
+  #status.good { color: var(--good); }
+
+  main { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+  .col { display: grid; min-height: 0; min-width: 0; }
+  .col.right { grid-template-rows: 1fr 1fr; border-left: 1px solid var(--line); }
+  section { display: grid; grid-template-rows: auto 1fr; min-height: 0; overflow: hidden; }
+  section + section { border-top: 1px solid var(--line); }
+  h2 {
+    font-size: 11px; margin: 0; padding: 6px 12px; color: var(--dim);
+    letter-spacing: .1em; text-transform: uppercase; background: var(--panel);
+    border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: center;
+  }
+  h2 .note { text-transform: none; letter-spacing: 0; margin-left: auto; }
+  .body { overflow: auto; padding: 10px 12px; }
+
+  #editor {
+    width: 100%; height: 100%; resize: none; border: 0; outline: 0; padding: 10px 12px;
+    background: transparent; color: var(--ink); font: inherit; tab-size: 4; white-space: pre;
+  }
+
+  .facts { color: var(--good); margin-bottom: 10px; word-break: break-word; }
+  table.att { border-collapse: collapse; width: 100%; }
+  table.att td { vertical-align: top; padding: 2px 8px 2px 0; word-break: break-word; }
+  td.who { color: var(--a0); white-space: nowrap; }
+  .lbl { color: var(--dim); }
+  .believes { color: var(--key); }
+  .undecided { color: var(--dim); }
+
+  #trace { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  #trace .step { background: #232830; border: 1px solid var(--line); border-radius: 4px; padding: 2px 7px; }
+  #trace .empty { color: var(--dim); }
+  .acts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .acts button { font-size: 12px; }
+
+  #console { border-top: 1px solid var(--line); background: var(--panel); }
+  #log { max-height: 148px; overflow: auto; padding: 8px 12px 0; }
+  #log div { white-space: pre-wrap; word-break: break-word; }
+  #log .q { color: var(--dim); }
+  #log .t { color: var(--good); }
+  #log .f { color: var(--key); }
+  #log .e { color: var(--bad); }
+  #promptRow { display: flex; align-items: center; gap: 8px; padding: 6px 12px; }
+  #promptRow span { color: var(--dim); }
+  #prompt { flex: 1; background: transparent; border: 0; outline: 0; color: var(--ink); font: inherit; }
+  pre.err { color: var(--bad); white-space: pre-wrap; margin: 0; }
+  pre.plain { margin: 0; color: var(--dim); white-space: pre; }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; }
+  .legend b { font-weight: normal; }
+  svg { width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>delhi</h1>
+  <select id="examples"></select>
+  <button id="reset">reset trace</button>
+  <button id="undo">undo step</button>
+  <span id="status">ready</span>
+</header>
+
+<main>
+  <div class="col">
+    <section>
+      <h2>editor <span class="note" id="editorNote"></span></h2>
+      <textarea id="editor" spellcheck="false" placeholder="pick an example, or write a .delhi file here"></textarea>
+    </section>
+  </div>
+
+  <div class="col right">
+    <section>
+      <h2>state <span class="note" id="stateNote"></span></h2>
+      <div class="body" id="state"></div>
+    </section>
+    <section>
+      <h2>model <span class="note legend" id="legend"></span></h2>
+      <div class="body" id="graph" style="padding:0"></div>
+    </section>
+  </div>
+</main>
+
+<div id="console">
+  <div id="trace"></div>
+  <div id="log"></div>
+  <div id="promptRow">
+    <span>&gt;</span>
+    <input id="prompt" spellcheck="false" autocomplete="off"
+           placeholder="a formula — B[alice] B[carol] !h — or :do action, :reset, :undo, :help">
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const AGENT_COLOURS = ['--a0','--a1','--a2','--a3','--a4'];
+
+let trace = [];
+let latest = null;
+let agentOrder = [];
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+function colourOf(agent) {
+  const i = agentOrder.indexOf(agent);
+  return `var(${AGENT_COLOURS[(i < 0 ? 0 : i) % AGENT_COLOURS.length]})`;
+}
+function setStatus(text, kind) {
+  const el = $('status');
+  el.textContent = text;
+  el.className = kind || '';
+}
+function query() {
+  return trace.map(a => 'a=' + encodeURIComponent(a)).join('&');
+}
+
+async function refresh() {
+  const src = $('editor').value;
+  let data;
+  try {
+    const res = await fetch('/api/state?' + query(), { method: 'POST', body: src });
+    data = await res.json();
+  } catch (e) {
+    setStatus('server unreachable', 'bad');
+    return;
+  }
+  latest = data;
+  renderTrace();
+
+  if (!data.ok) {
+    setStatus('rejected', 'bad');
+    $('stateNote').textContent = '';
+    $('state').innerHTML = '<pre class="err">' + esc(data.error || 'rejected') + '</pre>';
+    $('graph').innerHTML = '';
+    $('legend').innerHTML = '';
+    return;
+  }
+
+  agentOrder = data.agents.map(a => a.agent);
+  const goal = data.goal === null ? '' :
+    (data.goal ? ' · goal holds' : ' · goal does not hold');
+  setStatus(`ok · ${data.n_worlds} world${data.n_worlds === 1 ? '' : 's'}${goal}`,
+            data.goal ? 'good' : '');
+  $('editorNote').textContent = `${data.actions.length} ground actions`;
+  $('stateNote').textContent = data.trace_error ? '' : '';
+
+  renderState(data);
+  renderGraph(data);
+}
+
+function renderState(d) {
+  let html = '';
+  if (d.trace_error) html += '<pre class="err">' + esc(d.trace_error) + '</pre>';
+  html += '<div class="facts">actual world &nbsp;' + esc(d.facts.join(', ')) + '</div>';
+  html += '<table class="att">';
+  for (const a of d.agents) {
+    const bits = [];
+    if (a.knows.length) bits.push('<span class="lbl">knows</span> ' + esc(a.knows.join(', ')));
+    if (a.believes.length) bits.push('<span class="believes">believes ' + esc(a.believes.join(', ')) + '</span>');
+    if (a.undecided.length) bits.push('<span class="undecided">undecided ' + esc(a.undecided.join(', ')) + '</span>');
+    html += `<tr><td class="who" style="color:${colourOf(a.agent)}">${esc(a.agent)}</td><td>${bits.join(' &nbsp; ')}</td></tr>`;
+  }
+  html += '</table>';
+
+  html += '<h2 style="margin:14px -12px 6px;">available actions</h2><div class="acts">';
+  for (const name of d.actions) {
+    html += `<button data-act="${esc(name)}">${esc(name)}</button>`;
+  }
+  html += '</div>';
+  html += '<h2 style="margin:14px -12px 6px;">explicit form</h2><pre class="plain">' + esc(d.explicit) + '</pre>';
+  $('state').innerHTML = html;
+  for (const b of $('state').querySelectorAll('button[data-act]')) {
+    b.onclick = () => { trace.push(b.dataset.act); refresh(); };
+  }
+}
+
+// Worlds on a circle, edges as arcs. Good enough for the sizes a person can read;
+// past a few dozen worlds the picture stops helping and the explicit form is better.
+function renderGraph(d) {
+  const n = d.worlds.length;
+  $('legend').innerHTML = d.agents
+    .map(a => `<b style="color:${colourOf(a.agent)}">━ ${esc(a.agent)}</b>`).join('');
+
+  if (n === 0) { $('graph').innerHTML = ''; return; }
+  if (n > 40) {
+    $('graph').innerHTML = `<div class="body"><span class="undecided">${n} worlds — too many to draw; the explicit form above is the readable view at this size.</span></div>`;
+    return;
+  }
+
+  const W = 520, H = 340, cx = W / 2, cy = H / 2;
+  const r = n === 1 ? 0 : Math.min(W, H) / 2 - 58;
+  const pos = d.worlds.map((_, i) => {
+    const t = -Math.PI / 2 + (2 * Math.PI * i) / n;
+    return { x: cx + r * Math.cos(t), y: cy + r * Math.sin(t) };
+  });
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  svg += `<defs>`;
+  d.agents.forEach((a, i) => {
+    svg += `<marker id="m${i}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6"
+            markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="${colourOf(a.agent)}"/></marker>`;
+  });
+  svg += `</defs>`;
+
+  // Several agents can relate the same pair; bow each one out a little so they do not
+  // overdraw and hide each other.
+  const seen = {};
+  for (const e of d.edges) {
+    const key = e.from < e.to ? `${e.from}-${e.to}` : `${e.to}-${e.from}`;
+    const nth = (seen[key] = (seen[key] || 0) + 1) - 1;
+    const p = pos[e.from], q = pos[e.to];
+    const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
+    const dx = q.x - p.x, dy = q.y - p.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const bow = 16 + nth * 22;
+    const c = { x: mx - (dy / len) * bow, y: my + (dx / len) * bow };
+    const idx = agentOrder.indexOf(e.agent);
+    const marker = e.mutual ? '' : ` marker-end="url(#m${idx < 0 ? 0 : idx})"`;
+    svg += `<path d="M${p.x},${p.y} Q${c.x},${c.y} ${q.x},${q.y}" fill="none"
+            stroke="${colourOf(e.agent)}" stroke-width="1.4" opacity=".85"${marker}/>`;
+  }
+
+  d.worlds.forEach((w, i) => {
+    const { x, y } = pos[i];
+    if (w.designated) {
+      svg += `<circle cx="${x}" cy="${y}" r="27" fill="none" stroke="#8fbf7f" stroke-width="1"/>`;
+    }
+    svg += `<circle cx="${x}" cy="${y}" r="23" fill="#1b1e24" stroke="#3c434e" stroke-width="1"/>`;
+    // Only the atoms that differ between worlds are drawn — see the server's `label`.
+    // Each goes on its own line so a couple of them stay legible in a small circle.
+    const lines = w.label.length ? w.label : ['∅'];
+    const shown = lines.slice(0, 3).map(s => s.length > 11 ? s.slice(0, 10) + '…' : s);
+    if (lines.length > 3) shown[2] = '…';
+    const top = y - 2 - (shown.length - 1) * 5;
+    shown.forEach((s, k) => {
+      svg += `<text x="${x}" y="${top + k * 10}" text-anchor="middle" fill="#d7dbe2"
+              font-size="9" font-family="ui-monospace, monospace">${esc(s)}</text>`;
+    });
+    svg += `<text x="${x}" y="${top + shown.length * 10 + 2}" text-anchor="middle"
+            fill="#7d8593" font-size="8" font-family="ui-monospace, monospace">w${i}</text>`;
+    const full = w.facts.length ? w.facts.join(', ') : 'nothing true here';
+    svg += `<title>w${i} — ${esc(full)}</title>`;
+  });
+  svg += `</svg>`;
+  $('graph').innerHTML = svg;
+}
+
+function renderTrace() {
+  const el = $('trace');
+  if (!trace.length) { el.innerHTML = '<span class="empty">no actions applied</span>'; return; }
+  el.innerHTML = trace.map((a, i) => `<span class="step">${i + 1}. ${esc(a)}</span>`).join('');
+}
+
+function log(text, cls) {
+  const d = document.createElement('div');
+  d.className = cls || '';
+  d.textContent = text;
+  $('log').appendChild(d);
+  $('log').scrollTop = $('log').scrollHeight;
+}
+
+async function runCommand(line) {
+  line = line.trim();
+  if (!line) return;
+  log('> ' + line, 'q');
+
+  if (line === ':help') {
+    log('a formula evaluates in the current state — K B [] B^psi C Kw Bw ? ?? K\' B\' S\'');
+    log(':do <action>   apply an action      :undo    drop the last one');
+    log(':reset         clear the trace      :actions list them');
+    return;
+  }
+  if (line === ':reset') { trace = []; await refresh(); log('trace cleared'); return; }
+  if (line === ':undo') {
+    if (!trace.length) { log('nothing to undo'); return; }
+    log('dropped ' + trace.pop());
+    await refresh();
+    return;
+  }
+  if (line === ':actions') {
+    log((latest && latest.actions.length) ? latest.actions.join('\n') : 'none');
+    return;
+  }
+  if (line.startsWith(':do ')) {
+    trace.push(line.slice(4).trim());
+    await refresh();
+    if (latest && latest.trace_error) { log(latest.trace_error, 'e'); trace.pop(); await refresh(); }
+    else log('applied ' + trace[trace.length - 1]);
+    return;
+  }
+  if (line.startsWith(':')) { log('unknown command — try :help', 'e'); return; }
+
+  const res = await fetch('/api/eval?' + query() + '&f=' + encodeURIComponent(line),
+                          { method: 'POST', body: $('editor').value });
+  const d = await res.json();
+  if (!d.ok) log(d.error || 'error', 'e');
+  else log(String(d.value), d.value ? 't' : 'f');
+}
+
+$('prompt').addEventListener('keydown', async e => {
+  if (e.key === 'Enter') { const v = e.target.value; e.target.value = ''; await runCommand(v); }
+});
+$('reset').onclick = async () => { trace = []; await refresh(); };
+$('undo').onclick = async () => { trace.pop(); await refresh(); };
+
+// Editing invalidates the trace's meaning, so re-check from the top rather than
+// pretending actions applied to an older file still describe this one.
+let timer = null;
+$('editor').addEventListener('input', () => {
+  clearTimeout(timer);
+  setStatus('checking…');
+  timer = setTimeout(refresh, 220);
+});
+
+(async function start() {
+  const names = await (await fetch('/api/examples')).json();
+  const sel = $('examples');
+  sel.innerHTML = names.map(n => `<option>${esc(n)}</option>`).join('');
+  sel.onchange = async () => {
+    $('editor').value = await (await fetch('/api/example?name=' + encodeURIComponent(sel.value))).text();
+    trace = [];
+    $('log').innerHTML = '';
+    // A new file is a new subject: start both panes at the top rather than wherever
+    // the last one happened to be scrolled to.
+    $('state').scrollTop = 0;
+    $('editor').scrollTop = 0;
+    await refresh();
+  };
+  const initial = names.includes('coin_lie.delhi') ? 'coin_lie.delhi' : names[0];
+  if (initial) { sel.value = initial; await sel.onchange(); }
+})();
+</script>
+</body>
+</html>

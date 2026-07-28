@@ -18,3 +18,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Editor/IDE
+.vscode/
+.idea/

@@ -1,6 +1,30 @@
 [workspace]
 resolver = "2"
-members = ["crates/delhi-syntax", "crates/delhi-core", "crates/delhi-mb", "crates/delhi-lang", "crates/delhi-cli"]
+members = [
+    "crates/delhi-syntax",
+    "crates/delhi-core",
+    "crates/delhi-mb",
+    "crates/delhi-lang",
+    "crates/delhi-cli",
+    "crates/delhi-gui",
+]
+
+# `cargo build` and `cargo test` at the root skip the GUI, which is the only crate with
+# an external dependency and by far the slowest to compile. It is still a workspace
+# member, so `--workspace` covers it and `-p delhi-gui` builds it directly.
+#
+# The zero-dependency rule is scoped deliberately: it exists so the crates carrying the
+# semantics and the language stay auditable and still build years from now. A debugging
+# UI carries no such claim, and hand-rolling HTTP to honour a rule whose reason does not
+# reach it would buy nothing. `delhi-gui` holds no logic of its own — every answer it
+# renders comes from `delhi-lang`, where it is tested.
+default-members = [
+    "crates/delhi-syntax",
+    "crates/delhi-core",
+    "crates/delhi-mb",
+    "crates/delhi-lang",
+    "crates/delhi-cli",
+]
 
 [workspace.package]
 edition = "2021"
