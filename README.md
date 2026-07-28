@@ -526,11 +526,44 @@ cargo run -p delhi-gui        # then open http://127.0.0.1:8080
 cargo run -p delhi-gui 9000   # a different port
 ```
 
-Editor on the left, attitudes and the plausibility graph on the right, console along the
-bottom. The example files are in a dropdown; the ground actions are buttons, so a trace is
-built by clicking; and the console takes the same input the REPL does — a formula, or `:do`,
-`:undo`, `:reset`. Diagnostics arrive with line, column and caret exactly as they do on the
-command line, and every error at once rather than the first.
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ delhi  [file ▾] [new] [name] [save] [check]    ok · 14 · goal ✓   │
+├───────────────────────────────┬─────────┬────────────────────────┤
+│ editor                        │ ACTIONS │ STATE                  │
+│                               │ announce│  actual world  h, d    │
+│   types   { Actor - Object }  │ distract│  alice  knows h, d     │
+│   objects { alice, bob … }    │ peek_c  │  carol  knows h, d     │
+│                               │         ├────────────────────────┤
+│                               │ TRACE   │ RESULTS │model│explicit│
+│                               │ 1. …    │  > B[alice] B[carol]!h │
+│                               │ 2. …    │    true                │
+│                               │ [undo]  │                        │
+├───────────────────────────────┴─────────┴────────────────────────┤
+│ > a formula, or :ask B[alice] _ · :do action · :state            │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Three things about that arrangement are deliberate.
+
+**Actions are a rail beside the editor**, not buried in the state panel. It doubles as an
+outline of what the file declares and a set of buttons that apply them, with the trace
+directly beneath — what you can do, above what you have done.
+
+**State is always visible; everything else shares a tabbed panel.** State is what you read
+continuously, so it never moves. Results, the model graph and the explicit form are each
+wanted at different moments, and a query auto-switches to Results — the graph earns its
+place while stepping, the results while querying, and you rarely want both at once.
+
+**Errors are clickable.** The server sends each diagnostic's byte range as well as its
+rendered text, so clicking one selects exactly that span in the editor and scrolls to it.
+That matters more for authoring than the `check` button does, though there is one of those
+too. Every error is reported at once, as on the command line.
+
+`new` starts from a small template, and `save` writes to a gitignored `scratch/` directory
+that the file dropdown lists alongside `examples/`. Only `scratch/` is writable, so the UI
+cannot overwrite a curated example; names are restricted to plain `.delhi` filenames, since
+they arrive from a query string.
 
 The editor is syntax-highlighted: sections, clause keywords, modalities, variables and types
 each get a colour, and `?[a]` reads as the ignorance modality while `?who` reads as a

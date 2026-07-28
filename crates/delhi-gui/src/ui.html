@@ -16,37 +16,36 @@
     font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   header {
-    display: flex; gap: 12px; align-items: center; padding: 8px 12px;
+    display: flex; gap: 10px; align-items: center; padding: 7px 12px;
     border-bottom: 1px solid var(--line); background: var(--panel);
   }
-  header h1 { font-size: 13px; margin: 0; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
-  select, button {
+  header h1 { font-size: 12px; margin: 0; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+  select, button, input.name {
     background: #232830; color: var(--ink); border: 1px solid var(--line);
     border-radius: 4px; padding: 4px 8px; font: inherit; cursor: pointer;
   }
-  button:hover { border-color: #3c434e; }
+  input.name { cursor: text; width: 150px; }
+  button:hover { border-color: #4a525f; }
+  button.primary { border-color: #3d5a6b; color: #cfe6f2; }
   #status { margin-left: auto; color: var(--dim); }
   #status.bad { color: var(--bad); }
   #status.good { color: var(--good); }
 
-  main { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
-  .col { display: grid; min-height: 0; min-width: 0; }
-  .col.right { grid-template-rows: 1fr 1fr; border-left: 1px solid var(--line); }
+  /* editor | actions rail | right column */
+  main { display: grid; grid-template-columns: 1fr 190px 1fr; min-height: 0; }
   section { display: grid; grid-template-rows: auto 1fr; min-height: 0; overflow: hidden; }
-  section + section { border-top: 1px solid var(--line); }
   h2 {
-    font-size: 11px; margin: 0; padding: 6px 12px; color: var(--dim);
+    font-size: 10.5px; margin: 0; padding: 5px 10px; color: var(--dim);
     letter-spacing: .1em; text-transform: uppercase; background: var(--panel);
-    border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: center;
+    border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center;
   }
   h2 .note { text-transform: none; letter-spacing: 0; margin-left: auto; }
-  .body { overflow: auto; padding: 10px 12px; }
+  .body { overflow: auto; padding: 9px 11px; }
 
-  /* Highlighting is a coloured <pre> sitting exactly behind a transparent <textarea>.
-     Every metric that affects where a glyph lands — font, size, line-height, padding,
-     tab-size, whitespace handling — must match between the two, or the text drifts
-     apart as you scroll. Keeping a real textarea is what preserves native editing:
-     undo, selection, IME, spellcheck-off, and the caret. */
+  /* Highlighting is a coloured <pre> exactly behind a transparent <textarea>. Every
+     metric that decides where a glyph lands must match, or the two drift apart as you
+     scroll. Nothing here may change glyph advance — no italic, no bold — because the
+     caret comes from the textarea while the visible text is the pre. */
   #editorWrap { position: relative; overflow: hidden; }
   #highlight, #editor {
     position: absolute; inset: 0; margin: 0; padding: 10px 12px; border: 0;
@@ -58,47 +57,61 @@
     background: transparent; color: transparent; caret-color: var(--ink);
   }
   #editor::selection { background: #3a5570; color: transparent; }
+  .hl-comment { color: #5c6370; }
+  .hl-section { color: var(--a4); }
+  .hl-clause  { color: var(--a3); }
+  .hl-modal   { color: var(--a0); }
+  .hl-var     { color: var(--a1); }
+  .hl-type    { color: var(--a2); }
+  .hl-op      { color: var(--dim); }
 
-  /* Colour only. Nothing here may change glyph advance — no italic, no bold, no
-     letter-spacing — because the visible text is the <pre> while the caret and
-     selection come from the <textarea> underneath. A style that shifts one and not
-     the other puts the caret in the wrong place, and it would do so only on fonts
-     whose italic is not metric-compatible, which is the worst kind of bug to chase. */
-  .hl-comment  { color: #5c6370; }
-  .hl-section  { color: var(--a4); }
-  .hl-clause   { color: var(--a3); }
-  .hl-modal    { color: var(--a0); }
-  .hl-var      { color: var(--a1); }
-  .hl-type     { color: var(--a2); }
-  .hl-op       { color: var(--dim); }
+  /* actions rail */
+  #rail { border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+          display: grid; grid-template-rows: auto 1fr auto auto; min-height: 0; }
+  #actions { overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 5px; }
+  #actions button { text-align: left; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+  #trace { padding: 7px 8px; border-top: 1px solid var(--line); max-height: 150px; overflow: auto; }
+  #trace div { color: var(--dim); padding: 1px 0; }
+  #traceBtns { display: flex; gap: 5px; padding: 7px 8px; border-top: 1px solid var(--line); }
+  #traceBtns button { flex: 1; font-size: 12px; }
 
-  .facts { color: var(--good); margin-bottom: 10px; word-break: break-word; }
+  /* right column: state fixed on top, tabs beneath */
+  .right { display: grid; grid-template-rows: minmax(120px, 40%) 1fr; min-height: 0; }
+  .tabs { display: flex; gap: 4px; margin-left: -2px; }
+  .tabs button {
+    border: 0; border-bottom: 2px solid transparent; background: none; border-radius: 0;
+    padding: 2px 7px; color: var(--dim); font-size: 10.5px;
+    letter-spacing: .1em; text-transform: uppercase;
+  }
+  .tabs button.on { color: var(--ink); border-bottom-color: var(--a0); }
+  .pane { display: none; }
+  .pane.on { display: block; }
+
+  .facts { color: var(--good); margin-bottom: 9px; word-break: break-word; }
   table.att { border-collapse: collapse; width: 100%; }
   table.att td { vertical-align: top; padding: 2px 8px 2px 0; word-break: break-word; }
-  td.who { color: var(--a0); white-space: nowrap; }
+  td.who { white-space: nowrap; }
   .lbl { color: var(--dim); }
   .believes { color: var(--key); }
   .undecided { color: var(--dim); }
 
-  #trace { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
-  #trace .step { background: #232830; border: 1px solid var(--line); border-radius: 4px; padding: 2px 7px; }
-  #trace .empty { color: var(--dim); }
-  .acts { display: flex; flex-wrap: wrap; gap: 6px; }
-  .acts button { font-size: 12px; }
+  #results div { white-space: pre-wrap; word-break: break-word; }
+  #results .q { color: var(--dim); margin-top: 7px; }
+  #results .t { color: var(--good); }
+  #results .f { color: var(--key); }
+  #results .e { color: var(--bad); }
+  #results .m { color: var(--ink); padding-left: 12px; }
 
-  #console { border-top: 1px solid var(--line); background: var(--panel); }
-  #log { max-height: 148px; overflow: auto; padding: 8px 12px 0; }
-  #log div { white-space: pre-wrap; word-break: break-word; }
-  #log .q { color: var(--dim); }
-  #log .t { color: var(--good); }
-  #log .f { color: var(--key); }
-  #log .e { color: var(--bad); }
-  #promptRow { display: flex; align-items: center; gap: 8px; padding: 6px 12px; }
-  #promptRow span { color: var(--dim); }
+  #promptRow { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+               border-top: 1px solid var(--line); background: var(--panel); }
+  #promptRow span.caret { color: var(--dim); }
   #prompt { flex: 1; background: transparent; border: 0; outline: 0; color: var(--ink); font: inherit; }
-  pre.err { color: var(--bad); white-space: pre-wrap; margin: 0; }
+
   pre.plain { margin: 0; color: var(--dim); white-space: pre; }
-  .legend { display: flex; gap: 10px; flex-wrap: wrap; }
+  .fault { cursor: pointer; color: var(--bad); padding: 3px 0; border-bottom: 1px solid #2b3038; }
+  .fault:hover { background: #241d1d; }
+  .fault .where { color: var(--dim); margin-right: 8px; }
+  .legend { display: flex; gap: 9px; flex-wrap: wrap; }
   .legend b { font-weight: normal; }
   svg { width: 100%; height: 100%; display: block; }
 </style>
@@ -107,49 +120,90 @@
 
 <header>
   <h1>delhi</h1>
-  <select id="examples"></select>
-  <button id="reset">reset trace</button>
-  <button id="undo">undo step</button>
+  <select id="files"></select>
+  <button id="new">new</button>
+  <input class="name" id="saveName" placeholder="name.delhi" spellcheck="false">
+  <button id="save">save</button>
+  <button id="check" class="primary">check</button>
   <span id="status">ready</span>
 </header>
 
 <main>
-  <div class="col">
-    <section>
-      <h2>editor <span class="note" id="editorNote"></span></h2>
-      <div id="editorWrap">
-        <pre id="highlight" aria-hidden="true"></pre>
-        <textarea id="editor" spellcheck="false" wrap="off"
-                  placeholder="pick an example, or write a .delhi file here"></textarea>
-      </div>
-    </section>
+  <section>
+    <h2>editor <span class="note" id="editorNote"></span></h2>
+    <div id="editorWrap">
+      <pre id="highlight" aria-hidden="true"></pre>
+      <textarea id="editor" spellcheck="false" wrap="off"
+                placeholder="pick a file, or press `new` and write one here"></textarea>
+    </div>
+  </section>
+
+  <div id="rail">
+    <h2>actions <span class="note" id="actionCount"></span></h2>
+    <div id="actions"></div>
+    <div id="trace"></div>
+    <div id="traceBtns">
+      <button id="undo">undo</button>
+      <button id="reset">reset</button>
+    </div>
   </div>
 
-  <div class="col right">
+  <div class="right">
     <section>
       <h2>state <span class="note" id="stateNote"></span></h2>
       <div class="body" id="state"></div>
     </section>
     <section>
-      <h2>model <span class="note legend" id="legend"></span></h2>
-      <div class="body" id="graph" style="padding:0"></div>
+      <h2>
+        <span class="tabs">
+          <button data-tab="results" class="on">results</button>
+          <button data-tab="model">model</button>
+          <button data-tab="explicit">explicit</button>
+          <button data-tab="errors">errors</button>
+        </span>
+        <span class="note legend" id="legend"></span>
+      </h2>
+      <div class="body" style="padding:0">
+        <div class="pane on" id="pane-results"><div class="body" id="results"></div></div>
+        <div class="pane" id="pane-model" style="height:100%"><div id="graph" style="height:100%"></div></div>
+        <div class="pane" id="pane-explicit"><div class="body"><pre class="plain" id="explicit"></pre></div></div>
+        <div class="pane" id="pane-errors"><div class="body" id="errors"></div></div>
+      </div>
     </section>
   </div>
 </main>
 
-<div id="console">
-  <div id="trace"></div>
-  <div id="log"></div>
-  <div id="promptRow">
-    <span>&gt;</span>
-    <input id="prompt" spellcheck="false" autocomplete="off"
-           placeholder="a formula — B[alice] B[carol] !h — or :do action, :reset, :undo, :help">
-  </div>
+<div id="promptRow">
+  <span class="caret">&gt;</span>
+  <input id="prompt" spellcheck="false" autocomplete="off"
+         placeholder="a formula — B[alice] B[carol] !h — or :ask B[alice] _ · :do action · :state · :help">
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
 const AGENT_COLOURS = ['--a0','--a1','--a2','--a3','--a4'];
+
+const TEMPLATE = `types   { Actor - Object }
+objects { alice, bob - Actor }
+agents  { alice, bob }
+props   { p }
+
+initially {
+    p               // a fact about the actual world
+    ?[bob] p        // bob cannot tell
+    B[bob] p        // but he leans that way
+}
+
+goal { K[alice] p }
+
+actions {
+    tell() {
+        actor     alice
+        announces p
+        alice observes, bob observes
+    }
+}
+`;
 
 let trace = [];
 let latest = null;
@@ -158,25 +212,39 @@ let agentOrder = [];
 function esc(s) {
   return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 }
+function colourOf(agent) {
+  const i = agentOrder.indexOf(agent);
+  return `var(${AGENT_COLOURS[(i < 0 ? 0 : i) % AGENT_COLOURS.length]})`;
+}
+function setStatus(text, kind) {
+  $('status').textContent = text;
+  $('status').className = kind || '';
+}
+function query() { return trace.map(a => 'a=' + encodeURIComponent(a)).join('&'); }
 
-// Highlighting rules, tried in order — the first that matches at the cursor wins, so
-// the sequence encodes the precedence. Comments come first so nothing inside one is
-// styled; `?name` precedes bare `?` so a variable is not read as the ignorance
-// modality; and a capitalised word is only a modality when an agent list or a
-// condition follows it, which is what separates `K[alice]` from the type `Kettle`.
+function showTab(name) {
+  for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.tab === name);
+  for (const p of document.querySelectorAll('.pane')) p.classList.toggle('on', p.id === 'pane-' + name);
+}
+for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => showTab(b.dataset.tab);
+
+// ---- highlighting -----------------------------------------------------------
+// Rules in order: the first that matches at the cursor wins, so the sequence encodes
+// precedence. Comments first so nothing inside one is styled; `?name` before bare `?`
+// so a variable is not read as the ignorance modality; and a capitalised word is a
+// modality only when an agent list or condition follows, separating `K[a]` from a type.
 const RULES = [
   [/^\/\/[^\n]*/,                          'hl-comment'],
   [/^\/\*[\s\S]*?(\*\/|$)/,                'hl-comment'],
   [/^\?[A-Za-z_]\w*/,                      'hl-var'],
-  [/^(?:types|objects|agents|props|constants|initially|state|goal|actions)\b/, 'hl-section'],
-  [/^(?:actor|pre|causes|determines|announces|observes|aware|if)\b/,           'hl-clause'],
+  [/^(?:types|objects|agents|props|constants|define|rules|initially|state|goal|invariants|actions)\b/, 'hl-section'],
+  [/^(?:actor|pre|causes|determines|announces|observes|aware|if)\b/, 'hl-clause'],
   [/^(?:Kw|Bw|K|B|C|S)['′]?(?=\s*[\^\[])/, 'hl-modal'],
-  [/^(?:\[\]|□|\?\?|¿|\?)(?=\s*\[)/,  'hl-modal'],
+  [/^(?:\[\]|□|\?\?|¿|\?)(?=\s*\[)/,       'hl-modal'],
   [/^[A-Z][A-Za-z0-9_]*/,                  'hl-type'],
-  [/^(?:->|<=|[&|!~<>*^])/,                'hl-op'],
+  [/^(?:->|:-|<=|[&|!~<>*^=])/,            'hl-op'],
 ];
 
-/// Renders `src` as highlighted HTML, leaving anything unmatched as plain text.
 function highlight(src) {
   let out = '', i = 0;
   while (i < src.length) {
@@ -186,83 +254,90 @@ function highlight(src) {
       const m = re.exec(rest);
       if (m && m[0]) { hit = [m[0], cls]; break; }
     }
-    if (hit) {
-      out += `<span class="${hit[1]}">${esc(hit[0])}</span>`;
-      i += hit[0].length;
-    } else {
-      // Consume one character rather than scanning ahead: the rules are anchored, so
-      // the next position is where the next token could start.
-      out += esc(src[i]);
-      i += 1;
-    }
+    if (hit) { out += `<span class="${hit[1]}">${esc(hit[0])}</span>`; i += hit[0].length; }
+    else { out += esc(src[i]); i += 1; }
   }
-  // A trailing newline would otherwise collapse and the last line's highlighting would
-  // sit one row above the caret.
   return out + '\n';
 }
-
 function paintEditor() {
   const ta = $('editor'), pre = $('highlight');
   pre.innerHTML = highlight(ta.value);
   pre.scrollTop = ta.scrollTop;
   pre.scrollLeft = ta.scrollLeft;
 }
-function colourOf(agent) {
-  const i = agentOrder.indexOf(agent);
-  return `var(${AGENT_COLOURS[(i < 0 ? 0 : i) % AGENT_COLOURS.length]})`;
-}
-function setStatus(text, kind) {
-  const el = $('status');
-  el.textContent = text;
-  el.className = kind || '';
-}
-function query() {
-  return trace.map(a => 'a=' + encodeURIComponent(a)).join('&');
-}
 
+// ---- the main refresh -------------------------------------------------------
 async function refresh() {
-  const src = $('editor').value;
-  let data;
+  let d;
   try {
-    const res = await fetch('/api/state?' + query(), { method: 'POST', body: src });
-    data = await res.json();
-  } catch (e) {
-    setStatus('server unreachable', 'bad');
-    return;
-  }
-  latest = data;
+    const res = await fetch('/api/state?' + query(), { method: 'POST', body: $('editor').value });
+    d = await res.json();
+  } catch (e) { setStatus('server unreachable', 'bad'); return; }
+  latest = d;
   renderTrace();
+  renderErrors(d);
 
-  if (!data.ok) {
-    setStatus('rejected', 'bad');
-    $('stateNote').textContent = '';
-    $('state').innerHTML = '<pre class="err">' + esc(data.error || 'rejected') + '</pre>';
+  if (!d.ok) {
+    setStatus(`${d.faults.length} error${d.faults.length === 1 ? '' : 's'}`, 'bad');
+    $('state').innerHTML = '<span class="undecided">fix the errors to see the state</span>';
+    $('actions').innerHTML = '';
+    $('actionCount').textContent = '';
     $('graph').innerHTML = '';
-    $('legend').innerHTML = '';
+    $('explicit').textContent = '';
+    showTab('errors');
     return;
   }
 
-  agentOrder = data.agents.map(a => a.agent);
-  const goal = data.goal === null ? '' :
-    (data.goal ? ' · goal holds' : ' · goal does not hold');
-  setStatus(`ok · ${data.n_worlds} world${data.n_worlds === 1 ? '' : 's'}${goal}`,
-            data.goal ? 'good' : '');
-  $('editorNote').textContent = `${data.actions.length} ground actions`;
-  $('stateNote').textContent = data.trace_error ? '' : '';
+  agentOrder = d.agents.map(a => a.agent);
+  const goal = d.goal === null ? '' : (d.goal ? ' · goal holds' : ' · goal not yet');
+  setStatus(`ok · ${d.n_worlds} world${d.n_worlds === 1 ? '' : 's'}${goal}`, d.goal ? 'good' : '');
+  $('editorNote').textContent = '';
+  renderActions(d);
+  renderState(d);
+  renderGraph(d);
+  $('explicit').textContent = d.explicit;
+}
 
-  renderState(data);
-  renderGraph(data);
+function renderErrors(d) {
+  const box = $('errors');
+  if (d.ok) { box.innerHTML = '<span class="undecided">no errors</span>'; return; }
+  // Clickable: the server sends byte offsets alongside the rendered text, so selecting
+  // the offending span in the editor is just a setSelectionRange.
+  box.innerHTML = d.faults.map((f, i) =>
+    `<div class="fault" data-i="${i}"><span class="where">${f.line}:${f.col}</span>${esc(f.message)}</div>`
+  ).join('');
+  for (const el of box.querySelectorAll('.fault')) {
+    el.onclick = () => {
+      const f = d.faults[+el.dataset.i];
+      const ta = $('editor');
+      ta.focus();
+      ta.setSelectionRange(f.start, f.end);
+      // Scroll the line into view: no API for that on a textarea, so estimate from the
+      // line height and the number of newlines before the fault.
+      const before = ta.value.slice(0, f.start).split('\n').length;
+      ta.scrollTop = Math.max(0, (before - 4) * 19.5);
+      paintEditor();
+    };
+  }
+}
+
+function renderActions(d) {
+  $('actionCount').textContent = d.actions.length ? `${d.actions.length}` : '';
+  $('actions').innerHTML = d.actions.map(n => `<button data-act="${esc(n)}">${esc(n)}</button>`).join('')
+    || '<span class="undecided">none</span>';
+  for (const b of $('actions').querySelectorAll('button[data-act]')) {
+    b.onclick = () => { trace.push(b.dataset.act); refresh(); };
+  }
 }
 
 function renderState(d) {
   let html = '';
-  if (d.trace_error) html += '<pre class="err">' + esc(d.trace_error) + '</pre>';
+  if (d.trace_error) html += `<div class="e" style="color:var(--bad)">${esc(d.trace_error)}</div>`;
   if (d.violated && d.violated.length) {
-    html += '<pre class="err">invariant violated:\n  ' +
-            d.violated.map(esc).join('\n  ') + '</pre>';
+    html += '<div style="color:var(--bad)">invariant violated:<br>' +
+            d.violated.map(v => '&nbsp;&nbsp;' + esc(v)).join('<br>') + '</div>';
   }
-  html += '<div class="facts">actual world &nbsp;' + esc(d.facts.join(', ')) + '</div>';
-  html += '<table class="att">';
+  html += '<div class="facts">actual world &nbsp;' + esc(d.facts.join(', ')) + '</div><table class="att">';
   for (const a of d.agents) {
     const bits = [];
     if (a.knows.length) bits.push('<span class="lbl">knows</span> ' + esc(a.knows.join(', ')));
@@ -270,33 +345,19 @@ function renderState(d) {
     if (a.undecided.length) bits.push('<span class="undecided">undecided ' + esc(a.undecided.join(', ')) + '</span>');
     html += `<tr><td class="who" style="color:${colourOf(a.agent)}">${esc(a.agent)}</td><td>${bits.join(' &nbsp; ')}</td></tr>`;
   }
-  html += '</table>';
-
-  html += '<h2 style="margin:14px -12px 6px;">available actions</h2><div class="acts">';
-  for (const name of d.actions) {
-    html += `<button data-act="${esc(name)}">${esc(name)}</button>`;
-  }
-  html += '</div>';
-  html += '<h2 style="margin:14px -12px 6px;">explicit form</h2><pre class="plain">' + esc(d.explicit) + '</pre>';
-  $('state').innerHTML = html;
-  for (const b of $('state').querySelectorAll('button[data-act]')) {
-    b.onclick = () => { trace.push(b.dataset.act); refresh(); };
-  }
+  $('state').innerHTML = html + '</table>';
 }
 
-// Worlds on a circle, edges as arcs. Good enough for the sizes a person can read;
-// past a few dozen worlds the picture stops helping and the explicit form is better.
+// Worlds on a circle, edges as arcs. Good for sizes a person can read; past a few dozen
+// the picture stops helping and the explicit form is the better view.
 function renderGraph(d) {
   const n = d.worlds.length;
-  $('legend').innerHTML = d.agents
-    .map(a => `<b style="color:${colourOf(a.agent)}">━ ${esc(a.agent)}</b>`).join('');
-
+  $('legend').innerHTML = d.agents.map(a => `<b style="color:${colourOf(a.agent)}">━ ${esc(a.agent)}</b>`).join('');
   if (n === 0) { $('graph').innerHTML = ''; return; }
   if (n > 40) {
-    $('graph').innerHTML = `<div class="body"><span class="undecided">${n} worlds — too many to draw; the explicit form above is the readable view at this size.</span></div>`;
+    $('graph').innerHTML = `<div class="body"><span class="undecided">${n} worlds — too many to draw; the explicit tab is the readable view at this size.</span></div>`;
     return;
   }
-
   const W = 520, H = 340, cx = W / 2, cy = H / 2;
   const r = n === 1 ? 0 : Math.min(W, H) / 2 - 58;
   const pos = d.worlds.map((_, i) => {
@@ -304,8 +365,7 @@ function renderGraph(d) {
     return { x: cx + r * Math.cos(t), y: cy + r * Math.sin(t) };
   });
 
-  let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
-  svg += `<defs>`;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet"><defs>`;
   d.agents.forEach((a, i) => {
     svg += `<marker id="m${i}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6"
             markerHeight="6" orient="auto-start-reverse">
@@ -313,8 +373,7 @@ function renderGraph(d) {
   });
   svg += `</defs>`;
 
-  // Several agents can relate the same pair; bow each one out a little so they do not
-  // overdraw and hide each other.
+  // Several agents can relate the same pair; bow each out so they do not overdraw.
   const seen = {};
   for (const e of d.edges) {
     const key = e.from < e.to ? `${e.from}-${e.to}` : `${e.to}-${e.from}`;
@@ -330,15 +389,11 @@ function renderGraph(d) {
     svg += `<path d="M${p.x},${p.y} Q${c.x},${c.y} ${q.x},${q.y}" fill="none"
             stroke="${colourOf(e.agent)}" stroke-width="1.4" opacity=".85"${marker}/>`;
   }
-
   d.worlds.forEach((w, i) => {
     const { x, y } = pos[i];
-    if (w.designated) {
-      svg += `<circle cx="${x}" cy="${y}" r="27" fill="none" stroke="#8fbf7f" stroke-width="1"/>`;
-    }
+    if (w.designated) svg += `<circle cx="${x}" cy="${y}" r="27" fill="none" stroke="#8fbf7f" stroke-width="1"/>`;
     svg += `<circle cx="${x}" cy="${y}" r="23" fill="#1b1e24" stroke="#3c434e" stroke-width="1"/>`;
-    // Only the atoms that differ between worlds are drawn — see the server's `label`.
-    // Each goes on its own line so a couple of them stay legible in a small circle.
+    // Only the atoms that differ between worlds — see the server's `label`.
     const lines = w.label.length ? w.label : ['∅'];
     const shown = lines.slice(0, 3).map(s => s.length > 11 ? s.slice(0, 10) + '…' : s);
     if (lines.length > 3) shown[2] = '…';
@@ -349,61 +404,56 @@ function renderGraph(d) {
     });
     svg += `<text x="${x}" y="${top + shown.length * 10 + 2}" text-anchor="middle"
             fill="#7d8593" font-size="8" font-family="ui-monospace, monospace">w${i}</text>`;
-    const full = w.facts.length ? w.facts.join(', ') : 'nothing true here';
-    svg += `<title>w${i} — ${esc(full)}</title>`;
+    svg += `<title>w${i} — ${esc(w.facts.length ? w.facts.join(', ') : 'nothing true here')}</title>`;
   });
-  svg += `</svg>`;
-  $('graph').innerHTML = svg;
+  $('graph').innerHTML = svg + `</svg>`;
 }
 
 function renderTrace() {
-  const el = $('trace');
-  if (!trace.length) { el.innerHTML = '<span class="empty">no actions applied</span>'; return; }
-  el.innerHTML = trace.map((a, i) => `<span class="step">${i + 1}. ${esc(a)}</span>`).join('');
+  $('trace').innerHTML = trace.length
+    ? trace.map((a, i) => `<div>${i + 1}. ${esc(a)}</div>`).join('')
+    : '<div>no actions applied</div>';
 }
 
-function log(text, cls) {
+// ---- results ----------------------------------------------------------------
+function say(text, cls) {
   const d = document.createElement('div');
   d.className = cls || '';
   d.textContent = text;
-  $('log').appendChild(d);
-  $('log').scrollTop = $('log').scrollHeight;
+  $('results').appendChild(d);
+  $('results').scrollTop = $('results').scrollHeight;
 }
 
 async function runCommand(line) {
   line = line.trim();
   if (!line) return;
-  log('> ' + line, 'q');
+  showTab('results');
+  say('> ' + line, 'q');
 
   if (line === ':help') {
-    log('a formula evaluates in the current state — K B [] B^psi C Kw Bw ? ?? K\' B\' S\'');
-    log(':ask [d] <pat> which formulas of a shape hold; `_` is the hole');
-    log('               e.g. :ask B[alice] _     what alice believes');
-    log('                    :ask ?[alice] _     what she is ignorant of');
-    log('                    :ask 2 B[alice] _   nested two levels deep');
-    log(':do <action>   apply an action      :undo    drop the last one');
-    log(':reset         clear the trace      :actions list them');
+    say('a formula evaluates in the current state — K B [] B^psi C Kw Bw ? ?? K\' B\' S\'', 'm');
+    say(':ask [d] <pat>  which formulas of a shape hold; `_` is the hole', 'm');
+    say('                :ask B[alice] _   ·   :ask ?[alice] _   ·   :ask 2 B[alice] _', 'm');
+    say(':do <action>    apply one      :undo  drop the last      :reset  clear', 'm');
+    say(':state          re-show the state panel', 'm');
     return;
   }
-  if (line === ':reset') { trace = []; await refresh(); log('trace cleared'); return; }
+  if (line === ':reset') { trace = []; await refresh(); say('trace cleared', 'm'); return; }
   if (line === ':undo') {
-    if (!trace.length) { log('nothing to undo'); return; }
-    log('dropped ' + trace.pop());
+    if (!trace.length) { say('nothing to undo', 'm'); return; }
+    say('dropped ' + trace.pop(), 'm');
     await refresh();
     return;
   }
-  if (line === ':actions') {
-    log((latest && latest.actions.length) ? latest.actions.join('\n') : 'none');
-    return;
-  }
+  if (line === ':state') { await refresh(); say('state panel updated', 'm'); return; }
+  if (line === ':actions') { say((latest && latest.actions.length) ? latest.actions.join('\n') : 'none', 'm'); return; }
   if (line.startsWith(':do ')) {
     trace.push(line.slice(4).trim());
     await refresh();
-    if (latest && latest.trace_error) { log(latest.trace_error, 'e'); trace.pop(); await refresh(); }
-    else log('applied ' + trace[trace.length - 1]);
+    if (latest && latest.trace_error) { say(latest.trace_error, 'e'); trace.pop(); await refresh(); }
+    else say('applied ' + trace[trace.length - 1], 'm');
     return;
   }
-  // `:ask [depth] <pattern>` — a leading integer sets the depth, otherwise 0.
   if (line.startsWith(':ask')) {
     let rest = line.slice(4).trim();
     let depth = 0;
@@ -414,43 +464,62 @@ async function runCommand(line) {
     if (m) { depth = +m[1]; rest = m[2]; }
     else if (/^\d+$/.test(rest)) { rest = ''; }
     if (!rest) {
-      log('usage: :ask [depth] <pattern>, where _ marks the hole', 'e');
-      log('  :ask B[alice] _      what alice believes');
-      log('  :ask ?[alice] _      what she cannot settle');
-      log('  :ask 2 B[alice] _    the same, nested two levels deep');
+      say('usage: :ask [depth] <pattern>, where _ marks the hole', 'e');
+      say(':ask B[alice] _      what alice believes', 'm');
+      say(':ask ?[alice] _      what she cannot settle', 'm');
+      say(':ask 2 B[alice] _    the same, nested two levels deep', 'm');
       return;
     }
-    const res = await fetch(`/api/ask?${query()}&d=${depth}&f=${encodeURIComponent(rest)}`,
-                            { method: 'POST', body: $('editor').value });
-    const d = await res.json();
-    if (!d.ok) { log(d.error || 'error', 'e'); return; }
-    if (!d.matches.length) log('nothing matches', 'f');
-    for (const m2 of d.matches) log('  ' + m2, 't');
-    log(`${d.matches.length} of ${d.considered} candidates at depth ${depth}` +
-        (d.truncated ? ' (truncated — lower the depth)' : ''), 'q');
+    const d = await (await fetch(`/api/ask?${query()}&d=${depth}&f=${encodeURIComponent(rest)}`,
+                     { method: 'POST', body: $('editor').value })).json();
+    if (!d.ok) { say(d.error || 'error', 'e'); return; }
+    if (!d.matches.length) say('nothing matches', 'f');
+    for (const m2 of d.matches) say(m2, 'm');
+    say(`${d.matches.length} of ${d.considered} candidates at depth ${depth}`, 'q');
     return;
   }
-  if (line.startsWith(':')) { log('unknown command — try :help', 'e'); return; }
+  if (line.startsWith(':')) { say('unknown command — try :help', 'e'); return; }
 
-  const res = await fetch('/api/eval?' + query() + '&f=' + encodeURIComponent(line),
-                          { method: 'POST', body: $('editor').value });
-  const d = await res.json();
-  if (!d.ok) log(d.error || 'error', 'e');
-  else log(String(d.value), d.value ? 't' : 'f');
+  const d = await (await fetch('/api/eval?' + query() + '&f=' + encodeURIComponent(line),
+                   { method: 'POST', body: $('editor').value })).json();
+  if (!d.ok) say(d.error || 'error', 'e');
+  else say(String(d.value), d.value ? 't' : 'f');
 }
 
+// ---- wiring -----------------------------------------------------------------
 $('prompt').addEventListener('keydown', async e => {
   if (e.key === 'Enter') { const v = e.target.value; e.target.value = ''; await runCommand(v); }
 });
 $('reset').onclick = async () => { trace = []; await refresh(); };
 $('undo').onclick = async () => { trace.pop(); await refresh(); };
+$('check').onclick = async () => {
+  await refresh();
+  if (latest && !latest.ok) showTab('errors');
+  else { showTab('results'); say('checked — no errors', 'm'); }
+};
 
-// Editing invalidates the trace's meaning, so re-check from the top rather than
-// pretending actions applied to an older file still describe this one.
+$('new').onclick = async () => {
+  $('editor').value = TEMPLATE;
+  $('saveName').value = '';
+  trace = [];
+  $('results').innerHTML = '';
+  paintEditor();
+  await refresh();
+};
+
+$('save').onclick = async () => {
+  const name = $('saveName').value.trim();
+  if (!name) { setStatus('name the file first', 'bad'); $('saveName').focus(); return; }
+  const r = await (await fetch('/api/save?name=' + encodeURIComponent(name),
+                   { method: 'POST', body: $('editor').value })).json();
+  if (!r.ok) { setStatus(r.error, 'bad'); return; }
+  setStatus('saved ' + r.path, 'good');
+  await loadFileList(r.path);
+};
+
 let timer = null;
 $('editor').addEventListener('input', () => {
-  // Repaint immediately so typing never lags behind the caret; only the round trip to
-  // the server is debounced.
+  // Repaint at once so typing never lags the caret; only the round trip is debounced.
   paintEditor();
   clearTimeout(timer);
   setStatus('checking…');
@@ -461,23 +530,31 @@ $('editor').addEventListener('scroll', () => {
   $('highlight').scrollLeft = $('editor').scrollLeft;
 });
 
-(async function start() {
-  const names = await (await fetch('/api/examples')).json();
-  const sel = $('examples');
+async function loadFileList(select) {
+  const names = await (await fetch('/api/files')).json();
+  const sel = $('files');
   sel.innerHTML = names.map(n => `<option>${esc(n)}</option>`).join('');
-  sel.onchange = async () => {
-    $('editor').value = await (await fetch('/api/example?name=' + encodeURIComponent(sel.value))).text();
-    trace = [];
-    $('log').innerHTML = '';
-    // A new file is a new subject: start both panes at the top rather than wherever
-    // the last one happened to be scrolled to.
-    $('state').scrollTop = 0;
-    $('editor').scrollTop = 0;
-    paintEditor();
-    await refresh();
-  };
-  const initial = names.includes('coin_lie.delhi') ? 'coin_lie.delhi' : names[0];
-  if (initial) { sel.value = initial; await sel.onchange(); }
+  if (select && names.includes(select)) sel.value = select;
+  return names;
+}
+
+async function openFile(path) {
+  $('editor').value = await (await fetch('/api/file?name=' + encodeURIComponent(path))).text();
+  $('saveName').value = path.startsWith('scratch/') ? path.slice('scratch/'.length) : '';
+  trace = [];
+  $('results').innerHTML = '';
+  $('state').scrollTop = 0;
+  $('editor').scrollTop = 0;
+  paintEditor();
+  await refresh();
+}
+
+(async function start() {
+  const names = await loadFileList();
+  $('files').onchange = () => openFile($('files').value);
+  const initial = names.includes('examples/coin_lie.delhi') ? 'examples/coin_lie.delhi' : names[0];
+  if (initial) { $('files').value = initial; await openFile(initial); }
+  else { $('editor').value = TEMPLATE; paintEditor(); await refresh(); }
 })();
 </script>
 </body>

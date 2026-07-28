@@ -22,3 +22,6 @@ wheels/
 # Editor/IDE
 .vscode/
 .idea/
+
+# Files authored in the browser UI
+scratch/

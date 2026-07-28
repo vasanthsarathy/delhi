@@ -61,41 +61,76 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// The examples directory, resolved relative to the repository root.
-fn examples_dir() -> std::path::PathBuf {
-    // `CARGO_MANIFEST_DIR` is `crates/delhi-gui`, so the repo root is two levels up.
-    // Resolving at runtime rather than embedding lets edits to the files show up
-    // without a rebuild.
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples")
-}
-
-/// Names of the `.delhi` files shipped in `examples/`, sorted.
-fn example_names() -> Vec<String> {
-    let mut names: Vec<String> = std::fs::read_dir(examples_dir())
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter_map(|e| e.file_name().into_string().ok())
-        .filter(|n| n.ends_with(".delhi"))
-        .collect();
-    names.sort();
-    names
-}
-
-/// Reads one example, refusing any name that is not a plain `.delhi` filename.
+/// The two directories files may be read from. Only the second is written to.
 ///
-/// The guard matters because the name arrives from the query string: without it,
-/// `?name=../../../etc/passwd` would read whatever the process can.
-fn example_source(name: &str) -> Option<String> {
-    let plain = !name.is_empty()
+/// `examples/` is curated and version-controlled; `scratch/` is gitignored and is where
+/// anything authored in the browser lands, so the UI cannot overwrite a shipped example.
+const DIRS: [&str; 2] = ["examples", "scratch"];
+
+/// Resolves one of [`DIRS`] relative to the repository root.
+///
+/// `CARGO_MANIFEST_DIR` is `crates/delhi-gui`, so the root is two levels up. Resolved at
+/// runtime rather than embedded, so edits to a file show up without a rebuild.
+fn dir_path(dir: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(dir)
+}
+
+/// Whether `name` is a plain `.delhi` filename.
+///
+/// Load-bearing, because names arrive from the query string: without it,
+/// `?name=../../../etc/passwd` would read — or, for save, *write* — whatever the process
+/// can reach.
+fn is_plain_delhi(name: &str) -> bool {
+    !name.is_empty()
         && name.ends_with(".delhi")
         && !name.contains('/')
         && !name.contains('\\')
-        && !name.contains("..");
-    if !plain {
-        return None;
+        && !name.contains("..")
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c))
+}
+
+/// Every `.delhi` file in both directories, as `dir/name`, sorted within each directory.
+fn file_names() -> Vec<String> {
+    let mut out = Vec::new();
+    for dir in DIRS {
+        let mut names: Vec<String> = std::fs::read_dir(dir_path(dir))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| e.file_name().into_string().ok())
+            .filter(|n| is_plain_delhi(n))
+            .collect();
+        names.sort();
+        out.extend(names.into_iter().map(|n| format!("{dir}/{n}")));
     }
-    std::fs::read_to_string(examples_dir().join(name)).ok()
+    out
+}
+
+/// Splits a `dir/name` path, accepting only a known directory and a plain filename.
+fn split_path(path: &str) -> Option<(&'static str, &str)> {
+    let (dir, name) = path.split_once('/')?;
+    let dir = DIRS.iter().find(|d| **d == dir)?;
+    is_plain_delhi(name).then_some((*dir, name))
+}
+
+/// Reads one file, refusing anything outside the two known directories.
+fn read_source(path: &str) -> Option<String> {
+    let (dir, name) = split_path(path)?;
+    std::fs::read_to_string(dir_path(dir).join(name)).ok()
+}
+
+/// Writes `src` to `scratch/<name>`, creating the directory if needed.
+///
+/// Only `scratch/` is writable. Accepting a directory from the request would let the UI
+/// overwrite a curated example, and there is no undo here beyond git.
+fn save_source(name: &str, src: &str) -> Result<String, String> {
+    if !is_plain_delhi(name) {
+        return Err(format!("`{name}` is not a plain .delhi filename"));
+    }
+    let dir = dir_path("scratch");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("scratch/: {e}"))?;
+    std::fs::write(dir.join(name), src).map_err(|e| format!("scratch/{name}: {e}"))?;
+    Ok(format!("scratch/{name}"))
 }
 
 fn main() {
@@ -129,14 +164,21 @@ fn main() {
 
         let (mime, payload) = match path {
             "/" => ("text/html; charset=utf-8", PAGE.to_string()),
-            "/api/examples" => (
+            "/api/files" => (
                 "application/json",
-                serde_json::to_string(&example_names()).expect("serialises"),
+                serde_json::to_string(&file_names()).expect("serialises"),
             ),
-            "/api/example" => match example_source(&get("name")) {
+            "/api/file" => match read_source(&get("name")) {
                 Some(src) => ("text/plain; charset=utf-8", src),
                 None => ("text/plain; charset=utf-8", String::new()),
             },
+            "/api/save" => {
+                let reply = match save_source(&get("name"), &body) {
+                    Ok(path) => serde_json::json!({ "ok": true, "path": path }),
+                    Err(e) => serde_json::json!({ "ok": false, "error": e }),
+                };
+                ("application/json", reply.to_string())
+            }
             "/api/state" => ("application/json", api::state(&body, &trace)),
             "/api/eval" => ("application/json", api::eval(&body, &trace, &get("f"))),
             "/api/ask" => {
@@ -178,20 +220,38 @@ mod tests {
     }
 
     #[test]
-    fn example_names_are_the_shipped_files() {
-        let names = example_names();
-        assert!(names.contains(&"coin_lie.delhi".to_string()), "got {names:?}");
+    fn file_names_are_qualified_by_directory() {
+        let names = file_names();
+        assert!(names.contains(&"examples/coin_lie.delhi".to_string()), "got {names:?}");
         assert!(names.iter().all(|n| n.ends_with(".delhi")));
+        assert!(names.iter().all(|n| n.starts_with("examples/") || n.starts_with("scratch/")));
     }
 
     #[test]
-    fn an_example_loads_and_a_traversal_does_not() {
-        assert!(example_source("coin_lie.delhi").expect("loads").contains("announce_not_heads"));
-        // The name comes from the query string, so the guard is load-bearing.
-        assert!(example_source("../Cargo.toml").is_none());
-        assert!(example_source("../../Cargo.toml").is_none());
-        assert!(example_source("/etc/passwd").is_none());
-        assert!(example_source("coin_lie.delhi/../../../Cargo.toml").is_none());
-        assert!(example_source("Cargo.toml").is_none(), "only .delhi files");
+    fn a_file_loads_and_a_traversal_does_not() {
+        assert!(read_source("examples/coin_lie.delhi")
+            .expect("loads")
+            .contains("announce_not_heads"));
+        // Names arrive from the query string, so every guard here is load-bearing.
+        assert!(read_source("examples/../Cargo.toml").is_none());
+        assert!(read_source("../Cargo.toml").is_none());
+        assert!(read_source("/etc/passwd").is_none());
+        assert!(read_source("examples/coin_lie.delhi/../../Cargo.toml").is_none());
+        assert!(read_source("examples/Cargo.toml").is_none(), "only .delhi files");
+        assert!(read_source("coin_lie.delhi").is_none(), "a directory is required");
+        assert!(read_source("src/lib.delhi").is_none(), "and it must be a known one");
+    }
+
+    #[test]
+    fn only_plain_names_may_be_saved() {
+        // Save writes to disk, so the same guard matters more here than for reading.
+        // These are rejected before any filesystem call, which is why the test can
+        // assert on them without risking a stray file.
+        for bad in ["../escape.delhi", "sub/dir.delhi", "..delhi", "notes.txt", ""] {
+            assert!(save_source(bad, "x").is_err(), "`{bad}` must be refused");
+        }
+        assert!(is_plain_delhi("my_domain.delhi"));
+        assert!(is_plain_delhi("v2-test.delhi"));
+        assert!(!is_plain_delhi("space name.delhi"), "no spaces");
     }
 }

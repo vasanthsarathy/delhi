@@ -50,12 +50,27 @@ pub struct Edge {
     pub mutual: bool,
 }
 
+/// One diagnostic, positioned so the page can jump the editor to it.
+#[derive(Serialize)]
+pub struct Fault {
+    pub line: usize,
+    pub col: usize,
+    /// Byte offsets, which is what a textarea selection needs.
+    pub start: usize,
+    pub end: usize,
+    pub message: String,
+}
+
 /// Everything the page needs to render one state.
 #[derive(Serialize)]
 pub struct StateReply {
     pub ok: bool,
     /// Rendered diagnostics, when the file was rejected.
     pub error: Option<String>,
+    /// The same diagnostics, positioned. Sent alongside the rendering rather than
+    /// instead of it: the text reads well in a panel, and the offsets are what make an
+    /// error clickable.
+    pub faults: Vec<Fault>,
     pub facts: Vec<String>,
     pub agents: Vec<Agent>,
     pub worlds: Vec<World>,
@@ -75,10 +90,11 @@ pub struct StateReply {
     pub goal: Option<bool>,
 }
 
-fn rejected(error: String) -> StateReply {
+fn rejected(error: String, faults: Vec<Fault>) -> StateReply {
     StateReply {
         ok: false,
         error: Some(error),
+        faults,
         facts: Vec::new(),
         agents: Vec::new(),
         worlds: Vec::new(),
@@ -129,11 +145,32 @@ fn replay(p: &mut Problem, trace: &[String]) -> (State, Vec<String>, Option<Stri
     (state, applied, None)
 }
 
+/// Positions every diagnostic against the source.
+fn faults_of(diags: &delhi_lang::Diagnostics, src: &str) -> Vec<Fault> {
+    diags
+        .located(src)
+        .into_iter()
+        .map(|l| Fault {
+            line: l.line,
+            col: l.col,
+            start: l.start,
+            end: l.end,
+            message: l.message,
+        })
+        .collect()
+}
+
 /// `POST /api/state` — check the source, replay the trace, and describe where it lands.
 pub fn state(src: &str, trace: &[String]) -> String {
-    let mut p = match Problem::parse(src) {
-        Ok(p) => p,
-        Err(e) => return serde_json::to_string(&rejected(e)).expect("serialises"),
+    // `check` rather than `parse`, because a rendered error string has already discarded
+    // the spans, and the page needs them to jump the editor to the fault.
+    let (built, diags) = Problem::check(src);
+    let mut p = match built {
+        Some(p) if diags.is_empty() => p,
+        _ => {
+            let reply = rejected(diags.render(src), faults_of(&diags, src));
+            return serde_json::to_string(&reply).expect("serialises");
+        }
     };
     let (state, applied, trace_error) = replay(&mut p, trace);
 
@@ -204,6 +241,7 @@ pub fn state(src: &str, trace: &[String]) -> String {
     let reply = StateReply {
         ok: true,
         error: None,
+        faults: Vec::new(),
         facts: view.facts,
         agents: view
             .agents

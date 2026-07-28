@@ -34,4 +34,4 @@ pub use ask::{ask, modal_literals, Answer};
 pub use attitudes::{state_view, AgentView, StateView};
 pub use expand::{expand, expand_ast, Defs};
 pub use problem::{load, Problem};
-pub use span::{Diagnostic, Diagnostics, Span};
+pub use span::{Diagnostic, Diagnostics, Located, Span};

@@ -45,6 +45,19 @@ impl Problem {
     /// produced a state but also raised a diagnostic is a failure too: the state is
     /// only as trustworthy as the checks that passed alongside it.
     pub fn parse(src: &str) -> Result<Problem, String> {
+        match Problem::check(src) {
+            (Some(p), diags) if diags.is_empty() => Ok(p),
+            (_, diags) => Err(diags.render(src)),
+        }
+    }
+
+    /// Parses and checks, returning the diagnostics rather than a rendering of them.
+    ///
+    /// A caller that wants to *act* on a fault — jump a cursor to it, underline it —
+    /// needs the spans, which `parse`'s rendered string has already thrown away. The
+    /// problem comes back even when diagnostics were raised, so a UI can report the
+    /// errors and still show whatever was successfully built.
+    pub fn check(src: &str) -> (Option<Problem>, Diagnostics) {
         let mut diags = Diagnostics::default();
         let mut ast = parse_file(src, &mut diags);
 
@@ -93,10 +106,17 @@ impl Problem {
 
         let actions = ground_actions(&ast.actions, &sig, &consts, &mut store, &mut diags);
 
-        match (state, diags.is_empty()) {
-            (Some(state), true) => Ok(Problem { store, sig, consts, defs, state, goal, invariants, actions }),
-            _ => Err(diags.render(src)),
-        }
+        let problem = state.map(|state| Problem {
+            store,
+            sig,
+            consts,
+            defs,
+            state,
+            goal,
+            invariants,
+            actions,
+        });
+        (problem, diags)
     }
 
     /// A ground action by its display name, e.g. `move(alice,hall,study)`. A

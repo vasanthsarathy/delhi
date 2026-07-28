@@ -81,6 +81,45 @@ impl Diagnostics {
     }
 }
 
+/// One diagnostic with its position resolved against the source.
+///
+/// [`Diagnostics::render`] bakes position into a string, which is right for a terminal
+/// and useless to anything that wants to *act* on the location — a UI that jumps the
+/// cursor to the fault needs the numbers, not a rendering of them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Located {
+    /// 1-based line.
+    pub line: usize,
+    /// 1-based column, in characters.
+    pub col: usize,
+    /// Byte offset of the start of the offending text.
+    pub start: usize,
+    /// Byte offset just past its end.
+    pub end: usize,
+    /// What went wrong.
+    pub message: String,
+}
+
+impl Diagnostics {
+    /// Every diagnostic with its line, column and byte range resolved.
+    pub fn located(&self, src: &str) -> Vec<Located> {
+        self.0
+            .iter()
+            .map(|d| {
+                let (line, line_start) = line_of(src, d.span.start);
+                let col = src[line_start..d.span.start.min(src.len())].chars().count() + 1;
+                Located {
+                    line,
+                    col,
+                    start: d.span.start,
+                    end: d.span.end,
+                    message: d.message.clone(),
+                }
+            })
+            .collect()
+    }
+}
+
 /// 1-based line number and the byte offset where that line starts.
 fn line_of(src: &str, offset: usize) -> (usize, usize) {
     let mut line = 1;
