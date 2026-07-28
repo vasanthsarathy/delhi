@@ -43,26 +43,65 @@ Design spec: **`docs/superpowers/specs/2026-07-25-delhi-core-design.md`**
 
 ## Plan 2 — surface language and CLI (`delhi-lang`, `delhi-cli`)
 
-Plan: **`docs/superpowers/plans/2026-07-27-delhi-v0.1-surface-language.md`** — written, not yet executed.
+Plan: **`docs/superpowers/plans/2026-07-27-delhi-v0.1-surface-language.md`** — **COMPLETE**
 
-- [ ] **Task 1** — crate skeleton, spans, diagnostics
-- [ ] **Task 2** — lexer, with ASCII alternatives for `□` and `¿`
-- [ ] **Task 3** — formula expression parser
-- [ ] **Task 4** — section parser
-- [ ] **Task 5** — types, objects, predicate expansion
-- [ ] **Task 6** — constant folding
-- [ ] **Task 7** — formula lowering into `delhi-syntax`
-- [ ] **Task 8** — action grounding
-- [ ] **Task 9** — declarative `initially` construction
-- [ ] **Task 10** — explicit `state` form
-- [ ] **Task 11** — pretty-printer, round-tripping through Task 10
-- [ ] **Task 12** — `Problem` / `load`; **the gate**: `examples/coin_lie.delhi` must reproduce
-      Plan 1's `coin_lie.rs` assertions exactly
-- [ ] **Task 13** — CLI `check`, `show`, `eval`
-- [ ] **Task 14** — CLI `step`, `dot`
-- [ ] **Task 15** — CLI `repl`
+- [x] **Task 1** — crate skeleton, spans, diagnostics
+- [x] **Task 2** — lexer, with ASCII alternatives for `□` and `¿`
+- [x] **Task 3** — formula expression parser
+- [x] **Task 4** — section parser
+- [x] **Task 5** — types, objects, predicate expansion
+- [x] **Task 6** — constant folding
+- [x] **Task 7** — formula lowering into `delhi-syntax`
+- [x] **Task 8** — action grounding
+- [x] **Task 9** — declarative `initially` construction
+- [x] **Task 10** — explicit `state` form
+- [x] **Task 11** — pretty-printer, round-tripping through Task 10
+- [x] **Task 12** — `Problem` / `load`; **the gate passed on its first green run**
+- [x] **Task 13** — CLI `check`, `show`, `eval`
+- [x] **Task 14** — CLI `step`, `dot`
+- [x] **Task 15** — CLI `repl`
+- [x] Final whole-branch review + one fix wave + scoped re-review
 
-Depends only on Plan 1's public API; `delhi-mb` and `delhi-syntax` are not modified.
+**Delivered:** 26 commits, 194 passing tests (132 new), 2 ignored by design, clippy clean under
+`--all-targets`, zero runtime dependencies. `delhi-mb` and `delhi-syntax` have a literally empty
+diff — the semantic core was consumed, never modified.
+
+## Plan 2 follow-ons (triaged at final review, none blocking)
+
+Structural, deliberately left out of the end-of-branch fix wave because refactors there risk
+regressions for no functional gain:
+
+- [ ] Three copies of the cartesian-product loop — `ground.rs::tuples`, `constants.rs`,
+      `lower_action.rs`. One helper would serve all three.
+- [ ] `atom_of` defined identically in `init_decl.rs` and `lower_action.rs`; `agent_ids` in
+      `init_decl.rs` duplicates `lower_formula::resolve_agents` including its message, and its
+      `None` arm is dead (it runs only for entries already known clean).
+- [ ] `Ctx` lives in `lower_action.rs` and documents itself in grounding terms, but it is the
+      parameter bundle for `build_declarative`, `build_explicit`, and `Problem::parse` — none of
+      which ground actions. Meanwhile `lower_formula` takes `sig`/`consts` unbundled. **The
+      clearest seam in the public surface**; a caller meets two conventions for the same pair.
+- [ ] `build_explicit` takes `_store: &mut Store` it never uses, purely for symmetry with
+      `build_declarative`.
+- [ ] `Sig::atom_id`/`agent_id` are linear scans that rebuild the key string per call. Irrelevant
+      at example scale; a `HashMap` cache in `Sig` is the fix, since `Interner`'s map is private
+      and `delhi-syntax` is frozen.
+- [ ] `cmd_step` and the REPL's `:do` are near-identical.
+
+Smaller, each with its reason for standing:
+
+- [ ] `resolve_args`'s message for a variable is "`?x` is not bound here". In a `state` block no
+      variable could *ever* be bound, so it invites the author to hunt for a missing binder.
+      Fixing it properly needs a context flag or caller-supplied message — an API change.
+- [ ] `parse_file.rs` emits a duplicate diagnostic for one bad token in a malformed `state` edge
+      (the `from`/`to` arms `continue` without bumping). Termination is guaranteed; cosmetic.
+- [ ] `resolve_agents` drops an invalid agent and proceeds, unlike `resolve_args` which aborts.
+      Safe — both consumers gate on `diags.is_empty()` — but wants a comment saying so.
+- [ ] `cmd.rs`'s comment about padded valuations says a padding bit is *set*; it is allocated but
+      never set. `print.rs` phrases the same point accurately; make the twin match.
+- [ ] `init_decl.rs`'s block-span test asserts exact byte offsets into its fixture. Deliberate and
+      commented, but it will need updating if that fixture is reformatted.
+- [ ] No `rustfmt.toml` is checked in and `cargo fmt --check` reports diffs across the tree
+      (pre-existing, predates this branch). Decide on a format policy before it grows.
 
 ---
 
@@ -132,3 +171,53 @@ almost always right; the tests guarding it usually were not. The discipline that
 requiring a red/green experiment — sabotage the code the test claims to protect, observe the
 failure, restore — which turns "this test passes" into "this test would fail if the thing it
 protects broke."
+
+---
+
+## Review — Plan 2
+
+**What was built.** Two crates. `delhi-lang` is a staged front end — lex, parse, ground, lower —
+that turns a `.delhi` file into a `Problem`: a type/object signature with predicates expanded to
+ground atoms, constants folded away before they can occupy a bit in every world, actions compiled
+to `ActionDef`s, and an initial plausibility model built either declaratively or explicitly.
+`delhi-cli` is a thin binary over it with six subcommands. Every crate still has zero runtime
+dependencies; argument parsing is hand-rolled.
+
+**What validates it.** `examples/coin_lie.delhi` reproduces Plan 1's `coin_lie.rs` trace
+assertion for assertion, from text rather than the Rust API, ending at the second-order false
+belief — and it passed on its first green run with no reconciliation. The reviewer verified the
+gate is a real gate rather than accepting the pass: it read the `.delhi` file against the API
+reference and confirmed identical agents, atoms, actions, observer classes, conditional awareness
+and action order, with no assertion missing or weakened. The pretty-printer round-trips through
+the explicit-state parser under `State::equivalent`, which is full bisimulation and therefore
+sensitive to edge *direction*.
+
+**The dominant pattern, and it is the same one Plan 1 found.** Seven of fifteen tasks turned up a
+test specified in the plan that passed against the very bug it named. The production code the plan
+specified was almost always right; the tests guarding it usually were not. Sabotage is what
+separated them — for instance, collapsing the world enumeration so every uncertain atom read the
+same mask bit still produced four worlds that validated with the correct designated valuation, so
+the plan's `n_worlds == 4` assertion accepted it. Dropping a conjunct from the file's declared
+goal left all five gate tests green. Removing the `u != v` guard from the Graphviz emitter left
+all four of its assertions green. None of these were visible by reading.
+
+**Four defects in the specified code**, all found by execution: a lexer that decoded with a
+leading-byte cast and so could not match its own multi-byte operators; a constant-folding rule
+that would have rejected every idiomatic sparse-constants domain; an entry classifier that errored
+on entries which do hold in the state it builds; and an uncertainty bound of 16 that permitted
+inputs which hang — a 13-atom case had to be killed by a 240-second timeout.
+
+**One defect in already-approved code, found two tasks later.** Task 4's `causes` clause swallowed
+the head of the following clause, because no Task 4 test wrote a `causes` list followed by another
+clause on the same line. Two of Task 8's own fixtures could not have parsed. The fix's boundary
+check had one provably-exact branch and one heuristic that silently changed valid input; rather
+than tune the heuristic, the seven clause words became reserved names — a language rule the plan
+did not originally have.
+
+**What the process caught that a single pass would not.** Reviewers repeatedly declined to take an
+implementer's word: the plausibility direction was traced by hand through `Model::rel`'s contract
+rather than trusted to a test name; a sabotage experiment was checked to confirm that disabling a
+verification pass was *necessary* to make the experiment discriminate rather than a way of
+manufacturing a failure; and one reviewer verified empirically that a borrow-checker justification
+repeated across several tasks was simply wrong — field borrows are disjoint, so the clones were
+convention, not necessity.
