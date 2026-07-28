@@ -209,6 +209,10 @@ pub fn parse_query(p: &mut Problem, text: &str) -> Result<delhi_syntax::FormulaI
     let toks = delhi_lang::lex(text, &mut diags);
     let mut parser = delhi_lang::Parser::new(&toks);
     let expr = parser.parse_expr(&mut diags);
+    // Expanded like the file's own formulas, so a `define` name works at the prompt.
+    // Without this a definition would be usable in a goal but not in a query, which is
+    // the kind of split that makes a feature feel half-finished.
+    let expr = delhi_lang::expand(&expr, &p.defs, &mut diags);
     let f = delhi_lang::lower_formula(
         &expr,
         &p.sig,

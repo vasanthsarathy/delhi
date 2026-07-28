@@ -21,6 +21,9 @@ pub struct Problem {
     pub sig: Sig,
     /// The constant table, kept so later queries lower against the same one.
     pub consts: Constants,
+    /// The definition table, kept for the same reason: a name that works in the file
+    /// must work at the prompt, and a query is lowered after the file has been checked.
+    pub defs: crate::Defs,
     /// The initial state.
     pub state: State,
     /// The declared goal, if the file had one.
@@ -43,7 +46,14 @@ impl Problem {
     /// only as trustworthy as the checks that passed alongside it.
     pub fn parse(src: &str) -> Result<Problem, String> {
         let mut diags = Diagnostics::default();
-        let ast = parse_file(src, &mut diags);
+        let mut ast = parse_file(src, &mut diags);
+
+        // Definitions are expanded away before anything else looks at the tree, so the
+        // signature, the constants, the initial state and the actions never see a name
+        // that is not a real proposition.
+        let defs = crate::Defs::build(&ast, &mut diags);
+        crate::expand_ast(&mut ast, &defs, &mut diags);
+
         let sig = Sig::build(&ast, &mut diags);
         let consts = Constants::build(&ast, &sig, &mut diags);
         let mut store = Store::default();
@@ -81,7 +91,7 @@ impl Problem {
         let actions = ground_actions(&ast.actions, &sig, &consts, &mut store, &mut diags);
 
         match (state, diags.is_empty()) {
-            (Some(state), true) => Ok(Problem { store, sig, consts, state, goal, invariants, actions }),
+            (Some(state), true) => Ok(Problem { store, sig, consts, defs, state, goal, invariants, actions }),
             _ => Err(diags.render(src)),
         }
     }

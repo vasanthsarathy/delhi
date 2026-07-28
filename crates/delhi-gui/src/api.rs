@@ -256,6 +256,8 @@ pub fn eval(src: &str, trace: &[String], formula: &str) -> String {
     let mut diags = delhi_lang::Diagnostics::default();
     let toks = delhi_lang::lex(formula, &mut diags);
     let expr = delhi_lang::Parser::new(&toks).parse_expr(&mut diags);
+    // Expanded like the file's own formulas, so a `define` name works here too.
+    let expr = delhi_lang::expand(&expr, &p.defs, &mut diags);
     let f = delhi_lang::lower_formula(
         &expr,
         &p.sig,

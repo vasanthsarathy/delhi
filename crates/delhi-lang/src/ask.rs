@@ -196,7 +196,12 @@ pub fn ask(
     pattern: &str,
     depth: usize,
 ) -> Result<Answer, String> {
-    let (pat, diags) = parse(pattern);
+    let (pat, mut diags) = parse(pattern);
+    if !diags.is_empty() {
+        return Err(diags.render(pattern));
+    }
+    // Expanded like any other formula, so a pattern may use a `define` name.
+    let pat = crate::expand(&pat, &p.defs, &mut diags);
     if !diags.is_empty() {
         return Err(diags.render(pattern));
     }

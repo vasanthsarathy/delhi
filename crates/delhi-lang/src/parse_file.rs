@@ -41,6 +41,7 @@ pub fn parse_file(src: &str, diags: &mut Diagnostics) -> Ast {
             "agents" => parse_agents(&mut p, &mut ast, diags),
             "props" => parse_props(&mut p, &mut ast, diags),
             "constants" => parse_constants(&mut p, &mut ast, diags),
+            "define" => parse_defines(&mut p, &mut ast, diags),
             "initially" => parse_initially(&mut p, &mut ast, diags, head_span),
             "state" => parse_state(&mut p, &mut ast, diags, head_span),
             "goal" => {
@@ -200,6 +201,54 @@ fn parse_constants(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
             Expr::Atom(term) => ast.constants.push(ConstDecl { negated, term }),
             other => diags.push(other.span(), "a constant must be a predicate application"),
         }
+        p.eat(&Tok::Comma);
+    }
+    p.expect(&Tok::RBrace, "}", diags);
+}
+
+/// `define { name(?a, ?b) = <formula>  other = <formula> }`
+///
+/// Entries need no separator: an entry ends where its formula does, and the next begins
+/// with a name followed by `(` or `=`. Commas are accepted for those who want them.
+fn parse_defines(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
+    while !matches!(p.peek(), Tok::RBrace | Tok::Eof) {
+        let span = p.span();
+        let name = match p.peek().clone() {
+            Tok::Lower(n) => {
+                p.bump();
+                n
+            }
+            _ => {
+                diags.push(span, "expected a definition name");
+                p.bump();
+                continue;
+            }
+        };
+        let mut params = Vec::new();
+        if p.eat(&Tok::LParen) {
+            while !matches!(p.peek(), Tok::RParen | Tok::Eof) {
+                match p.peek().clone() {
+                    Tok::Var(v) => {
+                        p.bump();
+                        params.push(v);
+                    }
+                    _ => {
+                        diags.push(p.span(), "a definition's parameters must be `?variables`");
+                        p.bump();
+                    }
+                }
+                if !p.eat(&Tok::Comma) {
+                    break;
+                }
+            }
+            p.expect(&Tok::RParen, ")", diags);
+        }
+        if !p.expect(&Tok::Eq, "=", diags) {
+            skip_block(p);
+            return;
+        }
+        let body = p.parse_expr(diags);
+        ast.defines.push(DefDecl { name, params, body, span });
         p.eat(&Tok::Comma);
     }
     p.expect(&Tok::RBrace, "}", diags);

@@ -191,6 +191,22 @@ pub enum Clause {
     },
 }
 
+/// `name(?a, ?b) = <formula>` in the `define` section.
+///
+/// A named formula, expanded before lowering. Parameters are variables substituted with
+/// the call's arguments, so a definition may be used wherever a formula may.
+#[derive(Clone, Debug)]
+pub struct DefDecl {
+    /// The name being defined.
+    pub name: String,
+    /// Parameter variable names, without the `?`.
+    pub params: Vec<String>,
+    /// The formula it stands for.
+    pub body: Expr,
+    /// Source location of the name.
+    pub span: Span,
+}
+
 /// `?v - Type` in an action's parameter list.
 #[derive(Clone, Debug)]
 pub struct ParamDecl {
@@ -283,6 +299,8 @@ pub struct Ast {
     pub props: Vec<PropDecl>,
     /// `constants`
     pub constants: Vec<ConstDecl>,
+    /// `define` — named formulas, expanded away before lowering.
+    pub defines: Vec<DefDecl>,
     /// `initially` or `state`
     pub init: Option<Init>,
     /// `goal`, if written.

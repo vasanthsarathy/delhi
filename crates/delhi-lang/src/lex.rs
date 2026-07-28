@@ -57,6 +57,8 @@ pub enum Tok {
     Undecided,
     /// A lone `_` — the hole in a query pattern. Never legal in a file.
     Hole,
+    /// `=` — separates a definition's name from its body.
+    Eq,
     /// `^` — the conditional-belief marker in `B^psi`
     Caret,
     /// End of input.
@@ -157,6 +159,7 @@ pub fn lex(src: &str, diags: &mut Diagnostics) -> Vec<Token> {
                 '*' => Tok::Star,
                 '\'' => Tok::Prime,
                 '^' => Tok::Caret,
+                '=' => Tok::Eq,
                 '¿' => Tok::Undecided,
                 '□' => Tok::Box,
                 '~' => Tok::Tilde,
