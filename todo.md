@@ -320,8 +320,46 @@ worktree that only builds under `cargo run` and only sees files inside this repo
 
 ### Task 8 — repo, push, tag
 
-- [x] Create the GitHub repo, push `master` — done; CI confirmation pending.
-- [ ] Tag `v0.1.0`, confirm the release workflow produces working archives.
-- [ ] Download one archive on this machine and run it against a folder outside the repo
+- [x] Create the GitHub repo, push `master`, confirm CI green.
+- [x] Tag `v0.1.0`, confirm the release workflow produces working archives.
+- [x] Download one archive on this machine and run it against a folder outside the repo
       — the actual thing a stranger does, which nothing until this step tests.
 
+
+### Review — Plan 3
+
+**Shipped.** <https://github.com/vasanthsarathy/delhi>, public, dual MIT/Apache-2.0,
+`v0.1.0` released with binaries for Linux, macOS (both architectures) and Windows. CI is
+green on all three platforms; the release archives were downloaded, checksum-verified, and
+run against a folder unrelated to this repository.
+
+**What the packaging work actually found.** Three defects that only existed *because*
+everything had been run from inside the worktree:
+
+1. The GUI resolved its file list from `CARGO_MANIFEST_DIR/../..`. Every installed binary
+   would have pointed at a directory that does not exist on the user's machine. This was
+   invisible from here, where that path is always right.
+2. `macos-13` — the last x86 macOS image — has been retired. The first `v0.1.0` tag built
+   three targets successfully and then queued forever on the fourth, so nothing published.
+   Cross-compiling from the Apple-silicon runner fixed it; the smoke test is skipped for
+   that target under an explicit `cross` flag rather than silently testing nothing.
+3. A 6px drag handle is not reliably hittable. A synthetic pointer missed it three times
+   before the grab zone was widened to 16px behind an unchanged 6px rule — a measurement
+   a human would have felt as friction and probably not reported.
+
+**Two things CI caught that local checks had not.** A `needless_range_loop` from a clippy
+newer than the local toolchain (local stable was 1.88, CI runs 1.97), and 207 unresolved
+intra-doc links — every one a source citation like `[T]` or `[KR21]`, which rustdoc reads
+as a link. The lint is allowed once at the workspace level; escaping them would have put
+`\[KR21\]` in the source to satisfy a tool.
+
+**MSRV is 1.78, verified rather than asserted.** The first guess of 1.74 was wrong twice
+over: the committed `Cargo.lock` is v4, which needs 1.78, and `--all-targets` would have
+forced 1.85 because proptest pulls a `getrandom` requiring edition 2024. The MSRV job
+deliberately omits `--all-targets`: the promise is about *using* delhi, and no consumer
+builds its test tree.
+
+**Still open.** `crates.io` publication — the crates carry the metadata for it
+(`description`, `license`, `repository`, `keywords`, per-crate `version` on path deps) but
+nothing has been published, so `cargo install delhi-cli` does not yet work; only the
+`--git` form does.
