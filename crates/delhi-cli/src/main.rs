@@ -10,7 +10,8 @@ fn usage() -> i32 {
 
 USAGE:
     delhi check <FILE>
-    delhi show  <FILE>
+    delhi state <FILE>              facts, and each agent's attitudes
+    delhi show  <FILE>              the model itself, in the explicit form
     delhi eval  <FILE> -f <FORMULA>
     delhi step  <FILE> -a <ACTION>...
     delhi dot   <FILE>
@@ -42,15 +43,15 @@ fn main() {
     }
     let args: Vec<String> = std::env::args().skip(1).collect();
     let code = match args.first().map(String::as_str) {
-        Some("check") | Some("show") if args.len() == 2 => {
+        Some("check") | Some("show") | Some("state") if args.len() == 2 => {
             match read(&args[1]) {
                 Err(c) => c,
                 Ok(src) => {
                     let mut out = String::new();
-                    let c = if args[0] == "check" {
-                        cmd::cmd_check(&src, &mut out)
-                    } else {
-                        cmd::cmd_show(&src, &mut out)
+                    let c = match args[0].as_str() {
+                        "check" => cmd::cmd_check(&src, &mut out),
+                        "state" => cmd::cmd_state(&src, &mut out),
+                        _ => cmd::cmd_show(&src, &mut out),
                     };
                     print!("{out}");
                     c

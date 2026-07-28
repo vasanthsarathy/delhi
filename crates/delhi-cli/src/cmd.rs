@@ -36,6 +36,100 @@ pub fn cmd_check(src: &str, out: &mut String) -> i32 {
     }
 }
 
+/// Renders what a state *means*: the facts of the actual world, and every agent's
+/// attitude to every proposition.
+///
+/// `print_state` shows the model — worlds and plausibility edges — which is exact and
+/// round-trips through the parser, but leaves the reader to work out what any of it
+/// implies. This is the complementary view, and the one worth having open while
+/// stepping through a scenario.
+///
+/// Each proposition falls into exactly one of the five cases the attitude table
+/// distinguishes: the agent knows it, knows its negation, believes it without knowing,
+/// believes its negation without knowing, or is undecided.
+fn attitudes(p: &mut Problem, state: &State) -> String {
+    let n_atoms = p.sig.n_atoms();
+    let n_agents = p.sig.n_agents();
+
+    let names: Vec<String> = (0..n_atoms).map(|a| p.sig.atom_name(a as u32).to_string()).collect();
+    let agents: Vec<String> =
+        (0..n_agents).map(|i| p.sig.agent_name(i as u32).to_string()).collect();
+
+    let mut out = String::new();
+    let facts: Vec<String> = (0..n_atoms)
+        .map(|a| {
+            if state.model.val[state.designated].get(a) {
+                names[a].clone()
+            } else {
+                format!("!{}", names[a])
+            }
+        })
+        .collect();
+    let _ = writeln!(out, "{} {}", style::dim("actual world"), facts.join(", "));
+    if n_agents == 0 || n_atoms == 0 {
+        return out;
+    }
+    let _ = writeln!(out);
+
+    // Build every query first: `entails` needs `&Store` while `knows`/`believes` need
+    // `&mut Store`, so the two phases cannot interleave.
+    let width = agents.iter().map(String::len).max().unwrap_or(0);
+    for (i, agent) in agents.iter().enumerate() {
+        let mut queries = Vec::with_capacity(n_atoms);
+        for a in 0..n_atoms {
+            let atom = p.store.atom(a as u32);
+            let neg = p.store.not(atom);
+            let kp = p.store.knows(i as u32, atom);
+            let kn = p.store.knows(i as u32, neg);
+            let bp = p.store.believes(i as u32, atom);
+            let bn = p.store.believes(i as u32, neg);
+            queries.push((kp, kn, bp, bn));
+        }
+
+        let (mut known, mut believed, mut undecided) = (Vec::new(), Vec::new(), Vec::new());
+        for (a, (kp, kn, bp, bn)) in queries.into_iter().enumerate() {
+            let pos = names[a].clone();
+            let neg = format!("!{}", names[a]);
+            if state.entails(&p.store, kp) {
+                known.push(pos);
+            } else if state.entails(&p.store, kn) {
+                known.push(neg);
+            } else if state.entails(&p.store, bp) {
+                believed.push(pos);
+            } else if state.entails(&p.store, bn) {
+                believed.push(neg);
+            } else {
+                undecided.push(pos);
+            }
+        }
+
+        let mut parts = Vec::new();
+        if !known.is_empty() {
+            parts.push(format!("{} {}", style::dim("knows"), known.join(", ")));
+        }
+        if !believed.is_empty() {
+            parts.push(format!("{} {}", style::key("believes"), believed.join(", ")));
+        }
+        if !undecided.is_empty() {
+            parts.push(format!("{} {}", style::dim("undecided"), undecided.join(", ")));
+        }
+        let _ = writeln!(out, "  {agent:<width$}  {}", parts.join("   "));
+    }
+    out
+}
+
+/// `delhi state` — the actual world's facts and every agent's attitude to every
+/// proposition. The readable counterpart to `show`, which prints the model itself.
+pub fn cmd_state(src: &str, out: &mut String) -> i32 {
+    let Some(mut p) = open(src, out) else {
+        return 1;
+    };
+    let state = p.state.clone();
+    let text = attitudes(&mut p, &state);
+    let _ = write!(out, "{text}");
+    0
+}
+
 /// `delhi show` — print the initial state in the explicit form.
 pub fn cmd_show(src: &str, out: &mut String) -> i32 {
     match open(src, out) {
@@ -210,6 +304,11 @@ pub fn repl_step(
             "show" => {
                 let _ = write!(out, "{}", print_state(state, &p.sig));
             }
+            "state" | "s" => {
+                let snapshot = state.clone();
+                let text = attitudes(p, &snapshot);
+                let _ = write!(out, "{text}");
+            }
             "reset" => {
                 *state = p.state.clone();
                 let _ = writeln!(out, "reset to the initial state");
@@ -243,10 +342,12 @@ pub fn repl_step(
             "help" | "h" => {
                 let _ = writeln!(
                     out,
-                    "<formula>     evaluate in the current state\n\
-                     :do <action>  apply an action\n\
+                    "<formula>     evaluate in the current state — any operator:\n\
+                     \x20                K B [] B^psi C Kw Bw ? ?? K' B' S'\n\
+                     :state        facts, and each agent's attitude to each proposition\n\
+                     :do <action>  apply an action and keep the result\n\
                      :actions      list the ground actions\n\
-                     :show         print the current state\n\
+                     :show         print the model itself, in the explicit form\n\
                      :reset        return to the initial state\n\
                      :quit         exit"
                 );
@@ -727,6 +828,56 @@ mod tests {
             twice.equivalent(&twice_contracted),
             "contraction must not change what the state models"
         );
+    }
+
+    #[test]
+    fn state_separates_knowing_from_merely_believing() {
+        // In COIN, `b` knows h outright while `a` only believes it — the whole point of
+        // the view is that those read differently. A version that reported both as
+        // "knows" would still look plausible, so assert the distinction directly.
+        let (code, out) = run(|o| cmd_state(COIN, o));
+        assert_eq!(code, 0, "got: {out}");
+        assert!(out.contains("actual world"), "got: {out}");
+
+        let line_a = out.lines().find(|l| l.trim_start().starts_with("a ")).expect("a's line");
+        let line_b = out.lines().find(|l| l.trim_start().starts_with("b ")).expect("b's line");
+        assert!(line_a.contains("believes h"), "a believes h without knowing: {line_a}");
+        assert!(!line_a.contains("knows h"), "a must not be reported as knowing: {line_a}");
+        assert!(line_b.contains("knows h"), "b knows h: {line_b}");
+    }
+
+    #[test]
+    fn state_reports_undecided_when_an_agent_leans_neither_way() {
+        // Uncertainty with no belief declaration leaves the plausibility order flat, so
+        // both worlds are maximal and the agent believes neither h nor !h. Without this
+        // branch such an agent would be silently omitted from its own line.
+        let src = r#"
+            types{ Actor - Object } objects{ a - Actor } agents{ a } props{ h }
+            initially { h, ?[a] h }
+            actions {}
+        "#;
+        let (code, out) = run(|o| cmd_state(src, o));
+        assert_eq!(code, 0, "got: {out}");
+        assert!(out.contains("undecided h"), "got: {out}");
+        assert!(!out.contains("believes"), "a flat order is not a belief: {out}");
+    }
+
+    #[test]
+    fn repl_state_follows_the_current_state_not_the_initial_one() {
+        // The bug this guards is reading `p.state` instead of the live `state` — which
+        // would look right on the first call and never change afterwards.
+        let (_, out) = repl_on(COIN, &[":state", ":do look()", ":state"]);
+        let believes = out.matches("believes h").count();
+        let knows = out.matches("knows h").count();
+        assert_eq!(believes, 1, "only the first snapshot has a believing: {out}");
+        assert!(knows >= 2, "after look(), a knows h too: {out}");
+    }
+
+    #[test]
+    fn state_rejects_a_bad_file() {
+        let (code, out) = run(|o| cmd_state(BAD, o));
+        assert_eq!(code, 1);
+        assert!(out.contains("ghost"), "got: {out}");
     }
 
     #[test]

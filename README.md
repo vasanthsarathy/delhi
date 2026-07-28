@@ -265,7 +265,8 @@ does not know it.
 
 ```
 delhi check <FILE>                        parse, ground, and validate
-delhi show  <FILE>                        print the initial state
+delhi state <FILE>                        facts, and each agent's attitudes
+delhi show  <FILE>                        the model itself, in the explicit form
 delhi eval  <FILE> -f <FORMULA>           evaluate a formula
 delhi step  <FILE> -a <ACTION>…           apply actions in sequence
 delhi dot   <FILE>                        Graphviz
@@ -275,6 +276,46 @@ delhi bench <FILE> [-n CYCLES] -a <ACTION>…   model growth and timing
 
 Exit codes are scriptable: `0` success or the formula holds, `1` the file was rejected or
 the formula is false, `2` a usage error or a malformed formula.
+
+### Reading a state
+
+`show` prints the model — worlds and plausibility edges — which is exact and round-trips
+through the parser, but leaves you to work out what any of it implies. `state` prints what it
+*means*: the facts of the actual world, and every agent's attitude to every proposition,
+sorted into the ones it knows, the ones it merely believes, and the ones it has no view on.
+
+```
+$ delhi state examples/muddy_children.delhi
+actual world muddy(alice), muddy(bob), muddy(carol)
+
+  alice  knows muddy(bob), muddy(carol)   undecided muddy(alice)
+  bob    knows muddy(alice), muddy(carol)   undecided muddy(bob)
+  carol  knows muddy(alice), muddy(bob)   undecided muddy(carol)
+```
+
+That is the puzzle's whole setup in three lines. It is also the best way to watch it resolve,
+since `:state` in the REPL tracks the current state rather than the initial one:
+
+```
+> :do father_speaks()
+> :do nobody_knows()
+> :do nobody_knows()
+> :state
+  alice  knows muddy(bob), muddy(carol)   believes muddy(alice)
+```
+
+`undecided` has become `believes`, which is the moment the puzzle turns.
+
+The view is first-order by construction — one line per agent, one attitude per proposition.
+Nested attitudes do not fit that shape and are not shown; type the formula at the prompt
+instead. Every operator works there, against the current state:
+
+```
+> B[alice] B[carol] !h
+true
+```
+
+### Pictures
 
 `dot` is not decoration. A model with four agents and sixteen worlds is unreadable as text
 and obvious as a picture — the figures in the source papers *are* the debugging medium:
@@ -575,7 +616,7 @@ things down. It also never once produced a wrong answer at runtime.
 
 ## What validates it
 
-213 tests, plus 2 that fail by design and are marked ignored — they pin known gaps rather
+217 tests, plus 2 that fail by design and are marked ignored — they pin known gaps rather
 than pretending they are absent.
 
 The load-bearing one is `examples/coin_lie.delhi`, which reproduces the published figures
