@@ -55,6 +55,14 @@ pub enum Modal {
 /// A formula as written.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Expr {
+    /// `_` — the hole in a query pattern, standing for a formula to be filled in.
+    ///
+    /// Part of the expression grammar rather than a textual placeholder so that filling
+    /// it is a tree substitution: an underscore inside an identifier such as `at_park`
+    /// can never be mistaken for it, and a filled pattern needs no parentheses because
+    /// structure, not text, decides precedence. Lowering rejects it, since a hole has no
+    /// meaning outside a query.
+    Hole(Span),
     /// `true`
     True(Span),
     /// `false`
@@ -93,7 +101,7 @@ impl Expr {
     /// Where this expression came from.
     pub fn span(&self) -> Span {
         match self {
-            Expr::True(s) | Expr::False(s) => *s,
+            Expr::Hole(s) | Expr::True(s) | Expr::False(s) => *s,
             Expr::Atom(t) => t.span,
             Expr::Not(_, s) | Expr::And(_, _, s) | Expr::Or(_, _, s) | Expr::Implies(_, _, s) => *s,
             Expr::Modality { span, .. } => *span,

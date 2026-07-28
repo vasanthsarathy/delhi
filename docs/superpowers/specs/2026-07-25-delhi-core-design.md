@@ -1166,6 +1166,105 @@ Distinct stages — `lex → parse → AST → typecheck/ground → IR` — not 
 `DeplToProblem` visitor. Diagnostics carry source spans. A second front-end can be added against
 the IR without touching the semantics.
 
+### 7.6 The query language
+
+Queries were added after the language and grew ad hoc; this section is the retrospective
+specification, written because "it feels haphazard" was a fair complaint.
+
+There are **two query forms**, and they differ in what is decidable, not merely in convenience.
+*Checking* asks whether one formula holds. *Enumerating* asks which formulas of a shape hold, and
+is necessarily restricted, because the set of formulas is infinite.
+
+#### 7.6.1 Query grammar
+
+A query is a formula of `L^P_GB` (§4.2) extended with a hole:
+
+```
+query   ::= formula
+formula ::= atom | 'true' | 'false' | '_'
+          | '!' formula
+          | formula ('&' | '|' | '->') formula
+          | modality '[' agents ']' formula
+          | 'B' '^' formula '[' agents ']' formula
+          | '(' formula ')'
+modality ::= 'K' | 'B' | '[]' | '□' | 'C' | 'K\'' | 'B\'' | 'S\''
+           | 'Kw' | 'Bw' | '?' | '??' | '¿'
+agents  ::= '*' | name (',' name)*
+```
+
+Precedence, loosest to tightest: `->` (right-associative), `|`, `&`, `!`, modality. So
+`K[a] p & B[b] q -> r` is `((K[a]p) & (B[b]q)) -> r`.
+
+**The query language is exactly the formula language plus `_`.** Every operator the semantics
+has — all six primitives and all nine sugar forms of §7.4 — is available in a query, closed
+under negation, conjunction, disjunction and implication, at arbitrary nesting depth. Nothing
+expressible in `L^P_GB` is inexpressible as a query. `eval` and `goal` share the parser and
+lowering path, so a query is checked by exactly the machinery that checks a goal.
+
+**`_` is a token, not a placeholder string.** A lone `_` lexes to `Tok::Hole`; `_x` and
+`at_park` are ordinary identifiers. This is load-bearing rather than tidy: substituting textually
+tore any identifier containing an underscore, turning `_ & at_park` into `(φ) & at(φ)park`.
+Filling is a tree substitution, which also means a filled pattern needs no defensive parentheses
+— `!_` negates whatever fills it, whatever its precedence. Lowering rejects a hole, so `_` in a
+file is an error rather than a silent `⊥`.
+
+#### 7.6.2 Checking
+
+```
+eval(s, φ) = s ⊨ φ           for φ ∈ L^P_GB, by Definition §4.2
+```
+
+Total and decidable: `⊨` is the memoised evaluation of §5, so any query terminates.
+
+#### 7.6.3 Enumerating
+
+```
+ask(s, π, d) = { π[φ/_] : φ ∈ ML_d,  s ⊨ π[φ/_] }
+```
+
+where `π` is a query containing at least one hole, every hole in `π` receives the *same* `φ`,
+and `ML_d` is the **modal literals** of depth at most `d`:
+
+```
+Lit    = { p, ¬p : p ∈ P }
+ML_0   = Lit
+ML_k   = ML_{k-1} ∪ { Oᵢ φ : O ∈ {K, B}, i ∈ G, φ ∈ ML_{k-1} \ ML_{k-2} }
+|ML_d| = Σ_{k≤d} (2·|G|)^k · 2·|P|
+```
+
+Enumerated shallowest-first, so a truncated answer is a prefix rather than a sample.
+`MAX_CANDIDATES` bounds `|ML_d|` and truncation is reported; a partial answer must never be
+readable as a complete one.
+
+**Why the domain is restricted at all.** `{ φ : s ⊨ B_a φ }` is infinite — conjunction alone
+generates without bound — so "everything alice believes" is not enumerable and no
+implementation choice changes that. `ML_d` is the restriction Muise et al.'s PDKB planner uses,
+adopted here for the same reason: finite, and its size follows from the signature and the depth.
+
+**What the restriction costs, precisely.** Conjunctive candidates would be *redundant*: `K` and
+`B` are normal, so `K_a(φ∧ψ) ≡ K_aφ ∧ K_aψ`, and any conjunction believed is the conjunction of
+things separately believed. Disjunctive candidates would **not** be redundant — `B_a(p∨q)` can
+hold when neither `B_a p` nor `B_a q` does — so disjunctive knowledge is the one genuinely
+missing class. That is a known gap, not an oversight, and it is the direction to extend if
+enumeration is ever widened.
+
+**The pattern is the filter.** `B[a] _` at depth 1 also returns introspective truths such as
+`B_a B_a φ`, valid in KD45 and therefore uninformative. Naming the inner agent — `B[a] B[c] _` —
+is how they are excluded, and it is also the more precise question.
+
+#### 7.6.4 Polarity collapse (presentation)
+
+Some patterns cannot see the polarity of the hole: `?[a] φ`, `Kw[a] φ` and `Bw[a] φ` are each
+equivalent to their negated twin, so a literal enumeration returns both and reads as two
+findings where there is one. The *rendered* answer therefore drops the negative member of any
+complementary pair both of whose members matched.
+
+This is a presentation rule applied to the set defined in §7.6.3, not part of it. It is a sound
+approximation of "collapse when `π` is polarity-insensitive at the hole": it can only fire when
+both twins hold, which for a consistent attitude is impossible — belief is KD, so `B_aφ` and
+`B_a¬φ` cannot both hold. It over-collapses only for patterns that are trivially true of
+everything, where the loss is nothing.
+
 ---
 
 ## 8. Using delhi: worked examples

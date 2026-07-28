@@ -300,19 +300,40 @@ $ delhi ask examples/coin_lie.delhi -q "B[alice] B[carol] _" \
 `B[alice] (B[carol] !h)` without your having to name `B[carol]` yourself. In the REPL and
 the browser console it is `:ask [depth] <pattern>`.
 
-**What gets enumerated** is *modal literals* — a literal under some sequence of `K`/`B`
-modalities. Not "all formulas", of which there are infinitely many, since conjunction alone
-generates without bound. That restriction is not arbitrary: it is the representation
-Muise et al.'s PDKB planner is built on, chosen there for the reason it is chosen here, that
-the set is finite and its size follows from the signature and the depth. The count is
-`Σ_{k≤d} (2·agents)^k · 2·atoms`, which reaches ~3,900 at depth 3 with three agents and nine
-atoms, so there is a ceiling and you are told when it bites.
+**The query language is the formula language plus `_`.** Every operator the semantics has — all
+six primitives and all nine sugar forms — is available in a query, closed under `!`, `&`, `|`
+and `->`, nested arbitrarily. Nothing expressible in mB+ is inexpressible as a query, and `eval`
+uses exactly the parser and lowering that check a `goal`:
 
-Two details worth knowing. The pattern is itself the filter — `B[alice] _` at depth 1 also
-returns introspective truths like `B[alice] (B[alice] d)`, and naming the inner agent
-(`B[alice] B[carol] _`) is how you cut them out. And when a pattern cannot see polarity —
-ignorance of `h` *is* ignorance of `!h`, likewise `Kw`/`Bw` — only the positive form is
-listed, since printing both twins reads as two findings when there is one.
+```bash
+$ delhi eval examples/coin_lie.delhi \
+      -f "(K[alice] h | B[carol] !h) -> (C[*] Kw[alice] h & [][carol] h & !??[carol] h)"
+true
+```
+
+`_` is a real token, not a placeholder string — a lone `_` is the hole, while `at_park` and `_x`
+are ordinary identifiers, and filling is a tree substitution. That is load-bearing rather than
+tidy: substituting textually tore identifiers containing underscores, and `!_` now negates
+whatever fills it without needing defensive parentheses.
+
+**Enumeration is necessarily restricted, and the restriction is stated.** `{φ : B[a]φ}` is
+infinite — conjunction alone generates without bound — so what `ask` ranges over is *modal
+literals*: a literal under some sequence of `K`/`B`. That is the representation Muise et al.'s
+PDKB planner is built on, chosen here for the same reason: finite, with a size that follows from
+the signature and the depth (`Σ_{k≤d} (2·agents)^k · 2·atoms`). There is a ceiling and you are
+told when it bites.
+
+What that costs is precise. Conjunctive candidates would be *redundant*, since `K` and `B` are
+normal and `K[a](φ&ψ) ≡ K[a]φ & K[a]ψ`. Disjunctive ones would **not** be — `B[a](p|q)` can hold
+when neither `B[a]p` nor `B[a]q` does — so disjunctive knowledge is the one genuinely missing
+class, and the direction to extend if enumeration is ever widened.
+
+Two smaller points. The pattern is itself the filter: `B[alice] _` at depth 1 also returns
+introspective truths like `B[alice] (B[alice] d)`, valid in KD45 and uninformative, and naming
+the inner agent cuts them out. And when a pattern cannot see polarity — ignorance of `h` *is*
+ignorance of `!h`, likewise `Kw`/`Bw` — only the positive form is listed. That last one is a
+rendering rule, not part of the answer set; §7.6 of the spec gives the grammar and both
+semantics in full.
 
 ### Reading a state
 
@@ -689,7 +710,7 @@ things down. It also never once produced a wrong answer at runtime.
 
 ## What validates it
 
-246 tests, plus 2 that fail by design and are marked ignored — they pin known gaps rather
+253 tests, plus 2 that fail by design and are marked ignored — they pin known gaps rather
 than pretending they are absent.
 
 The load-bearing one is `examples/coin_lie.delhi`, which reproduces the published figures

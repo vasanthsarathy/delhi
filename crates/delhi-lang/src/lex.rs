@@ -55,6 +55,8 @@ pub enum Tok {
     Question,
     /// `¿` or `??` — suspends judgement
     Undecided,
+    /// A lone `_` — the hole in a query pattern. Never legal in a file.
+    Hole,
     /// `^` — the conditional-belief marker in `B^psi`
     Caret,
     /// End of input.
@@ -114,7 +116,17 @@ pub fn lex(src: &str, diags: &mut Diagnostics) -> Vec<Token> {
                 i += 1;
             }
             let s = src[start..i].to_string();
-            if c.is_ascii_uppercase() { Tok::Upper(s) } else { Tok::Lower(s) }
+            // A lone `_` is the query hole; `_x` or `at_park` are ordinary identifiers.
+            // Deciding it here, on the whole lexeme, is what keeps the hole from being
+            // confused with an underscore *inside* a name — the reason this is a token
+            // at all rather than a string substitution.
+            if s == "_" {
+                Tok::Hole
+            } else if c.is_ascii_uppercase() {
+                Tok::Upper(s)
+            } else {
+                Tok::Lower(s)
+            }
         } else if c == '?' {
             // `?name` is a variable; a bare `?` is the ignorant-whether operator,
             // and `??` is suspends-judgement.

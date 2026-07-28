@@ -199,6 +199,10 @@ impl<'a> Parser<'a> {
         }
 
         match self.peek().clone() {
+            Tok::Hole => {
+                self.bump();
+                Expr::Hole(start)
+            }
             Tok::Lower(name) if name == "true" => {
                 self.bump();
                 Expr::True(start)

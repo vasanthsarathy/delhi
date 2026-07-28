@@ -161,6 +161,13 @@ pub fn lower_formula(
     diags: &mut Diagnostics,
 ) -> FormulaId {
     match e {
+        // A hole is a query construct. Reaching lowering means either it was written in
+        // a file, or a pattern was lowered without being filled — both are errors, and
+        // both are clearer said than silently treated as `⊥`.
+        Expr::Hole(s) => {
+            diags.push(*s, "`_` is a query hole and has no meaning here");
+            store.fls()
+        }
         Expr::True(_) => store.tru(),
         Expr::False(_) => store.fls(),
         Expr::Not(inner, _) => {
