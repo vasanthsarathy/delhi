@@ -1,0 +1,83 @@
+// Muddy Children — the canonical multi-agent epistemic puzzle.
+//
+// Three children have been playing; all three have muddy foreheads. Each can see
+// the others but not herself. Their father says "at least one of you is muddy",
+// then asks repeatedly "do you know whether you are muddy?"
+//
+// The classic answer: nobody knows for the first two rounds, and then all three
+// know at once. Nothing was said in those rounds -- and yet *that* is the
+// information. Each child learns from the others' silence.
+//
+// Read the result of this file carefully, because delhi does not reproduce the
+// textbook answer exactly, and the difference is the interesting part. See the
+// note at the bottom.
+
+types   { Kid - Object }
+objects { alice, bob, carol - Kid }
+agents  { alice, bob, carol }
+props   { muddy(Kid) }
+
+initially {
+    muddy(alice)                   // all three really are muddy
+    muddy(bob)
+    muddy(carol)
+
+    ?[alice] muddy(alice)          // and none can see her own forehead.
+    ?[bob]   muddy(bob)            // Declaring uncertainty only about herself is
+    ?[carol] muddy(carol)          // what makes each child know the other two:
+}                                  // worlds are comparable for a child exactly
+                                   // when they agree on everything she is not
+                                   // uncertain about.
+
+goal { Bw[alice] muddy(alice) & Bw[bob] muddy(bob) & Bw[carol] muddy(carol) }
+
+actions {
+    // The actor of an announcement is recorded for display only -- it never reaches
+    // the semantics, since observability is independent of agency. So the father
+    // need not be modelled as an agent.
+    father_speaks() {
+        actor     alice
+        announces muddy(alice) | muddy(bob) | muddy(carol)
+        alice observes, bob observes, carol observes
+    }
+
+    nobody_knows() {
+        actor     alice
+        announces !Bw[alice] muddy(alice)
+                & !Bw[bob]   muddy(bob)
+                & !Bw[carol] muddy(carol)
+        alice observes, bob observes, carol observes
+    }
+}
+
+// ----------------------------------------------------------------------------
+// What actually happens, and where it departs from the textbook.
+//
+//     delhi repl examples/muddy_children.delhi
+//     > :do father_speaks()
+//     > :do nobody_knows()
+//     > :do nobody_knows()
+//     > Bw[alice] muddy(alice)     // true -- and likewise for bob and carol
+//     > B[alice] muddy(alice)      // true: she concludes she IS muddy
+//     > Kw[alice] muddy(alice)     // FALSE
+//
+// The timing is exactly classical: with three muddy children, ignorance is
+// announced twice and on the third round all three conclude together. Comment out
+// either `nobody_knows()` and the conclusion does not arrive -- the silence really
+// is carrying the information.
+//
+// What differs is the *attitude*. The textbook version ends in knowledge; here it
+// ends in belief, and `Kw` stays false however many rounds you run.
+//
+// That is not a bug, it is mB being consistent about what an announcement is. In
+// plain public-announcement logic, announcing φ deletes every ¬φ world, so what
+// survives is knowledge -- but that only works if announcements cannot be false.
+// mB is built for a language where they can be, and the Coin Lie in this same
+// directory turns on exactly that. So an announcement reorders which worlds an
+// agent finds plausible instead of destroying any, and no reordering can ever
+// produce knowledge, because the ¬φ worlds are all still there to be considered.
+//
+// The price is that this puzzle ends one notch weaker than the classical account.
+// The thing bought is the ability to model an agent who is lied to, believes it,
+// and later recovers -- which is the whole point of the system.
+

@@ -1,0 +1,56 @@
+// The ice-cream van — a *second-order* false belief.
+//
+// Perner & Wimmer (1985), the follow-up to Sally-Anne. Sally-Anne asks whether you
+// can represent someone's false belief about the world. This asks whether you can
+// represent someone's false belief about *someone else's belief*, which children
+// typically pass several years later.
+//
+// The van is in the park. John and Mary are both there. Mary goes home. The van
+// moves to the church, and John sees it go -- Mary does not. So far this is
+// Sally-Anne: Mary is wrong about the van.
+//
+// Then the driver passes Mary's house and tells her. John does not see that happen.
+//
+//     "Where does John think Mary will go for ice cream?"
+//
+// The park. John is not wrong about the van -- he watched it leave. He is wrong
+// about Mary's mind, and that is a different and harder thing to be wrong about.
+//
+// Adapted from the mecaPlanner corpus (problems/aamas/icecream.depl), extended with
+// the telling step that makes the task genuinely second-order.
+
+types   { Actor - Object }
+objects { john, mary - Actor }
+agents  { john, mary }
+props   { at_park, mary_home }     // van is at the park; mary has gone home
+
+initially {
+    at_park                        // common knowledge: the van is in the park
+}
+
+// John's belief about Mary's belief is false, while Mary in fact knows better.
+goal { B[john] B[mary] at_park & K[mary] !at_park }
+
+actions {
+    mary_goes_home() {
+        actor  mary
+        causes mary_home
+        john observes, mary observes
+    }
+
+    van_moves_to_church() {
+        actor  john                    // john happens to be the one watching
+        pre    at_park
+        causes !at_park
+        john observes
+        mary observes if !mary_home    // she is home, so she misses it
+    }
+
+    driver_tells_mary() {
+        actor      mary
+        determines at_park             // she learns which way it is: she now KNOWS
+        mary observes
+        // john is not listed at all -- he is oblivious, so his picture of Mary
+        // goes stale and stays stale.
+    }
+}

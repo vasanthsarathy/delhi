@@ -1,0 +1,52 @@
+// Sally-Anne — the canonical false-belief task.
+//
+// Wimmer & Perner (1983); Baron-Cohen, Leslie & Frith (1985) turned it into the
+// test that made it famous. Sally puts her marble in the basket and leaves. Anne
+// moves it to the box. Sally comes back.
+//
+//     "Where will Sally look for her marble?"
+//
+// The answer is the basket, and getting it right requires representing Sally's
+// belief as separate from the facts. Children under about four say "the box" --
+// they answer where the marble *is*, because they have no machinery for a belief
+// that is false.
+//
+// Ported from the mecaPlanner corpus (problems/aamas/sallyanne.depl).
+//
+// The whole task turns on one clause: `sally observes if present`. Anne's move is
+// witnessed only if Sally is in the room, and she is not.
+
+types   { Actor - Object }
+objects { sally, anne - Actor }
+agents  { sally, anne }
+props   { present, basket, box }   // sally in the room; marble in basket; in box
+
+initially {
+    present                        // sally is here, and the marble is
+    basket                         // in the basket -- both agents can see it
+}
+
+// Where Sally will look, versus where the marble is.
+goal { B[sally] basket & box }
+
+actions {
+    sally_leaves() {
+        actor  sally
+        causes !present
+        sally observes, anne observes
+    }
+
+    anne_moves() {
+        actor  anne
+        pre    basket
+        causes box, !basket
+        anne  observes
+        sally observes if present  // she is not, so she misses it entirely
+    }
+
+    sally_returns() {
+        actor  sally
+        causes present
+        sally observes, anne observes
+    }
+}

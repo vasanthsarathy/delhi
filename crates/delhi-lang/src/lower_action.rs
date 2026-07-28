@@ -72,6 +72,13 @@ fn display_name(decl: &ActionDecl, assign: &[(String, String)]) -> String {
 
 /// Grounds one declaration under one assignment. `None` when the action is impossible
 /// or malformed.
+///
+/// An observer clause whose condition folds to `⊥` is dropped rather than recorded.
+/// That is inert for the semantics — observer conditions reach the event model only
+/// through a disjunction, where `⊥` is the identity — but it matters for
+/// `ActionDef::validate`, which rejects an agent appearing in both classes by name
+/// alone. Without the drop, `?p observes` alongside `?o aware if !same(?p, ?o)` is
+/// rejected at `?o == ?p`, even though that awareness clause can never fire.
 fn ground_one(
     decl: &ActionDecl,
     assign: &[(String, String)],
@@ -137,13 +144,17 @@ fn ground_one(
             Clause::Observes { who, cond, span } => {
                 for id in expand_agent_arg(who, &binds, ctx.sig, *span, diags) {
                     let f = observer_condition(ctx, cond, who, id, &binds, store, diags);
-                    observes.push((id, f));
+                    if f != store.fls() {
+                        observes.push((id, f));
+                    }
                 }
             }
             Clause::Aware { who, cond, span } => {
                 for id in expand_agent_arg(who, &binds, ctx.sig, *span, diags) {
                     let f = observer_condition(ctx, cond, who, id, &binds, store, diags);
-                    aware.push((id, f));
+                    if f != store.fls() {
+                        aware.push((id, f));
+                    }
                 }
             }
         }
@@ -438,5 +449,59 @@ mod tests {
         let mut s = Store::default();
         let _ = ground_actions(&ast.actions, &sig, &c, &mut s, &mut d);
         assert!(!d.is_empty(), "the observer-class overlap must be reported");
+    }
+
+    #[test]
+    fn an_observer_clause_that_can_never_fire_is_dropped_not_recorded() {
+        // "whoever acts sees it, everyone else merely hears it" is the common shape,
+        // and with a parameterised actor it can only be written by excluding the
+        // actor from the aware list by condition. At `?o == ?p` that condition folds
+        // to `⊥`. Recording it would put one agent in both classes by name, and
+        // `ActionDef::validate` rejects that on names alone — so the clause must be
+        // dropped, not stored with a false guard.
+        let (_, _, acts) = ground(
+            r#"
+            types{ Actor - Object } objects{ a, b - Actor } agents{ a, b } props{ p }
+            constants { !same(Actor, Actor), same(a, a), same(b, b) }
+            initially{}
+            actions {
+                peek(?p - Actor) {
+                    actor      ?p
+                    determines p
+                    ?p observes
+                    ?o aware if !same(?p, ?o)
+                }
+            }
+        "#,
+        );
+        assert_eq!(acts.len(), 2, "one ground action per actor");
+
+        for act in &acts {
+            let obs: Vec<AgentId> = act.def.observes.iter().map(|(i, _)| *i).collect();
+            let awa: Vec<AgentId> = act.def.aware.iter().map(|(i, _)| *i).collect();
+            assert_eq!(obs.len(), 1, "{}: exactly the actor observes", act.name);
+            assert_eq!(awa.len(), 1, "{}: exactly the other agent is aware", act.name);
+            assert_ne!(obs[0], awa[0], "{}: the actor must not also be aware", act.name);
+        }
+    }
+
+    #[test]
+    fn a_dropped_observer_clause_still_leaves_a_live_one_recorded() {
+        // Guards the drop against being too eager: a condition that folds to `⊤`
+        // must survive, so the filter cannot be "drop every constant condition".
+        let (sig, _, acts) = ground(
+            r#"
+            types{ Actor - Object } objects{ a, b - Actor } agents{ a, b } props{ p }
+            constants { !nope, yes }
+            initially{}
+            actions {
+                go() { actor a, causes p, a observes if yes, b aware if nope }
+            }
+        "#,
+        );
+        let act = &acts[0];
+        assert_eq!(act.def.observes.len(), 1, "the `yes` clause survives");
+        assert_eq!(act.def.observes[0].0, sig.agent_id("a").unwrap());
+        assert!(act.def.aware.is_empty(), "the `nope` clause is dropped");
     }
 }

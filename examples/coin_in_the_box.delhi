@@ -1,0 +1,66 @@
+// Coin in the Box — the standard epistemic-planning benchmark.
+//
+// From van Ditmarsch's work on DEL, and one of the domains every epistemic planner
+// gets measured on (it appears in the EFP suite, and in the mecaPlanner corpus as
+// problems/efp/Coin_in_the_Box_*.depl).
+//
+// A coin lies in a locked box. Alice has the key. Anyone *looking* when the box is
+// opened sees what happens; anyone merely within earshot knows something happened
+// without learning what. So the domain separates three epistemic positions cleanly,
+// which is why it is the benchmark: seeing, hearing, and missing entirely.
+//
+// This file shows the three features the other examples do not: a parameterised
+// predicate, a parameterised action, and constants.
+//
+// The constants earn their place here. `peek(?p)` says the peeker sees the coin and
+// everyone *else* merely hears it happen -- but with `?p` unbound, "everyone else"
+// cannot be written down. `same` supplies it. It is declared false for every pair
+// and true only on the diagonal, so `!same(?p, bob)` folds to a literal true or
+// false the moment `?p` is bound, and never becomes a proposition occupying a bit
+// in every world. Without it, grounding `peek(bob)` puts bob in two observer classes
+// at once, and the well-formedness check rejects it.
+
+types   { Actor - Object }
+objects { alice, bob, carol - Actor }
+agents  { alice, bob, carol }
+props   { tail, opened, looking(Actor) }
+
+constants {
+    !same(Actor, Actor)            // by default no two actors are the same one
+    same(alice, alice)             // and these are the exceptions
+    same(bob, bob)
+    same(carol, carol)
+}
+
+initially {
+    tail                           // the coin is, in fact, tails
+    ?[alice] tail                  // but nobody can see it through a closed box
+    ?[bob]   tail
+    ?[carol] tail
+    looking(alice)                 // alice is watching the box; the others are not
+}
+
+// Alice learns the coin. Bob does not -- but he knows that she did.
+goal { K[alice] tail & !Kw[bob] tail & K[bob] Kw[alice] tail }
+
+actions {
+    open_box() {
+        actor  alice               // she has the key
+        pre    !opened
+        causes opened
+        alice observes if looking(alice)
+        bob   observes if looking(bob)
+        carol observes if looking(carol)
+    }
+
+    peek(?p - Actor) {
+        actor      ?p
+        pre        opened & looking(?p)
+        determines tail            // whoever looks comes to KNOW which way it is
+
+        ?p observes                            // sees the coin itself
+        alice aware if !same(?p, alice)        // everyone else is merely
+        bob   aware if !same(?p, bob)          // in earshot: they learn that
+        carol aware if !same(?p, carol)        // ?p now knows, not which way
+    }
+}

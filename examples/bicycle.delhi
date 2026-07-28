@@ -1,0 +1,42 @@
+// The bicycle — belief revision, and why plausibility orderings earn their keep.
+//
+// Theo's bicycle is fine. Mira tells him it is broken; she is lying. Theo believes
+// her. Then he goes and looks, and sees that it is fine.
+//
+// That sequence is the whole argument for ordering worlds by plausibility rather
+// than carrying a flat set of believed propositions. Under flat belief, Theo
+// believes `broken`, then learns `!broken`, and his belief set is contradictory --
+// there is nowhere to put the correction. Here nothing breaks: the lie reorders
+// which world Theo finds most plausible, and the evidence reorders it back. His
+// *knowledge* never changed at any point, because he never knew either way until
+// he looked.
+//
+// Ported from the mecaPlanner corpus (problems/aamas/bicycle1.depl).
+
+types   { Actor - Object }
+objects { theo, mira - Actor }
+agents  { theo, mira }
+props   { broken }
+
+initially {
+    // `broken` is unlisted, so it is false: the bicycle is fine.
+    ?[theo] broken                 // theo cannot tell from here
+    B[theo] !broken                // but he has no reason to worry
+}
+
+// Mira's lie lands, and then loses to the evidence.
+goal { K[theo] !broken }
+
+actions {
+    mira_lies() {
+        actor     mira
+        announces broken           // false, and `announces` does not require truth
+        theo observes, mira observes
+    }
+
+    theo_looks() {
+        actor      theo
+        determines broken          // sensing: he comes to KNOW, not merely believe
+        theo observes
+    }
+}
