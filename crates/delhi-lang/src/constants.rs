@@ -147,10 +147,34 @@ mod tests {
     }
 
     #[test]
-    fn an_unlisted_tuple_of_a_constant_predicate_is_unknown() {
+    fn a_wrong_arity_or_unknown_predicate_lookup_is_unknown() {
         let (_, c) = build(SRC);
         assert_eq!(c.lookup("adjacent", &["hall".into()]), None, "wrong arity");
         assert_eq!(c.lookup("nosuch", &[]), None);
+    }
+
+    #[test]
+    fn a_well_formed_but_undeclared_instance_of_a_constant_predicate_is_unknown() {
+        // No blanket declaration here, unlike `SRC`: `adjacent` is declared only
+        // for one pair, so `adjacent(hall, kitchen)` is a valid, correct-arity
+        // tuple of a known constant predicate that was simply never mentioned.
+        // Task 7 relies on the *conjunction* `is_constant_pred(p) && lookup(..)
+        // .unwrap_or(false)` to fold this to `false`; either half alone is
+        // compatible with a broken implementation, so both are asserted here.
+        let src = r#"
+            types   { Location - Object }
+            objects { hall, study, kitchen - Location }
+            agents  { }
+            props   { }
+            constants {
+                adjacent(hall, study),
+            }
+            initially { }
+            actions {}
+        "#;
+        let (_, c) = build(src);
+        assert!(c.is_constant_pred("adjacent"));
+        assert_eq!(c.lookup("adjacent", &["hall".into(), "kitchen".into()]), None);
     }
 
     #[test]
