@@ -6,6 +6,7 @@ use delhi_syntax::{AgentId, AtomId, Interner};
 use std::collections::HashMap;
 
 /// The declared signature, after checking: types, objects, agents, and every ground atom.
+#[derive(Debug)]
 pub struct Sig {
     /// Child type to its immediate parent. `Object` is implicit and absent.
     pub types: HashMap<String, String>,
