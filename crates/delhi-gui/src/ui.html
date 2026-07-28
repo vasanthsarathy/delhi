@@ -403,9 +403,19 @@ async function runCommand(line) {
   if (line.startsWith(':ask')) {
     let rest = line.slice(4).trim();
     let depth = 0;
+    // A leading integer is the depth. Unambiguous: a pattern can never start with a
+    // digit, since identifiers begin with a letter or underscore and the language has
+    // no number token. A bare integer is a depth with the pattern forgotten.
     const m = rest.match(/^(\d+)\s+(.*)$/);
     if (m) { depth = +m[1]; rest = m[2]; }
-    if (!rest) { log('usage: :ask [depth] <pattern with _>', 'e'); return; }
+    else if (/^\d+$/.test(rest)) { rest = ''; }
+    if (!rest) {
+      log('usage: :ask [depth] <pattern>, where _ marks the hole', 'e');
+      log('  :ask B[alice] _      what alice believes');
+      log('  :ask ?[alice] _      what she cannot settle');
+      log('  :ask 2 B[alice] _    the same, nested two levels deep');
+      return;
+    }
     const res = await fetch(`/api/ask?${query()}&d=${depth}&f=${encodeURIComponent(rest)}`,
                             { method: 'POST', body: $('editor').value });
     const d = await res.json();

@@ -70,7 +70,10 @@ fn attitudes(p: &mut Problem, state: &State) -> String {
 fn render_ask(p: &mut Problem, state: &State, pattern: &str, depth: usize, out: &mut String) -> i32 {
     match delhi_lang::ask(p, state, pattern, depth) {
         Err(e) => {
-            let _ = write!(out, "{}", style::bad(&e));
+            // Rendered diagnostics already end in a newline; the one-line usage errors
+            // do not, and without this the REPL's next prompt runs into the message.
+            let text = if e.ends_with('\n') { e } else { format!("{e}\n") };
+            let _ = write!(out, "{}", style::bad(&text));
             2
         }
         Ok(a) => {
@@ -309,16 +312,29 @@ pub fn repl_step(
                 let _ = write!(out, "{text}");
             }
             // `:ask [depth] <pattern>` — a leading integer sets the depth, else 0.
+            //
+            // The split is unambiguous: a pattern can never begin with a digit, since
+            // identifiers start with a letter or underscore and the lexer has no number
+            // token at all. So a leading integer is always the depth.
             "ask" => {
                 let (depth, pattern) = match arg.split_once(char::is_whitespace) {
                     Some((head, rest)) => match head.parse::<usize>() {
                         Ok(d) => (d, rest.trim()),
                         Err(_) => (0, arg),
                     },
+                    // A bare number is a depth with the pattern forgotten — say that,
+                    // rather than letting it fall through as a pattern named "2".
+                    None if arg.parse::<usize>().is_ok() => (0, ""),
                     None => (0, arg),
                 };
                 if pattern.is_empty() {
-                    let _ = writeln!(out, "usage: :ask [depth] <pattern with `_`>");
+                    let _ = writeln!(
+                        out,
+                        "usage: :ask [depth] <pattern>, where `_` marks the hole\n  \
+                         :ask B[alice] _      what alice believes\n  \
+                         :ask ?[alice] _      what she cannot settle\n  \
+                         :ask 2 B[alice] _    the same, nested two levels deep"
+                    );
                 } else {
                     let snapshot = state.clone();
                     render_ask(p, &snapshot, pattern, depth, out);
@@ -909,6 +925,34 @@ mod tests {
         let (code, out) = run(|o| cmd_ask(COIN, &[], "?[b] _", 0, o));
         assert_eq!(code, 1, "no matches must be distinguishable from matches: {out}");
         assert!(out.contains("0 of"), "got: {out}");
+    }
+
+    #[test]
+    fn repl_ask_reads_a_leading_integer_as_the_depth() {
+        // `:ask 1 K[b] _` must mean depth 1, not a pattern beginning with "1". The split
+        // is safe because no pattern can start with a digit, and this pins that.
+        let (_, out) = repl_on(COIN, &[":ask K[b] _", ":ask 1 K[b] _"]);
+        assert!(out.contains("at depth 0"), "got: {out}");
+        assert!(out.contains("at depth 1"), "got: {out}");
+        // Depth 1 reaches an attitude about an attitude, which depth 0 cannot express.
+        assert!(out.contains("K[b] (B[a] h)"), "got: {out}");
+    }
+
+    #[test]
+    fn repl_ask_explains_itself_when_the_pattern_is_missing() {
+        // A bare depth is the likely slip. Falling through would treat "2" as a pattern
+        // and complain about a missing `_`, which points at the wrong mistake.
+        for line in [":ask", ":ask 2"] {
+            let (_, out) = repl_on(COIN, &[line]);
+            assert!(out.contains("usage: :ask"), "`{line}` should explain itself: {out}");
+            assert!(out.contains("what alice believes"), "and give an example: {out}");
+        }
+    }
+
+    #[test]
+    fn ask_errors_end_with_a_newline_so_the_prompt_does_not_run_into_them() {
+        let (_, out) = repl_on(COIN, &[":ask B[a] h"]);
+        assert!(out.ends_with('\n'), "got: {out:?}");
     }
 
     #[test]
