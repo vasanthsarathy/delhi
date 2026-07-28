@@ -225,7 +225,62 @@ model the Coin Lie at all.
 
 ## Querying
 
-Every operator below is available in `eval`, in `goal`, and at the REPL prompt.
+### Three ways to ask
+
+| | Answers | Use when |
+|---|---|---|
+| `delhi eval -f φ` | is this one formula true? | you know what to check |
+| `delhi ask -q π` | which formulas of this shape are true? | you don't yet know what to look for |
+| `delhi state` | every agent's stance on every proposition | you want the lay of the land |
+
+All three take `-a ACTION…` to run a trace first, and all three exist at the REPL prompt and
+in the browser console as a bare formula, `:ask`, and `:state`.
+
+### Recipes
+
+The pattern language is where the leverage is, so start from the question rather than the
+syntax. `_` is a hole; every hole in one pattern takes the same filler, which is what makes
+the last four work.
+
+| The question | Write |
+|---|---|
+| Does alice know the coin is heads? | `eval -f "K[alice] h"` |
+| Is carol wrong about it? | `eval -f "B[carol] !h & h"` |
+| Is it common knowledge? | `eval -f "C[*] h"` |
+| What does alice believe? | `ask -q "B[alice] _"` |
+| What can't she settle? | `ask -q "?[alice] _"` |
+| What does she think carol believes? | `ask -q "B[alice] B[carol] _"` |
+| What's commonly known? | `ask -q "C[*] _"` |
+| **What does alice believe that is false?** | `ask -q "B[alice] _ & !_"` |
+| Where do alice and carol disagree? | `ask -q "B[alice] _ & B[carol] !_"` |
+| What does alice know that carol doesn't? | `ask -q "K[alice] _ & !K[carol] _"` |
+| What does carol believe without knowing? | `ask -q "B[carol] _ & !K[carol] _"` |
+
+The false-belief recipe is the one worth trying first, because it finds things you would not
+have thought to check. Run the Coin Lie to its end and ask what alice believes that is not so:
+
+```bash
+$ delhi ask examples/coin_lie.delhi -d 1 -q "B[alice] _ & !_" \
+      -a "announce_not_heads()" "distract_a()" "peek_c()"
+  B[alice] (B[carol] !h) & !(B[carol] !h)
+1 of 28 candidates at depth 1
+```
+
+That is the scenario's entire point — alice's second-order false belief — located without
+naming it. And on grapevine, after b tells a a secret with c out of the room:
+
+```bash
+$ delhi ask examples/grapevine.delhi -q "K[a] _ & !K[c] _" \
+      -a "move(c,r1,r2)" "share(b,b,r1)"
+  K[a] (secret(a)) & !K[c] (secret(a))
+  K[a] (secret(b)) & !K[c] (secret(b))
+```
+
+Her own secret, and the one she just heard.
+
+### The operators
+
+Every one is available in `eval`, in `ask` patterns, in `goal`, and at the prompt.
 
 | Write | Reads as | True when |
 |---|---|---|
@@ -239,27 +294,67 @@ Every operator below is available in `eval`, in `goal`, and at the REPL prompt.
 | `Bw[a] φ` | a believes whether φ | a has taken a side |
 | `?[a] φ` | a is ignorant of φ | a knows neither φ nor ¬φ |
 | `??[a] φ` | a is undecided about φ | a does not even lean |
-| `K'[a] φ` | a considers φ possible | dual of `K` |
-| `B'[a] φ` | a has not ruled φ out | dual of `B` |
-| `S'[a] φ` | — | dual of safe belief |
+| `K'[a] φ` | a considers φ possible | dual of `K` — she cannot rule it out |
+| `B'[a] φ` | a has not ruled φ out | dual of `B` — φ survives somewhere she finds plausible |
+| `S'[a] φ` | a cannot safely rule φ out | dual of `[]` |
 
 Connectives are `!`, `&`, `|`, `->`, with `->` loosest and right-associative, and
-modalities binding tightest. Both `□` and `[]` work for safe belief, `¿` and `??` for
-undecided.
+modalities binding tightest — so `K[a] p & B[b] q -> r` is `((K[a]p) & (B[b]q)) -> r`. Both
+`□` and `[]` work for safe belief, `¿` and `??` for undecided.
 
-The distinction between `K` and `[]` is the subtle one. Safe belief is belief that no *true*
-announcement can dislodge — it is factive, so `[][a] φ` does imply `φ` — but knowledge is
-strictly stronger, because it quantifies over everything the agent finds comparable rather
-than only over what it finds at least as plausible as the actual world. The example above
-shows both at once, in its initial state:
+Nothing expressible in mB+ is inexpressible as a query: all six primitives, all nine sugar
+forms, closed under the connectives and nested arbitrarily. `eval` runs the same parser and
+lowering that check a `goal`, so a query and a goal cannot disagree.
+
+```bash
+$ delhi eval examples/coin_lie.delhi \
+      -f "(K[alice] h | B[carol] !h) -> (C[*] Kw[alice] h & [][carol] h & !??[carol] h)"
+true
+```
+
+### Knowledge versus safe belief
+
+The subtle pair. Safe belief is belief that no *true* announcement can dislodge — it is
+factive, so `[][a] φ` does imply `φ` — but knowledge is strictly stronger, because it
+quantifies over everything the agent finds comparable rather than only over what it finds at
+least as plausible as the actual world. The Coin Lie shows both at once, in its initial state:
 
 ```
 $ delhi eval examples/coin_lie.delhi -f "[][carol] h"    # true
 $ delhi eval examples/coin_lie.delhi -f "K[carol] h"     # false
 ```
 
-Carol safely believes the coin is heads, and no truth will talk her out of it. She still
-does not know it.
+Carol safely believes the coin is heads, and no truth will talk her out of it. She still does
+not know it.
+
+### How `ask` chooses what to try
+
+`-d` sets how deeply the hole may nest, so `-d 1 -q "B[alice] _"` reaches
+`B[alice] (B[carol] !h)` without your naming `B[carol]` yourself. At the REPL and in the
+browser it is `:ask [depth] <pattern>`.
+
+**Enumeration is necessarily restricted.** `{φ : B[a]φ}` is infinite — conjunction alone
+generates without bound — so `ask` ranges over *modal literals*: a literal under some sequence
+of `K`/`B`. That is the representation Muise et al.'s PDKB planner is built on, chosen here for
+the same reason: finite, with a size that follows from the signature and the depth
+(`Σ_{k≤d} (2·agents)^k · 2·atoms`). There is a ceiling, and you are told when it bites.
+
+What that costs is precise. Conjunctive candidates would be *redundant*, since `K` and `B` are
+normal and `K[a](φ&ψ) ≡ K[a]φ & K[a]ψ`. Disjunctive ones would **not** be — `B[a](p|q)` can
+hold when neither `B[a]p` nor `B[a]q` does — so disjunctive knowledge is the one genuinely
+missing class, and the direction to extend if enumeration is ever widened.
+
+Two smaller points. The pattern is itself the filter: `B[alice] _` at depth 1 also returns
+introspective truths like `B[alice] (B[alice] d)`, valid in KD45 and uninformative, and naming
+the inner agent cuts them out. And when a pattern cannot see polarity — ignorance of `h` *is*
+ignorance of `!h`, likewise `Kw`/`Bw` — only the positive form is listed. That last one is a
+rendering rule, not part of the answer set.
+
+`_` is a real token, not a placeholder string: a lone `_` is the hole, while `at_park` and `_x`
+are ordinary identifiers, and filling is a tree substitution. That is load-bearing rather than
+tidy — substituting textually tore identifiers containing underscores, and `!_` now negates
+whatever fills it without needing defensive parentheses. §7.6 of the design spec gives the
+grammar and both semantics formally.
 
 ## The tool
 
@@ -277,63 +372,6 @@ delhi bench <FILE> [-n CYCLES] -a <ACTION>…   model growth and timing
 
 Exit codes are scriptable: `0` success or the formula holds, `1` the file was rejected or
 the formula is false, `2` a usage error or a malformed formula.
-
-### Asking what holds, rather than checking one thing
-
-`eval` answers "is this true?". `ask` answers "which of these are true?" — what does an
-agent believe, what is it ignorant of, what holds two levels down. That is the question you
-have when you are debugging a scenario and do not yet know what to look for.
-
-Write a pattern with `_` for the hole:
-
-```bash
-$ delhi ask examples/coin_lie.delhi -q "?[carol] _"
-  ?[carol] (h)                       # what carol cannot settle
-
-$ delhi ask examples/coin_lie.delhi -q "B[alice] B[carol] _" \
-      -a "announce_not_heads()" "distract_a()" "peek_c()"
-  B[alice] B[carol] (d)
-  B[alice] B[carol] (!h)             # the second-order false belief, found not guessed
-```
-
-`-d` sets how deeply the hole may nest, so `-d 1 -q "B[alice] _"` reaches
-`B[alice] (B[carol] !h)` without your having to name `B[carol]` yourself. In the REPL and
-the browser console it is `:ask [depth] <pattern>`.
-
-**The query language is the formula language plus `_`.** Every operator the semantics has — all
-six primitives and all nine sugar forms — is available in a query, closed under `!`, `&`, `|`
-and `->`, nested arbitrarily. Nothing expressible in mB+ is inexpressible as a query, and `eval`
-uses exactly the parser and lowering that check a `goal`:
-
-```bash
-$ delhi eval examples/coin_lie.delhi \
-      -f "(K[alice] h | B[carol] !h) -> (C[*] Kw[alice] h & [][carol] h & !??[carol] h)"
-true
-```
-
-`_` is a real token, not a placeholder string — a lone `_` is the hole, while `at_park` and `_x`
-are ordinary identifiers, and filling is a tree substitution. That is load-bearing rather than
-tidy: substituting textually tore identifiers containing underscores, and `!_` now negates
-whatever fills it without needing defensive parentheses.
-
-**Enumeration is necessarily restricted, and the restriction is stated.** `{φ : B[a]φ}` is
-infinite — conjunction alone generates without bound — so what `ask` ranges over is *modal
-literals*: a literal under some sequence of `K`/`B`. That is the representation Muise et al.'s
-PDKB planner is built on, chosen here for the same reason: finite, with a size that follows from
-the signature and the depth (`Σ_{k≤d} (2·agents)^k · 2·atoms`). There is a ceiling and you are
-told when it bites.
-
-What that costs is precise. Conjunctive candidates would be *redundant*, since `K` and `B` are
-normal and `K[a](φ&ψ) ≡ K[a]φ & K[a]ψ`. Disjunctive ones would **not** be — `B[a](p|q)` can hold
-when neither `B[a]p` nor `B[a]q` does — so disjunctive knowledge is the one genuinely missing
-class, and the direction to extend if enumeration is ever widened.
-
-Two smaller points. The pattern is itself the filter: `B[alice] _` at depth 1 also returns
-introspective truths like `B[alice] (B[alice] d)`, valid in KD45 and uninformative, and naming
-the inner agent cuts them out. And when a pattern cannot see polarity — ignorance of `h` *is*
-ignorance of `!h`, likewise `Kw`/`Bw` — only the positive form is listed. That last one is a
-rendering rule, not part of the answer set; §7.6 of the spec gives the grammar and both
-semantics in full.
 
 ### Reading a state
 
