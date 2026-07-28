@@ -76,13 +76,20 @@ fn mk_implies(store: &mut Store, a: FormulaId, b: FormulaId) -> FormulaId {
 /// Resolves a term's arguments to concrete object names.
 fn resolve_args(
     term: &Term,
+    sig: &Sig,
     binds: &Bindings,
     diags: &mut Diagnostics,
 ) -> Option<Vec<String>> {
     let mut out = Vec::with_capacity(term.args.len());
     for a in &term.args {
         match a {
-            Arg::Obj(o) => out.push(o.clone()),
+            Arg::Obj(o) => {
+                if !sig.objects.contains_key(o) {
+                    diags.push(term.span, format!("`{o}` is not a declared object"));
+                    return None;
+                }
+                out.push(o.clone());
+            }
             Arg::Var(v) => match binds.get(v) {
                 Some(o) => out.push(o.to_string()),
                 None => {
@@ -154,7 +161,7 @@ pub fn lower_formula(
             mk_implies(store, x, y)
         }
         Expr::Atom(term) => {
-            let Some(args) = resolve_args(term, binds, diags) else {
+            let Some(args) = resolve_args(term, sig, binds, diags) else {
                 return store.fls();
             };
             // Constants are folded away here and never become atoms (§7.1).
@@ -473,5 +480,65 @@ mod tests {
         let e = p.parse_expr(&mut d);
         let _ = lower_formula(&e, &sig, &c, &Bindings::default(), &mut s, &mut d);
         assert!(d.items().iter().any(|x| x.message.contains("nobody")));
+    }
+
+    #[test]
+    fn a_typo_d_object_in_a_constant_predicate_is_reported_not_folded_silently() {
+        // `is_constant_pred` short-circuits before `sig.atom_id`'s fallback check
+        // ever runs, so a bogus object name inside a constant predicate's arguments
+        // used to fold silently to `false` with no signal at all — `adjacent(hall,
+        // studdy)` (a typo of `study`) is a real predicate with a typo'd argument,
+        // not a legitimately-undeclared instance, and the two must not be
+        // confused. `resolve_args` must catch this before the constant-folding
+        // branch is ever reached.
+        let (sig, c) = setup();
+        let mut s = Store::default();
+        let mut d = Diagnostics::default();
+        let src = "adjacent(alice, bobo)";
+        let toks = crate::lex(src, &mut d);
+        let mut p = Parser::new(&toks);
+        let e = p.parse_expr(&mut d);
+        let f = lower_formula(&e, &sig, &c, &Bindings::default(), &mut s, &mut d);
+        assert!(
+            d.items().iter().any(|x| x.message.contains("bobo")),
+            "a typo'd object must be reported, not silently folded:\n{}",
+            d.render(src)
+        );
+        assert_eq!(f, s.fls(), "lowering still yields a value (⊥) even though it errored");
+    }
+
+    #[test]
+    fn a_typo_d_object_in_an_ordinary_proposition_is_still_reported() {
+        // The same check must not regress the ordinary-proposition path: a bogus
+        // object there was always going to be reported via `sig.atom_id`'s
+        // "no such proposition" fallback, and it must keep being reported (by
+        // whichever diagnostic fires first) now that `resolve_args` validates
+        // objects directly.
+        let src = r#"
+            types   { Location - Object }
+            objects { hall, study - Location }
+            agents  { }
+            props   { at(Location) }
+            initially { }
+            actions {}
+        "#;
+        let mut setup_d = Diagnostics::default();
+        let ast = parse_file(src, &mut setup_d);
+        let sig = Sig::build(&ast, &mut setup_d);
+        let c = Constants::build(&ast, &sig, &mut setup_d);
+        assert!(setup_d.is_empty(), "setup errors:\n{}", setup_d.render(src));
+
+        let mut s = Store::default();
+        let mut d = Diagnostics::default();
+        let expr_src = "at(bogus)";
+        let toks = crate::lex(expr_src, &mut d);
+        let mut p = Parser::new(&toks);
+        let e = p.parse_expr(&mut d);
+        let _ = lower_formula(&e, &sig, &c, &Bindings::default(), &mut s, &mut d);
+        assert!(
+            d.items().iter().any(|x| x.message.contains("bogus")),
+            "a typo'd object in an ordinary proposition must still be reported:\n{}",
+            d.render(expr_src)
+        );
     }
 }
