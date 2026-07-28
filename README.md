@@ -312,6 +312,37 @@ $ delhi eval examples/coin_lie.delhi \
 true
 ```
 
+### Where the "or" sits
+
+Several attitudes are disjunctions underneath, and it is worth knowing which:
+
+| Sugar | Is really |
+|---|---|
+| `Kw[a] φ` | `K[a] φ \| K[a] !φ` |
+| `Bw[a] φ` | `B[a] φ \| B[a] !φ` |
+| `?[a] φ` | `!Kw[a] φ`, so `!K[a] φ & !K[a] !φ` |
+| `??[a] φ` | `!Bw[a] φ` |
+
+That disjunction sits **outside** the modality, which is why the query language handles it
+without ceremony — it is an ordinary Boolean combination of modal formulas. You can write
+`Kw` by hand and get the same answer, using one filler in two holes:
+
+```bash
+$ delhi ask examples/coin_lie.delhi -q "Kw[alice] _"
+  Kw[alice] (d)
+  Kw[alice] (h)
+
+$ delhi ask examples/coin_lie.delhi -q "K[alice] _ | K[alice] !_"
+  K[alice] (d) | K[alice] !(d)
+  K[alice] (h) | K[alice] !(h)
+```
+
+A disjunction **inside** the modality is a different thing entirely. `K[a](p | q)` can hold
+when neither `K[a]p` nor `K[a]q` does — knowing that one of two things is so without knowing
+which. That is the case `ask` cannot reach, since its candidates are literals under
+modalities and never disjunctions; `eval` checks such formulas perfectly well. When the note
+below says disjunctive knowledge is the missing class, it means this inner kind only.
+
 ### Knowledge versus safe belief
 
 The subtle pair. Safe belief is belief that no *true* announcement can dislodge — it is
@@ -339,10 +370,11 @@ of `K`/`B`. That is the representation Muise et al.'s PDKB planner is built on, 
 the same reason: finite, with a size that follows from the signature and the depth
 (`Σ_{k≤d} (2·agents)^k · 2·atoms`). There is a ceiling, and you are told when it bites.
 
-What that costs is precise. Conjunctive candidates would be *redundant*, since `K` and `B` are
-normal and `K[a](φ&ψ) ≡ K[a]φ & K[a]ψ`. Disjunctive ones would **not** be — `B[a](p|q)` can
-hold when neither `B[a]p` nor `B[a]q` does — so disjunctive knowledge is the one genuinely
-missing class, and the direction to extend if enumeration is ever widened.
+What that costs is precise, and it concerns disjunction *inside* a modality only — the outer
+kind, as in `Kw`, is already there. Conjunctive candidates would be *redundant*, since `K` and
+`B` are normal and `K[a](φ&ψ) ≡ K[a]φ & K[a]ψ`. Disjunctive ones would **not** be — `B[a](p|q)`
+can hold when neither `B[a]p` nor `B[a]q` does — so knowing-that-one-of-these-holds is the one
+genuinely missing class, and the direction to extend if enumeration is ever widened.
 
 Two smaller points. The pattern is itself the filter: `B[alice] _` at depth 1 also returns
 introspective truths like `B[alice] (B[alice] d)`, valid in KD45 and uninformative, and naming

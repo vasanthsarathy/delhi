@@ -1241,12 +1241,18 @@ generates without bound — so "everything alice believes" is not enumerable and
 implementation choice changes that. `ML_d` is the restriction Muise et al.'s PDKB planner uses,
 adopted here for the same reason: finite, and its size follows from the signature and the depth.
 
-**What the restriction costs, precisely.** Conjunctive candidates would be *redundant*: `K` and
-`B` are normal, so `K_a(φ∧ψ) ≡ K_aφ ∧ K_aψ`, and any conjunction believed is the conjunction of
-things separately believed. Disjunctive candidates would **not** be redundant — `B_a(p∨q)` can
-hold when neither `B_a p` nor `B_a q` does — so disjunctive knowledge is the one genuinely
-missing class. That is a known gap, not an oversight, and it is the direction to extend if
-enumeration is ever widened.
+**What the restriction costs, precisely.** It concerns Boolean structure *inside* a modality
+only. Structure *outside* is untouched, because a pattern is an arbitrary formula: `Kw_aφ` is by
+definition `K_aφ ∨ K_a¬φ`, and `ask` reaches it either through the sugar or written out as
+`K[a] _ | K[a] !_`, the two holes taking one filler. The same holds for `Bw`, and for `?` and
+`??`, which are the negations of those disjunctions.
+
+Inside the modality, conjunctive candidates would be *redundant*: `K` and `B` are normal, so
+`K_a(φ∧ψ) ≡ K_aφ ∧ K_aψ`, and any conjunction believed is the conjunction of things separately
+believed. Disjunctive candidates would **not** be redundant — `B_a(p∨q)` can hold when neither
+`B_a p` nor `B_a q` does, which is knowing that one of two things holds without knowing which.
+That is the one genuinely missing class: a known gap, not an oversight, and the direction to
+extend if enumeration is ever widened.
 
 **The pattern is the filter.** `B[a] _` at depth 1 also returns introspective truths such as
 `B_a B_a φ`, valid in KD45 and therefore uninformative. Naming the inner agent — `B[a] B[c] _` —
