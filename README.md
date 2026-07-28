@@ -330,10 +330,11 @@ it built, and reports the ones that do not. Its limits — nested belief, disjun
 conditional belief are assertion-only — are reported to the author rather than silently
 tolerated.
 
-Beyond those: `B^ψ` and `□` are first-class operators here (standard in the Baltag–Smets
-belief-revision tradition, but not in this action language); the surface language is delhi's
-own rather than DEPL; and two known semantic gaps are pinned by tests that fail *by design*
-and are marked ignored, rather than going undocumented.
+Beyond those: `B^ψ` and `□` are first-class operators here, which they are not in mB's object
+language — though they are Baltag & Smets's operators, not delhi's, and the models could
+always interpret them (see **A note on the name** below, which is the honest accounting); the
+surface language is delhi's own rather than DEPL; and two known semantic gaps are pinned by
+tests that fail *by design* and are marked ignored, rather than going undocumented.
 
 ## Where this sits
 
@@ -385,9 +386,33 @@ being corrected and one that can only reset an agent to omniscience.
 **Baltag & Smets is where the semantics comes from, and it is not an action language.** The
 plausibility preorders, the conditional belief `B^ψ`, the safe belief `□` — all of that is
 theirs. What mB contributes is putting it under an action language, so a modeller writes
-`announces !bicycle` and `mom observes` rather than drawing an event model. delhi's `+` is
-narrow and worth stating precisely: it exposes `B^ψ` and `□` as operators you can *query*,
-alongside the derived attitudes, rather than leaving them implicit in the models.
+`announces !bicycle` and `mom observes` rather than drawing an event model.
+
+### A note on the name, since it matters for citation
+
+**"mB+" is delhi's own label, not Buckingham's.** It was coined for this project and appears
+nowhere in the thesis or the KR papers. Cite mB; mB+ is a name for what this implementation
+does on top of it.
+
+What it denotes is deliberately narrow. The thesis defines its object language in Definition 1
+(§5.1.1) with exactly six clauses — `p`, `¬φ`, `φ ∧ ψ`, `Kᵢφ`, `Bᵢφ`, `C_gφ` — and no more.
+delhi adds two operators to that language:
+
+| | in mB's models | in mB's object language | in delhi |
+|---|---|---|---|
+| `Bᵢ^ψ φ` conditional belief | yes — the models *are* Baltag–Smets models | no | yes |
+| `□ᵢ φ` safe belief | yes, same reason | no | yes |
+
+So the extension is not new logic and is not ours as logic. Both operators are Baltag & Smets's,
+and both were already *interpretable* in mB's models — the thesis simply does not lift them into
+the language it defines. delhi lifts them, implements them, and adds nine derived attitudes as
+sugar over the six primitives. The surface language also allows a condition on effects
+(`causes p if φ`), which the thesis's action tuple expresses by splitting events instead.
+
+One item originally scoped into the `+` was **not** delivered: a fix to the announcement
+construction. The design spec's §4.7(a) describes a defect that, on implementation, did not
+manifest as described, so it is documented and pinned rather than fixed. Do not read "mB+" as
+including it.
 
 **EFP and PDKB are solving the problem delhi has not started on.** Both are planners; delhi
 is not. They are also the two most interesting reference points for what a delhi planner

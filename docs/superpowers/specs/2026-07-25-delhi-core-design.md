@@ -497,6 +497,14 @@ completeness claim, and §6.1.2 explains why that claim is currently in doubt.
 
 ## 4. Semantics (mB+)
 
+> **"mB+" is this project's own name and appears in no source.** Cite mB. Verified against
+> [T] Def. 1 (§5.1.1), whose object language has exactly six clauses — `p`, `¬φ`, `φ ∧ ψ`,
+> `Kᵢφ`, `Bᵢφ`, `C_gφ` — with no conditional or safe belief. Those two operators are Baltag
+> & Smets's and were already interpretable in mB's models, since mB's models *are* their
+> plausibility models; what mB does not do is lift them into its language. The `+` is that
+> lift, plus conditional effects and the sugar in §7.4 — and **not** the §4.7(a) announcement
+> fix, which was scoped in, did not manifest as described, and is pinned rather than fixed.
+
 ### 4.1 Plausibility models — [T] §5.1.1
 
 *Frame vocabulary — reflexive, transitive, serial, Euclidean, preorder, S5, KD45 — is explained
