@@ -1,0 +1,13 @@
+[package]
+name = "delhi-cli"
+edition.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "delhi"
+path = "src/main.rs"
+
+[dependencies]
+delhi-lang = { path = "../delhi-lang" }
+delhi-mb = { path = "../delhi-mb" }
+delhi-syntax = { path = "../delhi-syntax" }
