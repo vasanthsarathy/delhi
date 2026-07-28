@@ -2,6 +2,29 @@
 
 Notable changes per release. Dates are the tag date.
 
+## 0.1.2 — 2026-07-28
+
+Browser UI only. The CLI is unchanged from 0.1.1.
+
+### Added
+
+- Command history at the prompt. Up and Down walk previous commands, `esc` clears the
+  line, and the list survives a reload. A half-typed line is stashed when the walk begins
+  and restored on the way back, so going to look does not eat what you were writing.
+
+### Changed
+
+- The prompt moved from the foot of the window to just under the toolbar. It is a control
+  and belongs with the controls; at the bottom edge it was the furthest thing on screen
+  from both the file it queries and the panel its answers land in.
+
+### Fixed
+
+- Scrollbars were the browser's default light-grey chrome on a dark page. The root element
+  now declares `color-scheme: dark`, which also re-skins the `<select>` and the caret, and
+  the bars are styled down from ~17px to 10px — width that matters in panels only a few
+  hundred pixels wide.
+
 ## 0.1.1 — 2026-07-28
 
 ### Added
