@@ -4,6 +4,7 @@
 pub mod ast;
 pub mod constants;
 pub mod ground;
+pub mod init_decl;
 pub mod lex;
 pub mod lower_action;
 pub mod lower_formula;
@@ -14,6 +15,7 @@ pub mod span;
 pub use ast::{Arg, Ast, Expr, Modal, Term};
 pub use constants::Constants;
 pub use ground::{atom_key, Sig};
+pub use init_decl::build_declarative;
 pub use lex::{lex, Tok, Token};
 pub use lower_action::{ground_actions, Ctx, GroundAction};
 pub use lower_formula::{lower_formula, Bindings};
