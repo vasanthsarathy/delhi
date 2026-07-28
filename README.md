@@ -186,11 +186,34 @@ about someone else's mind.
 
 | Clause | The agent… |
 |---|---|
-| `a observes` | sees exactly what happened |
-| `a aware` | knows *something* happened, not what |
-| *(neither)* | is oblivious; nothing changes for it |
+| `a observes` | sees exactly what happened, outcome included |
+| `a aware` | knows the action occurred, but not how it turned out |
+| *(neither)* | is oblivious — it does not even learn that anything happened |
 
 Both take a condition: `alice aware if !d` makes the class depend on the state.
+
+**What `aware` buys you** is second-order: if Bob peeks into the box and Alice is `aware`,
+Alice does not learn the coin — but she learns that *Bob* has. She comes to know that he
+knows whether. That is a different position from being oblivious, where she would not
+suspect he had looked at all:
+
+```
+$ delhi repl examples/coin_lie.delhi
+> :do distract_a()          // alice is distracted, so `alice aware if !d` drops
+> :do peek_c()              // carol observes; bob aware; alice oblivious
+> Kw[carol] h               true    carol saw the coin
+> K[bob] Kw[carol] h        true    bob heard her look, so he knows she settled it
+> K[alice] Kw[carol] h      false   alice missed it entirely
+> ?[alice] Kw[carol] h      true    she cannot even say whether carol knows
+```
+
+Mechanically, a sensing or announcing action builds three events — `ψ`, `¬ψ`, and a `⊤`
+event standing for *nothing observable happened*. Each agent gets two edge labels: `ψ`↔`¬ψ`
+is labelled `¬observes(i)`, and the edges to the `⊤` event are labelled
+`¬(observes(i) ∨ aware(i))`. So an `aware` agent keeps the first edge — the outcomes stay
+indistinguishable — and loses the second, which is precisely "I know it happened, I don't
+know how it went". An oblivious agent keeps both, and cannot rule out that the world simply
+carried on.
 
 ### Initial state
 

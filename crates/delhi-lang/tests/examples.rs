@@ -190,6 +190,42 @@ fn coin_in_the_box_separates_seeing_from_hearing() {
 }
 
 #[test]
+fn the_three_observer_classes_are_three_distinct_epistemic_positions() {
+    // The test above shows `observes` against `aware`, but in Coin in the Box every
+    // non-peeker is aware, so it never shows `aware` against *oblivious*. That is the
+    // half that makes three classes rather than two, and this pins it: one action, one
+    // sensed proposition, three agents, three different answers.
+    //
+    // `distract_a()` first, because `peek_c` declares `alice aware if !d` — with `d`
+    // true that clause drops and alice is left out of the action entirely.
+    //
+    // Every assertion below is false in the initial state and only the peek makes it
+    // true, except alice's pair, which is the point: the *same* action that gives bob
+    // `K[bob] Kw[carol] h` leaves alice without it. Note what is deliberately absent —
+    // `Kw[bob] h` is already true before anything happens, because Coin Lie declares
+    // only carol uncertain, so asserting it here would test the file's initial state
+    // rather than what `aware` does.
+    let mut p =
+        run(include_str!("../../../examples/coin_lie.delhi"), &["distract_a()", "peek_c()"]);
+    expect(
+        &mut p,
+        &[
+            // carol observes: she learns the value itself.
+            ("Kw[carol] h", true),
+            // bob is aware: he knows the peek happened, so he knows carol settled it —
+            // without seeing which way she settled it.
+            ("K[bob] Kw[carol] h", true),
+            // alice is oblivious, having been distracted. She does not learn the value,
+            // and — the part `aware` alone would not tell you — she does not learn that
+            // anyone else did either. Before the peek she knew carol could not tell;
+            // now she cannot even say that.
+            ("K[alice] Kw[carol] h", false),
+            ("?[alice] Kw[carol] h", true),
+        ],
+    );
+}
+
+#[test]
 fn coin_in_the_box_grounds_a_peek_per_actor_without_class_overlap() {
     // `?p observes` beside `?o aware if !same(?p, ?o)` is the shape that forced the
     // ⊥-conditioned observer clause to be dropped rather than recorded. If it were
