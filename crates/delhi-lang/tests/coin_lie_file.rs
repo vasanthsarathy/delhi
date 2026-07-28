@@ -72,7 +72,19 @@ fn coin_lie_from_a_file_matches_the_api_driven_trace() {
     assert!(s3.entails(&p.store, b_a_b_c), "s3: A still believes C believes !h");
 
     // The declared goal is exactly the second-order false belief.
+    //
+    // Pin it structurally, not just by satisfaction. `Store` is hash-consed, so `mk`
+    // returns the existing id for an identical node and `FormulaId` equality *is*
+    // structural identity. Satisfaction alone is far too weak here: both conjuncts are
+    // already asserted a few lines above, so a goal that folded to `⊤`, or that dropped
+    // `& K[carol] h`, would still be entailed by s3 and pass unnoticed. The two
+    // assertions check different things, so keep both.
     let goal = p.goal.expect("the file declares a goal");
+    let want = {
+        let s = &mut p.store;
+        s.and(b_a_b_c, kc) // the reference's `sofb`
+    };
+    assert_eq!(goal, want, "the declared goal is exactly the second-order false belief");
     assert!(s3.entails(&p.store, goal), "s3 satisfies the declared goal");
 }
 
