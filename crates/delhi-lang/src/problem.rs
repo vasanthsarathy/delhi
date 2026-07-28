@@ -25,6 +25,11 @@ pub struct Problem {
     pub state: State,
     /// The declared goal, if the file had one.
     pub goal: Option<FormulaId>,
+    /// Declared invariants, each with the source text that wrote it.
+    ///
+    /// The text is kept so a violation can name the constraint as the author wrote it
+    /// rather than as a formula id or a re-rendering.
+    pub invariants: Vec<(FormulaId, String)>,
     /// Every ground action whose precondition is satisfiable.
     pub actions: Vec<GroundAction>,
 }
@@ -63,10 +68,20 @@ impl Problem {
             lower_formula(g, &sig, &consts, &Bindings::default(), &mut store, &mut diags)
         });
 
+        let invariants: Vec<(FormulaId, String)> = ast
+            .invariants
+            .iter()
+            .map(|(e, sp)| {
+                let f =
+                    lower_formula(e, &sig, &consts, &Bindings::default(), &mut store, &mut diags);
+                (f, src[sp.start.min(src.len())..sp.end.min(src.len())].trim().to_string())
+            })
+            .collect();
+
         let actions = ground_actions(&ast.actions, &sig, &consts, &mut store, &mut diags);
 
         match (state, diags.is_empty()) {
-            (Some(state), true) => Ok(Problem { store, sig, consts, state, goal, actions }),
+            (Some(state), true) => Ok(Problem { store, sig, consts, state, goal, invariants, actions }),
             _ => Err(diags.render(src)),
         }
     }
@@ -87,11 +102,85 @@ impl Problem {
         );
         self.state.entails(&self.store, f)
     }
+
+    /// The declared invariants that `state` violates, as the author wrote them.
+    ///
+    /// Takes the state rather than using `self.state`, because the point of an invariant
+    /// is that it is checked *after every action* — a version that could only inspect the
+    /// initial state would be a slower way of writing an `initially` entry.
+    pub fn violated(&self, state: &State) -> Vec<&str> {
+        self.invariants
+            .iter()
+            .filter(|(f, _)| !state.entails(&self.store, *f))
+            .map(|(_, text)| text.as_str())
+            .collect()
+    }
 }
+
 
 /// Reads and parses a file from disk. Read errors are reported with the path, so a
 /// missing file reads the same way as a malformed one.
 pub fn load(path: &str) -> Result<Problem, String> {
     let src = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
     Problem::parse(&src)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SRC: &str = r#"
+        types{ Actor - Object } objects{ a, b - Actor } agents{ a, b } props{ p }
+        initially { p, ?[a] p, B[a] p }
+        invariants {
+            !((B[a] p & B[b] !p) | (B[a] !p & B[b] p))
+            K[b] p
+        }
+        actions { lie() { actor b, announces !p, a observes, b observes } }
+    "#;
+
+    #[test]
+    fn an_invariant_holding_initially_can_still_be_broken_by_an_action() {
+        // The whole point of an invariant over an `initially` assertion: it is checked
+        // against states the file never mentions.
+        let mut p = Problem::parse(SRC).unwrap_or_else(|e| panic!("{e}"));
+        assert!(p.violated(&p.state).is_empty(), "clean at the start");
+
+        let n = p.sig.n_agents();
+        let def = p.action("lie()").expect("action").def.clone();
+        let am = delhi_mb::build(&def, &mut p.store, n);
+        let after = p.state.clone().apply(&p.store, &am).expect("applicable");
+
+        let bad = p.violated(&after);
+        assert_eq!(bad.len(), 1, "exactly the disagreement one: {bad:?}");
+        assert!(bad[0].starts_with("!(("), "got {:?}", bad[0]);
+    }
+
+    #[test]
+    fn a_violation_quotes_the_constraint_exactly_as_written() {
+        // Guards a real bug: `Expr::span()` of a parenthesised expression covers only its
+        // contents, so slicing by it truncated `!(a | b)` to `!(a | b`. The span is taken
+        // from the parser's token positions instead.
+        let p = Problem::parse(SRC).unwrap_or_else(|e| panic!("{e}"));
+        let texts: Vec<&str> = p.invariants.iter().map(|(_, t)| t.as_str()).collect();
+        assert_eq!(texts[0], "!((B[a] p & B[b] !p) | (B[a] !p & B[b] p))");
+        assert_eq!(texts[1], "K[b] p");
+        for t in &texts {
+            assert_eq!(
+                t.matches('(').count(),
+                t.matches(')').count(),
+                "parens must balance in the quoted text: {t}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_with_no_invariants_section_has_none_and_violates_nothing() {
+        let p = Problem::parse(
+            r#"types{} objects{} agents{} props{ p } initially{ p } actions{}"#,
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        assert!(p.invariants.is_empty());
+        assert!(p.violated(&p.state).is_empty());
+    }
 }

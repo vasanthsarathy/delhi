@@ -257,6 +257,10 @@ async function refresh() {
 function renderState(d) {
   let html = '';
   if (d.trace_error) html += '<pre class="err">' + esc(d.trace_error) + '</pre>';
+  if (d.violated && d.violated.length) {
+    html += '<pre class="err">invariant violated:\n  ' +
+            d.violated.map(esc).join('\n  ') + '</pre>';
+  }
   html += '<div class="facts">actual world &nbsp;' + esc(d.facts.join(', ')) + '</div>';
   html += '<table class="att">';
   for (const a of d.agents) {

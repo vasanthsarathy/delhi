@@ -37,6 +37,15 @@ impl<'a> Parser<'a> {
     pub fn span(&self) -> Span {
         self.toks[self.pos.min(self.toks.len() - 1)].span
     }
+    /// Span of the token just consumed, or of the current one at the start of input.
+    ///
+    /// `Expr::span()` cannot serve here: a parenthesised expression carries the span of
+    /// its *contents*, so `!(a | b)` ends before the closing parens. This gives the real
+    /// end of whatever was last read, which is what quoting a construct back to the
+    /// author needs.
+    pub fn prev_span(&self) -> Span {
+        self.toks[self.pos.saturating_sub(1).min(self.toks.len() - 1)].span
+    }
     /// Consumes and returns the current token.
     pub fn bump(&mut self) -> Token {
         let t = self.toks[self.pos.min(self.toks.len() - 1)].clone();

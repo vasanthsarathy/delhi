@@ -68,6 +68,8 @@ pub struct StateReply {
     pub applied: Vec<String>,
     /// Set when an action in the trace was unknown or inapplicable.
     pub trace_error: Option<String>,
+    /// Declared invariants the current state violates, as the author wrote them.
+    pub violated: Vec<String>,
     pub n_worlds: usize,
     /// Whether the file's declared goal holds here, if it declares one.
     pub goal: Option<bool>,
@@ -85,6 +87,7 @@ fn rejected(error: String) -> StateReply {
         explicit: String::new(),
         applied: Vec::new(),
         trace_error: None,
+        violated: Vec::new(),
         n_worlds: 0,
         goal: None,
     }
@@ -218,6 +221,7 @@ pub fn state(src: &str, trace: &[String]) -> String {
         explicit: print_state(&state, &p.sig),
         applied,
         trace_error,
+        violated: p.violated(&state).into_iter().map(String::from).collect(),
         n_worlds: m.n_worlds,
         goal,
     };

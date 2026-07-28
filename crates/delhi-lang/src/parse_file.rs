@@ -49,6 +49,20 @@ pub fn parse_file(src: &str, diags: &mut Diagnostics) -> Ast {
                 }
                 p.expect(&Tok::RBrace, "}", diags);
             }
+            "invariants" => {
+                while !matches!(p.peek(), Tok::RBrace | Tok::Eof) {
+                    // The entry's span runs from its first token to its last consumed
+                    // one. `Expr::span()` will not do: a parenthesised expression carries
+                    // the span of its *contents*, so quoting `!(a | b)` back to the
+                    // author would drop the closing parens.
+                    let from = p.span();
+                    let e = p.parse_expr(diags);
+                    let sp = from.merge(p.prev_span());
+                    ast.invariants.push((e, sp));
+                    p.eat(&Tok::Comma);
+                }
+                p.expect(&Tok::RBrace, "}", diags);
+            }
             "actions" => parse_actions(&mut p, &mut ast, diags),
             other => {
                 diags.push(head_span, format!("unknown section `{other}`"));

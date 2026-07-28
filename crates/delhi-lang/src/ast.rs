@@ -287,6 +287,13 @@ pub struct Ast {
     pub init: Option<Init>,
     /// `goal`, if written.
     pub goal: Option<Expr>,
+    /// `invariants` — claims that must hold in every reachable state, not only the
+    /// first. Checked when the initial state is built and after every action applied.
+    ///
+    /// An `initially` entry that drives nothing is already an assertion about the start;
+    /// an invariant is the same claim made about the whole run, which is usually what a
+    /// domain constraint means.
+    pub invariants: Vec<(Expr, Span)>,
     /// `actions`
     pub actions: Vec<ActionDecl>,
 }

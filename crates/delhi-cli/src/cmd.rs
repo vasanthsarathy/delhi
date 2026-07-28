@@ -17,11 +17,32 @@ fn open(src: &str, out: &mut String) -> Option<Problem> {
     }
 }
 
+/// Reports any invariant `state` violates. Returns whether the state was clean.
+///
+/// Written once and called from every place a state is reached, because an invariant
+/// checked only at the start is an `initially` entry wearing a different name.
+fn report_violations(p: &Problem, state: &State, when: &str, out: &mut String) -> bool {
+    let bad = p.violated(state);
+    if bad.is_empty() {
+        return true;
+    }
+    let _ = writeln!(out, "{} {when}:", style::bad("invariant violated"));
+    for text in bad {
+        let _ = writeln!(out, "  {text}");
+    }
+    false
+}
+
 /// `delhi check` — parse, ground, and validate. `0` if the file is accepted.
 pub fn cmd_check(src: &str, out: &mut String) -> i32 {
     match open(src, out) {
         None => 1,
         Some(p) => {
+            // A domain whose own constraint fails at the start is inconsistent with
+            // itself, and saying "ok" would be wrong.
+            if !report_violations(&p, &p.state, "in the initial state", out) {
+                return 1;
+            }
             let _ = writeln!(
                 out,
                 "{} {} atoms, {} agents, {} ground actions, {} worlds",
@@ -224,6 +245,12 @@ pub fn cmd_step(src: &str, actions: &[String], out: &mut String) -> i32 {
             Some(next) => {
                 state = contracted(&next);
                 let _ = writeln!(out, "{} {name}", style::dim("applied"));
+                // Checked here rather than once at the end, so the report names the
+                // action that broke it — which is the thing you need to know.
+                if !report_violations(&p, &state, &format!("after {name}"), out) {
+                    let _ = write!(out, "{}", print_state(&state, &p.sig));
+                    return 1;
+                }
             }
             None => {
                 let _ = writeln!(out, "`{name}` is not applicable in the current state");
@@ -362,6 +389,9 @@ pub fn repl_step(
                             Some(next) => {
                                 *state = contracted(&next);
                                 let _ = writeln!(out, "{} {arg}", style::dim("applied"));
+                                // Reported, not refused: exploring past a broken
+                                // invariant is often exactly what you want to do next.
+                                report_violations(p, state, &format!("after {arg}"), out);
                             }
                             None => {
                                 let _ = writeln!(out, "`{arg}` is not applicable here");
@@ -964,6 +994,55 @@ mod tests {
         let (code, out) = run(|o| cmd_ask(COIN, &[], "B[nobody] _", 0, o));
         assert_eq!(code, 2);
         assert!(out.contains("nobody"), "got: {out}");
+    }
+
+    const INV: &str = r#"
+        types{ Actor - Object } objects{ a, b - Actor } agents{ a, b } props{ p }
+        initially { p, ?[a] p, B[a] p }
+        invariants { !((B[a] p & B[b] !p) | (B[a] !p & B[b] p)) }
+        actions { lie() { actor b, announces !p, a observes, b observes } }
+    "#;
+
+    #[test]
+    fn step_names_the_action_that_broke_an_invariant() {
+        // Reporting at the end would say only "something broke it". The action's name is
+        // the thing you need, so the check runs after each apply.
+        let (code, out) = run(|o| cmd_step(INV, &["lie()".to_string()], o));
+        assert_eq!(code, 1, "a broken invariant is a failure: {out}");
+        assert!(out.contains("invariant violated after lie()"), "got: {out}");
+        assert!(out.contains("!((B[a] p"), "and quotes the constraint: {out}");
+    }
+
+    #[test]
+    fn check_accepts_a_file_whose_invariants_hold_at_the_start() {
+        // The invariant is breakable but unbroken initially, so `check` must pass —
+        // otherwise every domain with a violable constraint would be unusable.
+        let (code, out) = run(|o| cmd_check(INV, o));
+        assert_eq!(code, 0, "got: {out}");
+        assert!(out.contains("ok:"), "got: {out}");
+    }
+
+    #[test]
+    fn check_rejects_a_domain_inconsistent_with_its_own_constraint() {
+        let src = r#"
+            types{} objects{} agents{} props{ p }
+            initially { p }
+            invariants { !p }
+            actions {}
+        "#;
+        let (code, out) = run(|o| cmd_check(src, o));
+        assert_eq!(code, 1, "saying `ok` here would be wrong: {out}");
+        assert!(out.contains("in the initial state"), "got: {out}");
+    }
+
+    #[test]
+    fn the_repl_reports_a_violation_but_keeps_going() {
+        // Exploring past a broken invariant is usually the next thing you want to do,
+        // so the REPL warns rather than refusing.
+        let (outcomes, out) = repl_on(INV, &[":do lie()", "B[a] !p"]);
+        assert!(outcomes.iter().all(|o| *o == ReplOutcome::Continue));
+        assert!(out.contains("invariant violated"), "got: {out}");
+        assert!(out.contains("true"), "and the session continues: {out}");
     }
 
     #[test]
