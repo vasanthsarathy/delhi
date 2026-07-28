@@ -28,6 +28,11 @@ impl<'a> Parser<'a> {
     pub fn peek2(&self) -> &Tok {
         &self.toks[(self.pos + 1).min(self.toks.len() - 1)].tok
     }
+    /// The token `n` positions ahead of the cursor; `peek_at(0)` is [`Parser::peek`].
+    /// Clamped to the trailing `Eof`, like `peek` and `peek2`.
+    pub fn peek_at(&self, n: usize) -> &Tok {
+        &self.toks[(self.pos + n).min(self.toks.len() - 1)].tok
+    }
     /// The current token's span.
     pub fn span(&self) -> Span {
         self.toks[self.pos.min(self.toks.len() - 1)].span

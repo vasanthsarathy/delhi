@@ -286,6 +286,24 @@ fn parse_actions(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
     p.expect(&Tok::RBrace, "}", diags);
 }
 
+/// Whether the tokens right after the cursor's current comma start a new clause,
+/// rather than continuing a `causes` literal list. Every clause begins with one of
+/// the fixed keywords below, or with `<arg> observes|aware`; a bare zero-arity
+/// literal like `p` cannot be confused with either check.
+///
+/// Precondition: `p.peek()` is the comma being considered.
+fn comma_starts_new_clause(p: &Parser) -> bool {
+    debug_assert!(matches!(p.peek(), Tok::Comma), "must be called at a comma");
+    const KEYWORDS: [&str; 5] = ["actor", "pre", "causes", "determines", "announces"];
+    match p.peek_at(1) {
+        Tok::Lower(k) if KEYWORDS.contains(&k.as_str()) => true,
+        Tok::Lower(_) | Tok::Var(_) => {
+            matches!(p.peek_at(2), Tok::Lower(k2) if k2 == "observes" || k2 == "aware")
+        }
+        _ => false,
+    }
+}
+
 fn parse_clauses(p: &mut Parser, diags: &mut Diagnostics) -> Vec<Clause> {
     let mut clauses = Vec::new();
     while !matches!(p.peek(), Tok::RBrace | Tok::Eof) {
@@ -321,6 +339,14 @@ fn parse_clauses(p: &mut Parser, diags: &mut Diagnostics) -> Vec<Clause> {
                     match p.parse_expr(diags) {
                         Expr::Atom(t) => lits.push((t, !neg)),
                         other => diags.push(other.span(), "`causes` takes literals"),
+                    }
+                    // A comma normally continues the literal list, but a zero-arity
+                    // literal (e.g. `p`) is syntactically identical to a bare object
+                    // name, so `causes p, a observes` would otherwise swallow `a` as
+                    // a second literal. Stop instead when what follows the comma is
+                    // the start of a fresh clause.
+                    if matches!(p.peek(), Tok::Comma) && comma_starts_new_clause(p) {
+                        break;
                     }
                     if !p.eat(&Tok::Comma) {
                         break;
