@@ -77,6 +77,10 @@ fn main() {
                 c
             }
         },
+        Some("repl") if args.len() == 2 => match read(&args[1]) {
+            Err(c) => c,
+            Ok(src) => cmd::cmd_repl(&src),
+        },
         _ => usage(),
     };
     std::process::exit(code);

@@ -161,6 +161,129 @@ pub fn cmd_dot(src: &str, out: &mut String) -> i32 {
     0
 }
 
+use delhi_mb::State;
+
+/// Whether the interactive loop should keep going.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ReplOutcome {
+    /// Read another line.
+    Continue,
+    /// Stop.
+    Quit,
+}
+
+/// Handles one line of interactive input. Pure, so the loop can be tested without a
+/// terminal — the reason command handling is separated from the loop at all.
+pub fn repl_step(
+    p: &mut Problem,
+    state: &mut State,
+    line: &str,
+    out: &mut String,
+) -> ReplOutcome {
+    let line = line.trim();
+    if line.is_empty() {
+        return ReplOutcome::Continue;
+    }
+    if let Some(rest) = line.strip_prefix(':') {
+        let (cmd, arg) = match rest.split_once(char::is_whitespace) {
+            Some((c, a)) => (c, a.trim()),
+            None => (rest, ""),
+        };
+        match cmd {
+            "quit" | "q" => return ReplOutcome::Quit,
+            "show" => {
+                let _ = write!(out, "{}", print_state(state, &p.sig));
+            }
+            "reset" => {
+                *state = p.state.clone();
+                let _ = writeln!(out, "reset to the initial state");
+            }
+            "actions" => {
+                let mut names: Vec<&str> = p.actions.iter().map(|a| a.name.as_str()).collect();
+                names.sort_unstable();
+                let _ = writeln!(out, "{}", names.join("\n"));
+            }
+            "do" => {
+                let n_agents = p.sig.n_agents();
+                match p.actions.iter().find(|a| a.name == arg) {
+                    None => {
+                        let _ = writeln!(out, "no action `{arg}`; try :actions");
+                    }
+                    Some(g) => {
+                        let def = g.def.clone();
+                        let model = delhi_mb::build(&def, &mut p.store, n_agents);
+                        match state.apply(&p.store, &model) {
+                            Some(next) => {
+                                *state = next;
+                                let _ = writeln!(out, "applied {arg}");
+                            }
+                            None => {
+                                let _ = writeln!(out, "`{arg}` is not applicable here");
+                            }
+                        }
+                    }
+                }
+            }
+            "help" | "h" => {
+                let _ = writeln!(
+                    out,
+                    "<formula>     evaluate in the current state\n\
+                     :do <action>  apply an action\n\
+                     :actions      list the ground actions\n\
+                     :show         print the current state\n\
+                     :reset        return to the initial state\n\
+                     :quit         exit"
+                );
+            }
+            other => {
+                let _ = writeln!(out, "unknown command `:{other}` — try :help");
+            }
+        }
+        return ReplOutcome::Continue;
+    }
+
+    match parse_query(p, line) {
+        Ok(f) => {
+            let _ = writeln!(out, "{}", state.entails(&p.store, f));
+        }
+        Err(e) => {
+            let _ = write!(out, "{e}");
+        }
+    }
+    ReplOutcome::Continue
+}
+
+/// `delhi repl` — the interactive loop.
+pub fn cmd_repl(src: &str) -> i32 {
+    let mut buf = String::new();
+    let Some(mut p) = open(src, &mut buf) else {
+        print!("{buf}");
+        return 1;
+    };
+    let mut state = p.state.clone();
+    println!("delhi — :help for commands, :quit to exit");
+    loop {
+        use std::io::Write as _;
+        print!("> ");
+        let _ = std::io::stdout().flush();
+        let mut line = String::new();
+        match std::io::stdin().read_line(&mut line) {
+            Ok(0) => return 0, // EOF
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("{e}");
+                return 1;
+            }
+        }
+        let mut out = String::new();
+        let outcome = repl_step(&mut p, &mut state, &line, &mut out);
+        print!("{out}");
+        if outcome == ReplOutcome::Quit {
+            return 0;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -282,5 +405,59 @@ mod tests {
                 "reflexive edges must not be drawn:\n{out}"
             );
         }
+    }
+
+    fn repl_on(src: &str, lines: &[&str]) -> (Vec<ReplOutcome>, String) {
+        let mut p = Problem::parse(src).expect("parses");
+        let mut state = p.state.clone();
+        let mut out = String::new();
+        let mut outcomes = Vec::new();
+        for l in lines {
+            outcomes.push(repl_step(&mut p, &mut state, l, &mut out));
+        }
+        (outcomes, out)
+    }
+
+    #[test]
+    fn repl_evaluates_a_bare_formula() {
+        let (o, out) = repl_on(COIN, &["B[a] h"]);
+        assert_eq!(o, vec![ReplOutcome::Continue]);
+        assert!(out.contains("true"), "got: {out}");
+    }
+
+    #[test]
+    fn repl_applies_an_action_and_the_state_persists() {
+        // After `tell()` announces !h, a should believe !h rather than h.
+        let (_, out) = repl_on(COIN, &[":do tell()", "B[a] h", "B[a] !h"]);
+        let lines: Vec<&str> = out.lines().filter(|l| *l == "true" || *l == "false").collect();
+        assert_eq!(lines, vec!["false", "true"], "the applied action must persist; got:\n{out}");
+    }
+
+    #[test]
+    fn repl_reset_returns_to_the_initial_state() {
+        let (_, out) = repl_on(COIN, &[":do tell()", ":reset", "B[a] h"]);
+        assert!(out.lines().any(|l| l == "true"), "after reset a believes h again:\n{out}");
+    }
+
+    #[test]
+    fn repl_quit_stops_and_unknown_commands_do_not() {
+        let (o, _) = repl_on(COIN, &[":quit"]);
+        assert_eq!(o, vec![ReplOutcome::Quit]);
+        let (o, out) = repl_on(COIN, &[":nonsense"]);
+        assert_eq!(o, vec![ReplOutcome::Continue]);
+        assert!(out.contains(":help"), "an unknown command should point at help");
+    }
+
+    #[test]
+    fn repl_reports_a_bad_formula_without_stopping() {
+        let (o, out) = repl_on(COIN, &["K[nobody] h"]);
+        assert_eq!(o, vec![ReplOutcome::Continue], "a bad query must not end the session");
+        assert!(out.contains("nobody"));
+    }
+
+    #[test]
+    fn repl_lists_the_available_actions() {
+        let (_, out) = repl_on(COIN, &[":actions"]);
+        assert!(out.contains("tell()") && out.contains("look()"));
     }
 }
