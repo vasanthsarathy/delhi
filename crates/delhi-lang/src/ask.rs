@@ -102,9 +102,7 @@ fn fill(pattern: &Expr, filler: &Expr) -> Expr {
         Expr::Hole(_) => filler.clone(),
         Expr::True(_) | Expr::False(_) | Expr::Atom(_) => pattern.clone(),
         Expr::Not(a, s) => Expr::Not(Box::new(fill(a, filler)), *s),
-        Expr::And(a, b, s) => {
-            Expr::And(Box::new(fill(a, filler)), Box::new(fill(b, filler)), *s)
-        }
+        Expr::And(a, b, s) => Expr::And(Box::new(fill(a, filler)), Box::new(fill(b, filler)), *s),
         Expr::Or(a, b, s) => Expr::Or(Box::new(fill(a, filler)), Box::new(fill(b, filler)), *s),
         Expr::Implies(a, b, s) => {
             Expr::Implies(Box::new(fill(a, filler)), Box::new(fill(b, filler)), *s)
@@ -190,12 +188,7 @@ fn complement(candidate: &str) -> String {
 /// `pattern` must contain [`HOLE`]. Returns rendered diagnostics if the pattern does not
 /// parse or does not lower once filled — checked on the first candidate, so a typo is
 /// reported as itself rather than as an empty answer.
-pub fn ask(
-    p: &mut Problem,
-    state: &State,
-    pattern: &str,
-    depth: usize,
-) -> Result<Answer, String> {
+pub fn ask(p: &mut Problem, state: &State, pattern: &str, depth: usize) -> Result<Answer, String> {
     let (pat, mut diags) = parse(pattern);
     if !diags.is_empty() {
         return Err(diags.render(pattern));
@@ -225,14 +218,8 @@ pub fn ask(
     // mistake and must surface as its own diagnostic, not as "nothing matched".
     let mut probe = Diagnostics::default();
     let first = fill(&pat, &parsed[0]);
-    let _ = lower_formula(
-        &first,
-        &p.sig,
-        &p.consts,
-        &Bindings::default(),
-        &mut p.store,
-        &mut probe,
-    );
+    let _ =
+        lower_formula(&first, &p.sig, &p.consts, &Bindings::default(), &mut p.store, &mut probe);
     if !probe.is_empty() {
         return Err(probe.render(pattern));
     }
@@ -341,8 +328,11 @@ mod tests {
         let (mut p, s) = problem(COIN);
         let ignorant = ask(&mut p, &s, "?[a] _", 0).expect("valid pattern");
         assert!(ignorant.matches.iter().any(|m| m.contains("(h)")), "got {:?}", ignorant.matches);
-        assert!(!ignorant.matches.iter().any(|m| m.contains("(!h)")),
-                "the negated twin is redundant: {:?}", ignorant.matches);
+        assert!(
+            !ignorant.matches.iter().any(|m| m.contains("(!h)")),
+            "the negated twin is redundant: {:?}",
+            ignorant.matches
+        );
     }
 
     #[test]

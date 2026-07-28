@@ -90,9 +90,10 @@ impl Problem {
             }
         };
 
-        let goal = ast.goal.as_ref().map(|g| {
-            lower_formula(g, &sig, &consts, &Bindings::default(), &mut store, &mut diags)
-        });
+        let goal = ast
+            .goal
+            .as_ref()
+            .map(|g| lower_formula(g, &sig, &consts, &Bindings::default(), &mut store, &mut diags));
 
         let invariants: Vec<(FormulaId, String)> = ast
             .invariants
@@ -149,7 +150,6 @@ impl Problem {
             .collect()
     }
 }
-
 
 /// Reads and parses a file from disk. Read errors are reported with the path, so a
 /// missing file reads the same way as a malformed one.
@@ -209,10 +209,8 @@ mod tests {
 
     #[test]
     fn a_file_with_no_invariants_section_has_none_and_violates_nothing() {
-        let p = Problem::parse(
-            r#"types{} objects{} agents{} props{ p } initially{ p } actions{}"#,
-        )
-        .unwrap_or_else(|e| panic!("{e}"));
+        let p = Problem::parse(r#"types{} objects{} agents{} props{ p } initially{ p } actions{}"#)
+            .unwrap_or_else(|e| panic!("{e}"));
         assert!(p.invariants.is_empty());
         assert!(p.violated(&p.state).is_empty());
     }

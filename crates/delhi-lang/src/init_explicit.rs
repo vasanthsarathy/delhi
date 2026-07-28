@@ -38,19 +38,12 @@ pub fn build_explicit(
         }
     }
 
-    let designated: Vec<usize> = worlds
-        .iter()
-        .enumerate()
-        .filter(|(_, w)| w.designated)
-        .map(|(i, _)| i)
-        .collect();
+    let designated: Vec<usize> =
+        worlds.iter().enumerate().filter(|(_, w)| w.designated).map(|(i, _)| i).collect();
     if designated.len() != 1 {
         diags.push(
             block,
-            format!(
-                "exactly one world must be designated with `*`; found {}",
-                designated.len()
-            ),
+            format!("exactly one world must be designated with `*`; found {}", designated.len()),
         );
         return None;
     }
@@ -84,8 +77,7 @@ pub fn build_explicit(
             diags.push(e.span, format!("`{}` is not a declared agent", e.agent));
             continue;
         };
-        let (Some(&from), Some(&to)) =
-            (index.get(e.from.as_str()), index.get(e.to.as_str()))
+        let (Some(&from), Some(&to)) = (index.get(e.from.as_str()), index.get(e.to.as_str()))
         else {
             for name in [&e.from, &e.to] {
                 if !index.contains_key(name.as_str()) {
@@ -198,22 +190,28 @@ mod tests {
 
     #[test]
     fn tilde_adds_both_directions() {
-        let (sig, _, st) = build(r#"
+        let (sig, _, st) = build(
+            r#"
             types{ Actor - Object } objects{ a - Actor } agents{ a } props{ h }
             state { *u <- { h }, v <- { }, a: u ~ v }
             actions{}
-        "#).expect("should build");
+        "#,
+        )
+        .expect("should build");
         let a = sig.agent_id("a").unwrap() as usize;
         assert!(st.model.rel[a][0].get(1) && st.model.rel[a][1].get(0));
     }
 
     #[test]
     fn the_relation_is_transitively_closed() {
-        let (sig, _, st) = build(r#"
+        let (sig, _, st) = build(
+            r#"
             types{ Actor - Object } objects{ a - Actor } agents{ a } props{ p, q }
             state { *u <- { }, v <- { p }, w <- { q }, a: u <= v, a: v <= w }
             actions{}
-        "#).expect("should build");
+        "#,
+        )
+        .expect("should build");
         let a = sig.agent_id("a").unwrap() as usize;
         assert!(st.model.rel[a][0].get(2), "u <= v <= w implies u <= w");
         assert_eq!(st.model.validate(), Ok(()));
@@ -222,45 +220,60 @@ mod tests {
     #[test]
     fn strict_edges_whose_converse_is_derivable_are_rejected() {
         // `a: u < v` together with `a: v ~ u` is contradictory.
-        let err = build(r#"
+        let err = build(
+            r#"
             types{ Actor - Object } objects{ a - Actor } agents{ a } props{ p }
             state { *u <- { }, v <- { p }, a: u < v, a: v ~ u }
             actions{}
-        "#).unwrap_err();
+        "#,
+        )
+        .unwrap_err();
         assert!(err.contains("strict"), "expected a strictness complaint, got:\n{err}");
     }
 
     #[test]
     fn exactly_one_designated_world_is_required() {
-        let none = build(r#"
+        let none = build(
+            r#"
             types{ Actor - Object } objects{ a - Actor } agents{ a } props{ p }
             state { u <- { }, v <- { p } }
             actions{}
-        "#).unwrap_err();
+        "#,
+        )
+        .unwrap_err();
         assert!(none.contains("designated"));
 
-        let two = build(r#"
+        let two = build(
+            r#"
             types{ Actor - Object } objects{ a - Actor } agents{ a } props{ p }
             state { *u <- { }, *v <- { p } }
             actions{}
-        "#).unwrap_err();
+        "#,
+        )
+        .unwrap_err();
         assert!(two.contains("designated"));
     }
 
     #[test]
     fn unknown_world_and_agent_names_are_reported() {
-        let err = build(r#"
+        let err = build(
+            r#"
             types{ Actor - Object } objects{ a - Actor } agents{ a } props{ p }
             state { *u <- { }, a: u ~ nosuch }
             actions{}
-        "#).unwrap_err();
+        "#,
+        )
+        .unwrap_err();
         assert!(err.contains("nosuch"));
 
-        let err = build(r#"
+        let err = build(
+            r#"
             types{ Actor - Object } objects{ a - Actor } agents{ a } props{ p }
             state { *u <- { }, v <- { p }, ghost: u ~ v }
             actions{}
-        "#).unwrap_err();
+        "#,
+        )
+        .unwrap_err();
         assert!(err.contains("ghost"));
     }
 
@@ -279,19 +292,24 @@ mod tests {
     #[test]
     fn a_frame_that_is_not_locally_connected_is_rejected() {
         // u and v both reach w but cannot be compared with each other.
-        let err = build(r#"
+        let err = build(
+            r#"
             types{ Actor - Object } objects{ a - Actor } agents{ a } props{ p, q }
             state { *u <- { }, v <- { p }, w <- { q }, a: u <= w, a: v <= w }
             actions{}
-        "#).unwrap_err();
+        "#,
+        )
+        .unwrap_err();
         // Name the variant, not the sentence. Every rejection in `build_explicit` that
         // reaches `validate` renders as "the declared frame is invalid: {e:?}", so
         // `contains("frame")` is true for *any* frame failure — reflexivity,
         // transitivity, or connectedness — and the old `connected || frame` disjunct
         // could never discriminate. `{e:?}` prints the `FrameError` variant, so
         // matching on `NotLocallyConnected` pins it to the condition this test names.
-        assert!(err.contains("NotLocallyConnected"),
-                "expected a local-connectedness complaint, got:\n{err}");
+        assert!(
+            err.contains("NotLocallyConnected"),
+            "expected a local-connectedness complaint, got:\n{err}"
+        );
     }
 
     #[test]
@@ -299,13 +317,18 @@ mod tests {
         // The undeclared object has to be named. Reporting only "no proposition
         // `at(bogus)`" sends the author looking at the `props` declaration, which is
         // fine — the fault is in `objects`.
-        let err = build(r#"
+        let err = build(
+            r#"
             types{ Location - Object } objects{ hall - Location } agents{ } props{ at(Location) }
             state { *u <- { at(bogus) } }
             actions{}
-        "#).unwrap_err();
-        assert!(err.contains("`bogus` is not a declared object"),
-                "the undeclared object must be named as such, got:\n{err}");
+        "#,
+        )
+        .unwrap_err();
+        assert!(
+            err.contains("`bogus` is not a declared object"),
+            "the undeclared object must be named as such, got:\n{err}"
+        );
     }
 
     #[test]
@@ -344,12 +367,17 @@ mod tests {
     fn an_unknown_predicate_in_a_world_s_facts_is_reported() {
         // The arguments resolve cleanly, so this reaches `atom_id` and must still be
         // caught there — the shared `resolve_args` must not swallow the case.
-        let err = build(r#"
+        let err = build(
+            r#"
             types{ Location - Object } objects{ hall - Location } agents{ } props{ at(Location) }
             state { *u <- { nosuch(hall) } }
             actions{}
-        "#).unwrap_err();
-        assert!(err.contains("no proposition `nosuch(hall)`"),
-                "an unknown predicate must still be reported, got:\n{err}");
+        "#,
+        )
+        .unwrap_err();
+        assert!(
+            err.contains("no proposition `nosuch(hall)`"),
+            "an unknown predicate must still be reported, got:\n{err}"
+        );
     }
 }

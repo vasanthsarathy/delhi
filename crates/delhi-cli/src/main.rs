@@ -109,21 +109,19 @@ fn main() {
             0
         }
         Some("gui") => cmd_gui(&args[1..]),
-        Some("check") | Some("show") | Some("state") if args.len() == 2 => {
-            match read(&args[1]) {
-                Err(c) => c,
-                Ok(src) => {
-                    let mut out = String::new();
-                    let c = match args[0].as_str() {
-                        "check" => cmd::cmd_check(&src, &mut out),
-                        "state" => cmd::cmd_state(&src, &mut out),
-                        _ => cmd::cmd_show(&src, &mut out),
-                    };
-                    print!("{out}");
-                    c
-                }
+        Some("check") | Some("show") | Some("state") if args.len() == 2 => match read(&args[1]) {
+            Err(c) => c,
+            Ok(src) => {
+                let mut out = String::new();
+                let c = match args[0].as_str() {
+                    "check" => cmd::cmd_check(&src, &mut out),
+                    "state" => cmd::cmd_state(&src, &mut out),
+                    _ => cmd::cmd_show(&src, &mut out),
+                };
+                print!("{out}");
+                c
             }
-        }
+        },
         Some("eval") if args.len() == 4 && args[2] == "-f" => match read(&args[1]) {
             Err(c) => c,
             Ok(src) => {

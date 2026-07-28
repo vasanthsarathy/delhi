@@ -138,10 +138,7 @@ mod tests {
             observes: vec![(0, t)],
             aware: vec![(0, t)],
         };
-        assert_eq!(
-            a.validate(&s),
-            Err(TheoryError::ObserverClassOverlap { agent: 0 })
-        );
+        assert_eq!(a.validate(&s), Err(TheoryError::ObserverClassOverlap { agent: 0 }));
     }
 
     #[test]

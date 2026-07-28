@@ -67,7 +67,6 @@ fn relower(body: &Expr, ctx: &Ctx, binds: &Bindings, store: &mut Store) -> Formu
     f
 }
 
-
 /// Builds the initial state from a declarative block, then verifies every entry.
 ///
 /// Facts fix the designated world's valuation; `?[a] p` entries decide which atoms
@@ -146,7 +145,9 @@ pub fn build_declarative(
                     Some(a) => {
                         drove[k] = true;
                         uncertain.extend(
-                            resolve_agents(names, ctx.sig, &Bindings::default(), *span, diags).into_iter().map(|i| (i, a)),
+                            resolve_agents(names, ctx.sig, &Bindings::default(), *span, diags)
+                                .into_iter()
+                                .map(|i| (i, a)),
                         );
                     }
                     None => diags.push(
@@ -161,8 +162,11 @@ pub fn build_declarative(
                 // Only propositional bodies can rank worlds before the model exists.
                 if is_propositional(store, f) {
                     drove[k] = true;
-                    beliefs
-                        .extend(resolve_agents(names, ctx.sig, &Bindings::default(), *span, diags).into_iter().map(|i| (i, f)));
+                    beliefs.extend(
+                        resolve_agents(names, ctx.sig, &Bindings::default(), *span, diags)
+                            .into_iter()
+                            .map(|i| (i, f)),
+                    );
                 }
             }
             _ => { /* assertion only */ }
@@ -209,11 +213,8 @@ pub fn build_declarative(
     model.val.clone_from(&vals);
 
     for i in 0..n_agents {
-        let iu: Vec<AtomId> = uncertain
-            .iter()
-            .filter(|(a, _)| *a as usize == i)
-            .map(|(_, at)| *at)
-            .collect();
+        let iu: Vec<AtomId> =
+            uncertain.iter().filter(|(a, _)| *a as usize == i).map(|(_, at)| *at).collect();
         // Score: how many of `i`'s belief declarations hold at each world.
         let score: Vec<usize> = vals
             .iter()

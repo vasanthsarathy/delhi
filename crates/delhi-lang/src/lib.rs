@@ -1,8 +1,11 @@
 //! The delhi surface language: lexer, parser, grounding, and lowering to `delhi-mb`.
 #![deny(missing_docs)]
 
+pub mod ask;
 pub mod ast;
+pub mod attitudes;
 pub mod constants;
+pub mod expand;
 pub mod ground;
 pub mod init_decl;
 pub mod init_explicit;
@@ -11,16 +14,16 @@ pub mod lower_action;
 pub mod lower_formula;
 pub mod parse_expr;
 pub mod parse_file;
-pub mod ask;
-pub mod attitudes;
-pub mod expand;
-pub mod rules;
 pub mod print;
 pub mod problem;
+pub mod rules;
 pub mod span;
 
+pub use ask::{ask, modal_literals, Answer};
 pub use ast::{Arg, Ast, Expr, Modal, Term};
+pub use attitudes::{state_view, AgentView, StateView};
 pub use constants::Constants;
+pub use expand::{expand, expand_ast, Defs};
 pub use ground::{atom_key, Sig};
 pub use init_decl::build_declarative;
 pub use init_explicit::build_explicit;
@@ -30,8 +33,5 @@ pub use lower_formula::{lower_formula, Bindings};
 pub use parse_expr::Parser;
 pub use parse_file::parse_file;
 pub use print::print_state;
-pub use ask::{ask, modal_literals, Answer};
-pub use attitudes::{state_view, AgentView, StateView};
-pub use expand::{expand, expand_ast, Defs};
 pub use problem::{load, Problem};
 pub use span::{Diagnostic, Diagnostics, Located, Span};

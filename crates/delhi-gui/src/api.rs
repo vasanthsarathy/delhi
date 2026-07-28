@@ -150,13 +150,7 @@ fn faults_of(diags: &delhi_lang::Diagnostics, src: &str) -> Vec<Fault> {
     diags
         .located(src)
         .into_iter()
-        .map(|l| Fault {
-            line: l.line,
-            col: l.col,
-            start: l.start,
-            end: l.end,
-            message: l.message,
-        })
+        .map(|l| Fault { line: l.line, col: l.col, start: l.start, end: l.end, message: l.message })
         .collect()
 }
 
@@ -378,14 +372,24 @@ mod tests {
         assert!(carol["knows"].as_array().unwrap().iter().all(|k| k != "h"));
         // Two worlds, one designated, and an edge to draw between them.
         assert_eq!(v["worlds"].as_array().unwrap().len(), 2);
-        assert_eq!(v["worlds"].as_array().unwrap().iter().filter(|w| w["designated"] == true).count(), 1);
+        assert_eq!(
+            v["worlds"].as_array().unwrap().iter().filter(|w| w["designated"] == true).count(),
+            1
+        );
         // `d` is false in both worlds, so it says nothing about which world you are in
         // and must not clutter the label; `h` is the one that differs.
-        let labels: Vec<&str> = v["worlds"].as_array().unwrap()
-            .iter().flat_map(|w| w["label"].as_array().unwrap())
-            .map(|s| s.as_str().unwrap()).collect();
+        let labels: Vec<&str> = v["worlds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|w| w["label"].as_array().unwrap())
+            .map(|s| s.as_str().unwrap())
+            .collect();
         assert!(labels.contains(&"h") && labels.contains(&"!h"), "got {labels:?}");
-        assert!(!labels.iter().any(|l| l.contains('d')), "invariant atoms must be dropped: {labels:?}");
+        assert!(
+            !labels.iter().any(|l| l.contains('d')),
+            "invariant atoms must be dropped: {labels:?}"
+        );
         assert_eq!(v["edges"].as_array().unwrap().len(), 1);
         assert_eq!(v["actions"].as_array().unwrap().len(), 3);
     }
@@ -408,8 +412,7 @@ mod tests {
         // Twelve actions uncontracted is 8192 worlds — unreadable as a picture and slow
         // to produce. The quotient keeps it at 16.
         let cycle = ["announce_not_heads()", "distract_a()", "peek_c()"];
-        let trace: Vec<String> =
-            cycle.iter().cycle().take(12).map(|s| s.to_string()).collect();
+        let trace: Vec<String> = cycle.iter().cycle().take(12).map(|s| s.to_string()).collect();
         let v = json(&state(COIN, &trace));
         assert_eq!(v["ok"], true);
         let n = v["n_worlds"].as_u64().unwrap();
@@ -418,7 +421,8 @@ mod tests {
 
     #[test]
     fn a_rejected_file_carries_its_diagnostics_rather_than_failing_silently() {
-        let v = json(&state("types{} objects{} agents{ ghost } props{} initially{} actions{}", &[]));
+        let v =
+            json(&state("types{} objects{} agents{ ghost } props{} initially{} actions{}", &[]));
         assert_eq!(v["ok"], false);
         assert!(v["error"].as_str().unwrap().contains("ghost"));
     }
@@ -457,12 +461,14 @@ mod tests {
             .collect();
         let v = json(&ask(COIN, &trace, "B[alice] B[carol] _", 0));
         assert_eq!(v["ok"], true);
-        let ms: Vec<&str> = v["matches"].as_array().unwrap().iter().map(|m| m.as_str().unwrap()).collect();
+        let ms: Vec<&str> =
+            v["matches"].as_array().unwrap().iter().map(|m| m.as_str().unwrap()).collect();
         assert!(ms.iter().any(|m| m.contains("(!h)")), "got {ms:?}");
         assert!(!ms.contains(&"B[alice] B[carol] (h)"), "got {ms:?}");
 
         let before = json(&ask(COIN, &[], "B[alice] B[carol] _", 0));
-        let bs: Vec<&str> = before["matches"].as_array().unwrap().iter().map(|m| m.as_str().unwrap()).collect();
+        let bs: Vec<&str> =
+            before["matches"].as_array().unwrap().iter().map(|m| m.as_str().unwrap()).collect();
         assert!(!bs.iter().any(|m| m.contains("(!h)")), "not yet true initially: {bs:?}");
     }
 

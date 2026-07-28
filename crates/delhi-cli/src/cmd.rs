@@ -88,7 +88,13 @@ fn attitudes(p: &mut Problem, state: &State) -> String {
 }
 
 /// Runs an enumeration and formats it, shared by `delhi ask` and the REPL's `:ask`.
-fn render_ask(p: &mut Problem, state: &State, pattern: &str, depth: usize, out: &mut String) -> i32 {
+fn render_ask(
+    p: &mut Problem,
+    state: &State,
+    pattern: &str,
+    depth: usize,
+    out: &mut String,
+) -> i32 {
     match delhi_lang::ask(p, state, pattern, depth) {
         Err(e) => {
             // Rendered diagnostics already end in a newline; the one-line usage errors
@@ -105,7 +111,11 @@ fn render_ask(p: &mut Problem, state: &State, pattern: &str, depth: usize, out: 
                 "{} of {} candidates at depth {depth}{}",
                 a.matches.len(),
                 a.considered,
-                if a.truncated { " (truncated — lower the depth for a complete answer)" } else { "" }
+                if a.truncated {
+                    " (truncated — lower the depth for a complete answer)"
+                } else {
+                    ""
+                }
             );
             let _ = writeln!(out, "{}", style::dim(&note));
             i32::from(a.matches.is_empty())
@@ -117,7 +127,13 @@ fn render_ask(p: &mut Problem, state: &State, pattern: &str, depth: usize, out: 
 ///
 /// Exit code is `0` when something matched and `1` when nothing did, so a shell can
 /// branch on "is this agent ignorant of anything at all".
-pub fn cmd_ask(src: &str, actions: &[String], pattern: &str, depth: usize, out: &mut String) -> i32 {
+pub fn cmd_ask(
+    src: &str,
+    actions: &[String],
+    pattern: &str,
+    depth: usize,
+    out: &mut String,
+) -> i32 {
     let Some(mut p) = open(src, out) else {
         return 1;
     };
@@ -317,12 +333,7 @@ pub enum ReplOutcome {
 
 /// Handles one line of interactive input. Pure, so the loop can be tested without a
 /// terminal — the reason command handling is separated from the loop at all.
-pub fn repl_step(
-    p: &mut Problem,
-    state: &mut State,
-    line: &str,
-    out: &mut String,
-) -> ReplOutcome {
+pub fn repl_step(p: &mut Problem, state: &mut State, line: &str, out: &mut String) -> ReplOutcome {
     let line = line.trim();
     if line.is_empty() {
         return ReplOutcome::Continue;

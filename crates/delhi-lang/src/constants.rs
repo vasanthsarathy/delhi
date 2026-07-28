@@ -206,8 +206,10 @@ mod tests {
         let ast = parse_file(src, &mut d);
         let sig = Sig::build(&ast, &mut d);
         let _ = Constants::build(&ast, &sig, &mut d);
-        assert!(d.items().iter().any(|x| x.message.contains("both")),
-                "should reject a name declared as both a constant and a proposition");
+        assert!(
+            d.items().iter().any(|x| x.message.contains("both")),
+            "should reject a name declared as both a constant and a proposition"
+        );
     }
 
     #[test]

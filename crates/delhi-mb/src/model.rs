@@ -182,10 +182,7 @@ mod tests {
         m.relate(0, 0, 1);
         m.relate(0, 1, 2);
         // 0 R 2 is missing
-        assert_eq!(
-            m.validate(),
-            Err(FrameError::NotTransitive { agent: 0, u: 0, v: 1, w: 2 })
-        );
+        assert_eq!(m.validate(), Err(FrameError::NotTransitive { agent: 0, u: 0, v: 1, w: 2 }));
     }
 
     #[test]

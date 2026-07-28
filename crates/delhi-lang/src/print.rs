@@ -71,7 +71,7 @@ pub fn print_state(st: &State, sig: &Sig) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{parse_file, build_explicit, Constants, Ctx, Diagnostics, Sig};
+    use crate::{build_explicit, parse_file, Constants, Ctx, Diagnostics, Sig};
     use delhi_syntax::Store;
 
     const HEADER: &str = r#"
@@ -126,8 +126,10 @@ mod tests {
         // for that name rather than the source name `u`.
         let (sig, st) = build("state { *u <- { h } }");
         let out = print_state(&st, &sig);
-        assert!(!out.contains("w0 ~ w0") && !out.contains("w0 <= w0") && !out.contains("w0 < w0"),
-                "reflexive edges are implicit:\n{out}");
+        assert!(
+            !out.contains("w0 ~ w0") && !out.contains("w0 <= w0") && !out.contains("w0 < w0"),
+            "reflexive edges are implicit:\n{out}"
+        );
     }
 
     #[test]

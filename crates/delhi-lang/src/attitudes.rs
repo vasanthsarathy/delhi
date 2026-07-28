@@ -63,9 +63,7 @@ pub fn state_view(p: &mut Problem, state: &State) -> StateView {
         }
     };
 
-    let facts = (0..n_atoms)
-        .map(|a| signed(a, state.model.val[state.designated].get(a)))
-        .collect();
+    let facts = (0..n_atoms).map(|a| signed(a, state.model.val[state.designated].get(a))).collect();
 
     let mut agents = Vec::with_capacity(n_agents);
     for (i, agent) in agent_names.iter().enumerate() {
@@ -142,11 +140,13 @@ mod tests {
         // Uncertainty with no belief declaration leaves both worlds maximal, so the
         // agent believes neither h nor !h. Without this branch such a proposition would
         // vanish from the report entirely rather than being called out.
-        let v = view(r#"
+        let v = view(
+            r#"
             types{ Actor - Object } objects{ a - Actor } agents{ a } props{ h }
             initially { h, ?[a] h }
             actions {}
-        "#);
+        "#,
+        );
         assert_eq!(v.agents[0].undecided, vec!["h"]);
         assert!(v.agents[0].knows.is_empty() && v.agents[0].believes.is_empty());
     }
@@ -156,11 +156,13 @@ mod tests {
         // `d` is false everywhere, so both the facts line and the attitudes must carry
         // `!d`. Reporting only the true propositions would make a state that knows a lot
         // look like one that knows little.
-        let v = view(r#"
+        let v = view(
+            r#"
             types{ Actor - Object } objects{ a - Actor } agents{ a } props{ h, d }
             initially { h }
             actions {}
-        "#);
+        "#,
+        );
         assert!(v.facts.contains(&"!d".to_string()), "got {:?}", v.facts);
         assert!(v.agents[0].knows.contains(&"!d".to_string()), "got {:?}", v.agents[0]);
     }

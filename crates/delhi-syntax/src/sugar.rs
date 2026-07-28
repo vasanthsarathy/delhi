@@ -120,13 +120,22 @@ mod tests {
         let p = s.atom(0);
         let np = s.not(p);
 
-        let expect_k = { let k = s.knows(0, np); s.not(k) };
+        let expect_k = {
+            let k = s.knows(0, np);
+            s.not(k)
+        };
         assert_eq!(s.considers_possible(0, p), expect_k, "K'[a]p is !K[a]!p");
 
-        let expect_b = { let b = s.believes(0, np); s.not(b) };
+        let expect_b = {
+            let b = s.believes(0, np);
+            s.not(b)
+        };
         assert_eq!(s.not_ruled_out(0, p), expect_b, "B'[a]p is !B[a]!p");
 
-        let expect_s = { let sf = s.safe(0, np); s.not(sf) };
+        let expect_s = {
+            let sf = s.safe(0, np);
+            s.not(sf)
+        };
         assert_eq!(s.safe_dual(0, p), expect_s, "S'[a]p is ![][a]!p");
     }
 
@@ -135,7 +144,11 @@ mod tests {
         let mut s = Store::default();
         let p = s.atom(0);
         let np = s.not(p);
-        let expect_bw = { let a = s.believes(0, p); let b = s.believes(0, np); s.or(a, b) };
+        let expect_bw = {
+            let a = s.believes(0, p);
+            let b = s.believes(0, np);
+            s.or(a, b)
+        };
         assert_eq!(s.believes_whether(0, p), expect_bw);
         let bw = s.believes_whether(0, p);
         let expect_un = s.not(bw);
@@ -146,7 +159,11 @@ mod tests {
     fn believes_all_distributes_over_agents() {
         let mut s = Store::default();
         let p = s.atom(0);
-        let expect = { let a = s.believes(0, p); let b = s.believes(1, p); s.and(a, b) };
+        let expect = {
+            let a = s.believes(0, p);
+            let b = s.believes(1, p);
+            s.and(a, b)
+        };
         assert_eq!(s.believes_all(&[0, 1], p), expect);
     }
 }

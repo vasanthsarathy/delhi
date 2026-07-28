@@ -22,12 +22,7 @@ impl State {
     /// Product update under the chosen rule. Returns `None` when the action is not
     /// applicable, i.e. when the designated world satisfies no designated event's
     /// precondition, or more than one.
-    pub fn apply_with(
-        &self,
-        store: &Store,
-        am: &ActionModel,
-        rule: UpdateRule,
-    ) -> Option<State> {
+    pub fn apply_with(&self, store: &Store, am: &ActionModel, rule: UpdateRule) -> Option<State> {
         let m = &self.model;
         let mut ev = Evaluator::new(store, m);
 
@@ -80,7 +75,12 @@ impl State {
         }
 
         // Q(e,f)(i) evaluated at BOTH u and v (§4.5).
-        let arrow = |evaluator: &mut Evaluator, i: usize, e: usize, f: usize, u: usize, v: usize| {
+        let arrow = |evaluator: &mut Evaluator,
+                     i: usize,
+                     e: usize,
+                     f: usize,
+                     u: usize,
+                     v: usize| {
             match am.q[i][e][f] {
                 None => false,
                 Some(cond) => evaluator.eval(cond, u) && evaluator.eval(cond, v),

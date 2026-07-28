@@ -101,10 +101,8 @@ pub(crate) fn resolve_args(
                 }
             },
             Arg::Ty(t) => {
-                diags.push(
-                    term.span,
-                    format!("type name `{t}` is only allowed inside `constants`"),
-                );
+                diags
+                    .push(term.span, format!("type name `{t}` is only allowed inside `constants`"));
                 return None;
             }
         }
@@ -233,7 +231,11 @@ pub fn lower_formula(
                 let mask: u32 = match agents {
                     None => {
                         let n = sig.n_agents();
-                        if n >= 32 { u32::MAX } else { (1u32 << n) - 1 }
+                        if n >= 32 {
+                            u32::MAX
+                        } else {
+                            (1u32 << n) - 1
+                        }
                     }
                     Some(names) => resolve_agents(names, sig, binds, *span, diags)
                         .into_iter()
@@ -324,15 +326,24 @@ mod tests {
         let p_atom = sig.atom_id("p", &[]).unwrap();
 
         let got = lower("Kw[alice] p", &mut s);
-        let want = { let x = s.atom(p_atom); s.knows_whether(a, x) };
+        let want = {
+            let x = s.atom(p_atom);
+            s.knows_whether(a, x)
+        };
         assert_eq!(got, want, "Kw must lower through knows_whether");
 
         let got = lower("?[alice] p", &mut s);
-        let want = { let x = s.atom(p_atom); s.ignorant(a, x) };
+        let want = {
+            let x = s.atom(p_atom);
+            s.ignorant(a, x)
+        };
         assert_eq!(got, want);
 
         let got = lower("S'[alice] p", &mut s);
-        let want = { let x = s.atom(p_atom); s.safe_dual(a, x) };
+        let want = {
+            let x = s.atom(p_atom);
+            s.safe_dual(a, x)
+        };
         assert_eq!(got, want);
     }
 
@@ -343,7 +354,10 @@ mod tests {
         let (a, b) = (sig.agent_id("alice").unwrap(), sig.agent_id("bob").unwrap());
         let p_atom = sig.atom_id("p", &[]).unwrap();
         let got = lower("K[alice, bob] p", &mut s);
-        let want = { let x = s.atom(p_atom); s.knows_all(&[a, b], x) };
+        let want = {
+            let x = s.atom(p_atom);
+            s.knows_all(&[a, b], x)
+        };
         assert_eq!(got, want);
     }
 
@@ -357,11 +371,18 @@ mod tests {
         let p_atom = sig.atom_id("p", &[]).unwrap();
         let got = lower("C[alice, bob] p", &mut s);
         let mask = (1u32 << a) | (1u32 << b);
-        let want = { let x = s.atom(p_atom); s.common(mask, x) };
+        let want = {
+            let x = s.atom(p_atom);
+            s.common(mask, x)
+        };
         assert_eq!(got, want);
 
-        let wrong = { let x = s.atom(p_atom); let ca = s.common(1 << a, x);
-                      let cb = s.common(1 << b, x); s.and(ca, cb) };
+        let wrong = {
+            let x = s.atom(p_atom);
+            let ca = s.common(1 << a, x);
+            let cb = s.common(1 << b, x);
+            s.and(ca, cb)
+        };
         assert_ne!(got, wrong, "C must NOT distribute over its agent list");
     }
 
@@ -371,7 +392,10 @@ mod tests {
         let (sig, _) = setup();
         let p_atom = sig.atom_id("p", &[]).unwrap();
         let got = lower("C[*] p", &mut s);
-        let want = { let x = s.atom(p_atom); s.common(0b11, x) };
+        let want = {
+            let x = s.atom(p_atom);
+            s.common(0b11, x)
+        };
         assert_eq!(got, want);
     }
 
@@ -433,7 +457,10 @@ mod tests {
         assert_eq!(lower("p & adjacent(bob, alice)", &mut s), s.fls());
         assert_eq!(lower("adjacent(bob, alice) & p", &mut s), s.fls());
         // and the dual: a true constant disappears rather than lingering as `⊤ & p`
-        let p_only = { let (sig, _) = setup(); s.atom(sig.atom_id("p", &[]).unwrap()) };
+        let p_only = {
+            let (sig, _) = setup();
+            s.atom(sig.atom_id("p", &[]).unwrap())
+        };
         assert_eq!(lower("p & adjacent(alice, bob)", &mut s), p_only);
         assert_eq!(lower("p | adjacent(bob, alice)", &mut s), p_only);
         assert_eq!(lower("p | adjacent(alice, bob)", &mut s), s.tru());
@@ -495,8 +522,10 @@ mod tests {
         // for `"Location"` alone would pass for that wrong reason; the mention of
         // `constants` pins this down to the actual type-name-outside-constants
         // rejection this test claims to protect.
-        assert!(d.items().iter().any(|x| x.message.contains("Location")
-            && x.message.contains("constants")));
+        assert!(d
+            .items()
+            .iter()
+            .any(|x| x.message.contains("Location") && x.message.contains("constants")));
     }
 
     #[test]

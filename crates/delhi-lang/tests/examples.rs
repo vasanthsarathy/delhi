@@ -28,9 +28,8 @@ fn run(src: &str, actions: &[&str]) -> Problem {
             .unwrap_or_else(|| panic!("no action `{name}`"));
         let def = g.def.clone();
         let model = delhi_mb::build(&def, &mut p.store, n_agents);
-        state = state
-            .apply(&p.store, &model)
-            .unwrap_or_else(|| panic!("`{name}` was not applicable"));
+        state =
+            state.apply(&p.store, &model).unwrap_or_else(|| panic!("`{name}` was not applicable"));
     }
     p.state = state;
     p
@@ -66,11 +65,7 @@ fn expect(p: &mut Problem, cases: &[(&str, bool)]) {
     let state: State = p.state.clone();
     for (text, want) in cases {
         let f = q(p, text);
-        assert_eq!(
-            state.entails(&p.store, f),
-            *want,
-            "expected `{text}` to be {want}"
-        );
+        assert_eq!(state.entails(&p.store, f), *want, "expected `{text}` to be {want}");
     }
 }
 
@@ -109,10 +104,10 @@ fn the_ice_cream_van_produces_a_second_order_false_belief() {
         &mut p,
         &[
             ("at_park", false),
-            ("K[mary] !at_park", true),          // mary was told
-            ("B[john] !at_park", true),          // john watched it leave
-            ("B[john] B[mary] at_park", true),   // ...and is wrong about her
-            ("B[mary] B[john] !at_park", true),  // while she has him right
+            ("K[mary] !at_park", true),         // mary was told
+            ("B[john] !at_park", true),         // john watched it leave
+            ("B[john] B[mary] at_park", true),  // ...and is wrong about her
+            ("B[mary] B[john] !at_park", true), // while she has him right
         ],
     );
     let goal = p.goal.expect("the file declares a goal");
@@ -124,10 +119,8 @@ fn sally_anne_second_order_makes_anne_wrong_about_being_seen() {
     // The variant where nobody misses an event: Sally watches, and Anne's mistake is
     // about *observability itself*. Anne's most plausible worlds have `watching`
     // false, so in those worlds she computes Sally as oblivious.
-    let mut p = run(
-        include_str!("../../../examples/sally_anne_second_order.delhi"),
-        &["anne_moves()"],
-    );
+    let mut p =
+        run(include_str!("../../../examples/sally_anne_second_order.delhi"), &["anne_moves()"]);
     expect(
         &mut p,
         &[
@@ -155,11 +148,7 @@ fn the_birthday_bicycle_revises_timmy_and_leaves_his_mother_wrong() {
     let mut p = run(src, &["mom_tells_him_no()"]);
     expect(
         &mut p,
-        &[
-            ("B[timmy] !bicycle", true),
-            ("K[timmy] !bicycle", false),
-            ("[][timmy] !bicycle", false),
-        ],
+        &[("B[timmy] !bicycle", true), ("K[timmy] !bicycle", false), ("[][timmy] !bicycle", false)],
     );
 
     // Looking reorders it back — and his mother, who never saw him go, is left
@@ -169,8 +158,8 @@ fn the_birthday_bicycle_revises_timmy_and_leaves_his_mother_wrong() {
         &mut p,
         &[
             ("K[timmy] bicycle", true),
-            ("K[mom] bicycle", true),             // she hid it; she is not confused
-            ("B[mom] B[timmy] !bicycle", true),   // ...about the bicycle
+            ("K[mom] bicycle", true), // she hid it; she is not confused
+            ("B[mom] B[timmy] !bicycle", true), // ...about the bicycle
         ],
     );
     let goal = p.goal.expect("the file declares a goal");
@@ -224,14 +213,7 @@ fn selective_communication_reaches_its_third_order_goals() {
         include_str!("../../../examples/selective_communication.delhi"),
         &["right()", "sense()", "shout_2()"],
     );
-    expect(
-        &mut p,
-        &[
-            ("B[a] q", true),
-            ("B[a] B[c] B[a] q", true),
-            ("B[c] B[a] B[c] q", true),
-        ],
-    );
+    expect(&mut p, &[("B[a] q", true), ("B[a] B[c] B[a] q", true), ("B[c] B[a] B[c] q", true)]);
     let goal = p.goal.expect("the file declares a goal");
     assert!(p.state.entails(&p.store, goal), "the declared goal holds");
 }
@@ -256,17 +238,15 @@ fn grapevine_spreads_a_secret_to_one_agent_and_not_another() {
     // Two actions: c steps out, b tells the room. The negative conjunct is the point —
     // it is not enough to spread information, you have to withhold it too, and then
     // know that you withheld it.
-    let mut p = run(
-        include_str!("../../../examples/grapevine.delhi"),
-        &["move(c,r1,r2)", "share(b,b,r1)"],
-    );
+    let mut p =
+        run(include_str!("../../../examples/grapevine.delhi"), &["move(c,r1,r2)", "share(b,b,r1)"]);
     expect(
         &mut p,
         &[
-            ("B[a] secret(b)", true),             // a hears it
-            ("B[c] secret(b)", false),            // c was out of the room
-            ("B[a] !B[c] secret(b)", true),       // a knows c missed it
-            ("B[b] B[a] !B[c] secret(b)", true),  // and b knows that a knows
+            ("B[a] secret(b)", true),            // a hears it
+            ("B[c] secret(b)", false),           // c was out of the room
+            ("B[a] !B[c] secret(b)", true),      // a knows c missed it
+            ("B[b] B[a] !B[c] secret(b)", true), // and b knows that a knows
         ],
     );
     let goal = p.goal.expect("the file declares a goal");
@@ -287,11 +267,11 @@ fn reachability_derives_a_closure_that_prunes_impossible_actions() {
     expect(
         &mut p,
         &[
-            ("reach(hall, study)", true),      // one step
-            ("reach(hall, attic)", true),      // two — only the recursive rule gives this
-            ("reach(hall, cellar)", false),    // no path
-            ("reach(attic, hall)", false),     // not symmetric
-            ("can_get(alice, attic)", true),   // a definition over a derived predicate
+            ("reach(hall, study)", true),    // one step
+            ("reach(hall, attic)", true),    // two — only the recursive rule gives this
+            ("reach(hall, cellar)", false),  // no path
+            ("reach(attic, hall)", false),   // not symmetric
+            ("can_get(alice, attic)", true), // a definition over a derived predicate
             ("can_get(alice, cellar)", false),
         ],
     );
@@ -306,10 +286,7 @@ fn muddy_children_conclude_on_the_third_round_and_not_before() {
 
     // Each child knows the others from the start, and herself not at all.
     let mut p = run(src, &[]);
-    expect(
-        &mut p,
-        &[("K[alice] muddy(bob)", true), ("Bw[alice] muddy(alice)", false)],
-    );
+    expect(&mut p, &[("K[alice] muddy(bob)", true), ("Bw[alice] muddy(alice)", false)]);
 
     // The father's announcement alone settles nothing, and neither does one round.
     let mut p = run(src, &["father_speaks()", "nobody_knows()"]);

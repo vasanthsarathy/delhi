@@ -24,7 +24,12 @@ impl Bits {
     /// # Panics
     /// If `i` is beyond the capacity given to [`Bits::new`].
     pub fn set(&mut self, i: usize) {
-        debug_assert!(i / 64 < self.0.len(), "set: index {} out of bounds (capacity {})", i, self.0.len() * 64);
+        debug_assert!(
+            i / 64 < self.0.len(),
+            "set: index {} out of bounds (capacity {})",
+            i,
+            self.0.len() * 64
+        );
         self.0[i / 64] |= 1u64 << (i % 64);
     }
     /// Removes `i`.

@@ -92,10 +92,8 @@ fn check(ast: &Ast, sig: &Sig, diags: &mut Diagnostics) -> HashSet<String> {
             continue;
         }
         match arity.iter().find(|(n, _)| *n == r.head.pred) {
-            Some((_, k)) if *k != r.head.args.len() => diags.push(
-                r.span,
-                format!("`{}` is derived with {k} arguments elsewhere", r.head.pred),
-            ),
+            Some((_, k)) if *k != r.head.args.len() => diags
+                .push(r.span, format!("`{}` is derived with {k} arguments elsewhere", r.head.pred)),
             None => arity.push((r.head.pred.clone(), r.head.args.len())),
             _ => {}
         }
@@ -216,10 +214,7 @@ pub fn saturate(ast: &Ast, sig: &Sig, consts: &mut Constants, diags: &mut Diagno
                 added += 1;
                 changed = true;
                 if added > MAX_DERIVED {
-                    diags.push(
-                        r.span,
-                        format!("the rules derived more than {MAX_DERIVED} facts"),
-                    );
+                    diags.push(r.span, format!("the rules derived more than {MAX_DERIVED} facts"));
                     return;
                 }
             }

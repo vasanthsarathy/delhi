@@ -18,6 +18,12 @@ pub const BUILTIN: &[(&str, &str)] = &[
     ("muddy_children.delhi", include_str!("../../../examples/muddy_children.delhi")),
     ("reachability.delhi", include_str!("../../../examples/reachability.delhi")),
     ("sally_anne.delhi", include_str!("../../../examples/sally_anne.delhi")),
-    ("sally_anne_second_order.delhi", include_str!("../../../examples/sally_anne_second_order.delhi")),
-    ("selective_communication.delhi", include_str!("../../../examples/selective_communication.delhi")),
+    (
+        "sally_anne_second_order.delhi",
+        include_str!("../../../examples/sally_anne_second_order.delhi"),
+    ),
+    (
+        "selective_communication.delhi",
+        include_str!("../../../examples/selective_communication.delhi"),
+    ),
 ];

@@ -27,8 +27,7 @@ pub fn refine(rels: &[Vec<Bits>], init: &[u32], n_worlds: usize) -> Vec<u32> {
         for u in 0..n_worlds {
             let mut sig = Vec::with_capacity(rels.len());
             for rel in rels {
-                let mut reached: Vec<u32> =
-                    rel[u].ones().into_iter().map(|v| block[v]).collect();
+                let mut reached: Vec<u32> = rel[u].ones().into_iter().map(|v| block[v]).collect();
                 reached.sort_unstable();
                 reached.dedup();
                 sig.push(reached);
@@ -145,10 +144,7 @@ impl Model {
 }
 
 fn joint(a: &State, b: &State) -> (Model, usize, usize) {
-    debug_assert_eq!(
-        a.model.n_agents, b.model.n_agents,
-        "joint: states must share an agent count"
-    );
+    debug_assert_eq!(a.model.n_agents, b.model.n_agents, "joint: states must share an agent count");
     let n = a.model.n_worlds + b.model.n_worlds;
     let agents = a.model.n_agents.max(b.model.n_agents);
     let atoms = a.model.n_atoms.max(b.model.n_atoms);

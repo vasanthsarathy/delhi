@@ -241,8 +241,11 @@ mod tests {
         let s = sig(SRC);
         let mut actors = s.objects_of("Actor");
         actors.sort();
-        assert_eq!(actors, vec!["alice".to_string(), "r2".to_string()],
-                   "r2 is a Robot, and Robot is an Actor");
+        assert_eq!(
+            actors,
+            vec!["alice".to_string(), "r2".to_string()],
+            "r2 is a Robot, and Robot is an Actor"
+        );
     }
 
     #[test]
@@ -253,8 +256,10 @@ mod tests {
         assert!(s.atom_id("heads", &[]).is_some());
         assert!(s.atom_id("at", &["alice".into(), "study".into()]).is_some());
         assert!(s.atom_id("at", &["r2".into(), "hall".into()]).is_some());
-        assert!(s.atom_id("at", &["study".into(), "alice".into()]).is_none(),
-                "arguments must respect the declared parameter types");
+        assert!(
+            s.atom_id("at", &["study".into(), "alice".into()]).is_none(),
+            "arguments must respect the declared parameter types"
+        );
     }
 
     #[test]
@@ -283,7 +288,9 @@ mod tests {
     fn an_undeclared_supertype_is_reported() {
         let mut d = Diagnostics::default();
         let ast = parse_file(
-            "types{ Actor - Nope } objects{} agents{} props{} initially{} actions{}", &mut d);
+            "types{ Actor - Nope } objects{} agents{} props{} initially{} actions{}",
+            &mut d,
+        );
         let _ = Sig::build(&ast, &mut d);
         assert!(d.items().iter().any(|x| x.message.contains("Nope")));
     }
@@ -292,7 +299,9 @@ mod tests {
     fn an_object_of_an_undeclared_type_is_reported() {
         let mut d = Diagnostics::default();
         let ast = parse_file(
-            "types{} objects{ bob - Ghost } agents{} props{} initially{} actions{}", &mut d);
+            "types{} objects{ bob - Ghost } agents{} props{} initially{} actions{}",
+            &mut d,
+        );
         let _ = Sig::build(&ast, &mut d);
         assert!(d.items().iter().any(|x| x.message.contains("Ghost")));
     }
@@ -311,15 +320,18 @@ mod tests {
         let s = Sig::build(&ast, &mut d);
         assert_eq!(s.n_agents(), 1, "the id space still dedups");
         assert_eq!(d.len(), 1, "exactly one complaint, and it is the duplicate");
-        assert!(d.items()[0].message.contains("duplicate agent `alice`"),
-                "got: {}", d.items()[0].message);
+        assert!(
+            d.items()[0].message.contains("duplicate agent `alice`"),
+            "got: {}",
+            d.items()[0].message
+        );
     }
 
     #[test]
     fn an_agent_that_is_not_an_object_is_reported() {
         let mut d = Diagnostics::default();
-        let ast = parse_file(
-            "types{} objects{} agents{ ghost } props{} initially{} actions{}", &mut d);
+        let ast =
+            parse_file("types{} objects{} agents{ ghost } props{} initially{} actions{}", &mut d);
         let _ = Sig::build(&ast, &mut d);
         assert!(d.items().iter().any(|x| x.message.contains("ghost")));
     }

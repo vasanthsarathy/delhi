@@ -179,14 +179,12 @@ pub fn serve(port: u16, root: &Path) -> std::io::Result<()> {
         let (mime, payload) = match path {
             "/" => ("text/html; charset=utf-8", PAGE.to_string()),
             "/api/root" => ("text/plain; charset=utf-8", display_path(&root)),
-            "/api/files" => (
-                "application/json",
-                serde_json::to_string(&file_names(&root)).expect("serialises"),
-            ),
-            "/api/file" => (
-                "text/plain; charset=utf-8",
-                read_source(&root, &get("name")).unwrap_or_default(),
-            ),
+            "/api/files" => {
+                ("application/json", serde_json::to_string(&file_names(&root)).expect("serialises"))
+            }
+            "/api/file" => {
+                ("text/plain; charset=utf-8", read_source(&root, &get("name")).unwrap_or_default())
+            }
             "/api/save" => {
                 let reply = match save_source(&root, &get("name"), &body) {
                     Ok(path) => serde_json::json!({ "ok": true, "path": path }),

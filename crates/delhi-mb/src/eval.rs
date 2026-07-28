@@ -45,22 +45,15 @@ impl<'a> Evaluator<'a> {
             Node::Atom(a) => self.model.val[w].get(a as usize),
             Node::Not(g) => !self.eval(g, w),
             Node::And(a, b) => self.eval(a, w) && self.eval(b, w),
-            Node::Knows(i, g) => self
-                .derived
-                .comp[i as usize][w]
-                .ones()
-                .into_iter()
-                .all(|v| self.eval(g, v)),
-            Node::Believes(i, g) => self
-                .derived
-                .bel[i as usize][w]
-                .ones()
-                .into_iter()
-                .all(|v| self.eval(g, v)),
-            Node::Safe(i, g) => self.model.rel[i as usize][w]
-                .ones()
-                .into_iter()
-                .all(|v| self.eval(g, v)),
+            Node::Knows(i, g) => {
+                self.derived.comp[i as usize][w].ones().into_iter().all(|v| self.eval(g, v))
+            }
+            Node::Believes(i, g) => {
+                self.derived.bel[i as usize][w].ones().into_iter().all(|v| self.eval(g, v))
+            }
+            Node::Safe(i, g) => {
+                self.model.rel[i as usize][w].ones().into_iter().all(|v| self.eval(g, v))
+            }
             Node::Common(g, inner) => {
                 // Cloning the cached closure rows is a deliberate borrow-checker tradeoff:
                 // the `&mut self` recursion into `self.eval` forces it, not an oversight.
@@ -86,10 +79,7 @@ impl<'a> Evaluator<'a> {
                 if sat.is_empty() {
                     return true;
                 }
-                maxima(self.model, i as usize, &sat)
-                    .ones()
-                    .into_iter()
-                    .all(|v| self.eval(phi, v))
+                maxima(self.model, i as usize, &sat).ones().into_iter().all(|v| self.eval(phi, v))
             }
         }
     }

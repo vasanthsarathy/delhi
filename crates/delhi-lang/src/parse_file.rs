@@ -101,13 +101,26 @@ fn parse_types(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
     while !matches!(p.peek(), Tok::RBrace | Tok::Eof) {
         let sp = p.span();
         let name = match p.peek().clone() {
-            Tok::Upper(n) => { p.bump(); n }
-            _ => { diags.push(sp, "expected a type name (types start uppercase)"); p.bump(); continue; }
+            Tok::Upper(n) => {
+                p.bump();
+                n
+            }
+            _ => {
+                diags.push(sp, "expected a type name (types start uppercase)");
+                p.bump();
+                continue;
+            }
         };
         p.expect(&Tok::Dash, "-", diags);
         let parent = match p.peek().clone() {
-            Tok::Upper(n) => { p.bump(); n }
-            _ => { diags.push(p.span(), "expected a supertype name"); "Object".to_string() }
+            Tok::Upper(n) => {
+                p.bump();
+                n
+            }
+            _ => {
+                diags.push(p.span(), "expected a supertype name");
+                "Object".to_string()
+            }
         };
         ast.types.push(TypeDecl { name, parent, span: sp.merge(p.span()) });
         p.eat(&Tok::Comma);
@@ -122,8 +135,15 @@ fn parse_objects(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
         loop {
             let sp = p.span();
             match p.peek().clone() {
-                Tok::Lower(n) => { p.bump(); group.push((n, sp)); }
-                _ => { diags.push(sp, "expected an object name (objects start lowercase)"); p.bump(); break; }
+                Tok::Lower(n) => {
+                    p.bump();
+                    group.push((n, sp));
+                }
+                _ => {
+                    diags.push(sp, "expected an object name (objects start lowercase)");
+                    p.bump();
+                    break;
+                }
             }
             if !p.eat(&Tok::Comma) {
                 break;
@@ -134,8 +154,14 @@ fn parse_objects(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
         }
         p.expect(&Tok::Dash, "-", diags);
         let ty = match p.peek().clone() {
-            Tok::Upper(n) => { p.bump(); n }
-            _ => { diags.push(p.span(), "expected a type name"); "Object".to_string() }
+            Tok::Upper(n) => {
+                p.bump();
+                n
+            }
+            _ => {
+                diags.push(p.span(), "expected a type name");
+                "Object".to_string()
+            }
         };
         for (name, sp) in group {
             ast.objects.push(ObjDecl { name, ty: ty.clone(), span: sp });
@@ -149,8 +175,14 @@ fn parse_agents(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
     while !matches!(p.peek(), Tok::RBrace | Tok::Eof) {
         let sp = p.span();
         match p.peek().clone() {
-            Tok::Lower(n) => { p.bump(); ast.agents.push((n, sp)); }
-            _ => { diags.push(sp, "expected an agent name"); p.bump(); }
+            Tok::Lower(n) => {
+                p.bump();
+                ast.agents.push((n, sp));
+            }
+            _ => {
+                diags.push(sp, "expected an agent name");
+                p.bump();
+            }
         }
         p.eat(&Tok::Comma);
     }
@@ -167,8 +199,15 @@ fn parse_props(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
     while !matches!(p.peek(), Tok::RBrace | Tok::Eof) {
         let sp = p.span();
         let name = match p.peek().clone() {
-            Tok::Lower(n) => { p.bump(); n }
-            _ => { diags.push(sp, "expected a predicate name"); p.bump(); continue; }
+            Tok::Lower(n) => {
+                p.bump();
+                n
+            }
+            _ => {
+                diags.push(sp, "expected a predicate name");
+                p.bump();
+                continue;
+            }
         };
         if RESERVED_CLAUSE_WORDS.contains(&name.as_str()) {
             diags.push(
@@ -180,8 +219,14 @@ fn parse_props(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
         if p.eat(&Tok::LParen) {
             while !matches!(p.peek(), Tok::RParen | Tok::Eof) {
                 match p.peek().clone() {
-                    Tok::Upper(t) => { p.bump(); params.push(t); }
-                    _ => { diags.push(p.span(), "predicate parameters must be type names"); p.bump(); }
+                    Tok::Upper(t) => {
+                        p.bump();
+                        params.push(t);
+                    }
+                    _ => {
+                        diags.push(p.span(), "predicate parameters must be type names");
+                        p.bump();
+                    }
                 }
                 if !p.eat(&Tok::Comma) {
                     break;
@@ -339,24 +384,56 @@ fn parse_state(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics, head: Spa
         let sp = p.span();
         let designated = p.eat(&Tok::Star);
         let name = match p.peek().clone() {
-            Tok::Lower(n) => { p.bump(); n }
-            _ => { diags.push(sp, "expected a world or agent name"); p.bump(); continue; }
+            Tok::Lower(n) => {
+                p.bump();
+                n
+            }
+            _ => {
+                diags.push(sp, "expected a world or agent name");
+                p.bump();
+                continue;
+            }
         };
         if p.eat(&Tok::Colon) {
             // `agent: u <cmp> v`
             let from = match p.peek().clone() {
-                Tok::Lower(n) => { p.bump(); n }
-                _ => { diags.push(p.span(), "expected a world name"); continue; }
+                Tok::Lower(n) => {
+                    p.bump();
+                    n
+                }
+                _ => {
+                    diags.push(p.span(), "expected a world name");
+                    continue;
+                }
             };
             let cmp = match p.peek() {
-                Tok::Tilde => { p.bump(); Cmp::Equi }
-                Tok::Lt => { p.bump(); Cmp::Lt }
-                Tok::Le => { p.bump(); Cmp::Le }
-                _ => { diags.push(p.span(), "expected `~`, `<`, or `<=`"); p.bump(); Cmp::Le }
+                Tok::Tilde => {
+                    p.bump();
+                    Cmp::Equi
+                }
+                Tok::Lt => {
+                    p.bump();
+                    Cmp::Lt
+                }
+                Tok::Le => {
+                    p.bump();
+                    Cmp::Le
+                }
+                _ => {
+                    diags.push(p.span(), "expected `~`, `<`, or `<=`");
+                    p.bump();
+                    Cmp::Le
+                }
             };
             let to = match p.peek().clone() {
-                Tok::Lower(n) => { p.bump(); n }
-                _ => { diags.push(p.span(), "expected a world name"); continue; }
+                Tok::Lower(n) => {
+                    p.bump();
+                    n
+                }
+                _ => {
+                    diags.push(p.span(), "expected a world name");
+                    continue;
+                }
             };
             edges.push(EdgeDecl { agent: name, from, cmp, to, span: sp.merge(p.span()) });
         } else {
@@ -367,7 +444,9 @@ fn parse_state(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics, head: Spa
             while !matches!(p.peek(), Tok::RBrace | Tok::Eof) {
                 match p.parse_expr(diags) {
                     Expr::Atom(t) => facts.push(t),
-                    other => diags.push(other.span(), "a world's facts must be predicate applications"),
+                    other => {
+                        diags.push(other.span(), "a world's facts must be predicate applications")
+                    }
                 }
                 p.eat(&Tok::Comma);
             }
@@ -383,8 +462,14 @@ fn parse_state(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics, head: Spa
 
 fn parse_arg(p: &mut Parser, diags: &mut Diagnostics) -> Arg {
     match p.peek().clone() {
-        Tok::Lower(n) => { p.bump(); Arg::Obj(n) }
-        Tok::Var(v) => { p.bump(); Arg::Var(v) }
+        Tok::Lower(n) => {
+            p.bump();
+            Arg::Obj(n)
+        }
+        Tok::Var(v) => {
+            p.bump();
+            Arg::Var(v)
+        }
         _ => {
             diags.push(p.span(), "expected an object or `?variable`");
             p.bump();
@@ -397,21 +482,41 @@ fn parse_actions(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
     while !matches!(p.peek(), Tok::RBrace | Tok::Eof) {
         let sp = p.span();
         let name = match p.peek().clone() {
-            Tok::Lower(n) => { p.bump(); n }
-            _ => { diags.push(sp, "expected an action name"); p.bump(); continue; }
+            Tok::Lower(n) => {
+                p.bump();
+                n
+            }
+            _ => {
+                diags.push(sp, "expected an action name");
+                p.bump();
+                continue;
+            }
         };
         let mut params = Vec::new();
         if p.eat(&Tok::LParen) {
             while !matches!(p.peek(), Tok::RParen | Tok::Eof) {
                 let psp = p.span();
                 let vn = match p.peek().clone() {
-                    Tok::Var(v) => { p.bump(); v }
-                    _ => { diags.push(psp, "expected `?parameter`"); p.bump(); continue; }
+                    Tok::Var(v) => {
+                        p.bump();
+                        v
+                    }
+                    _ => {
+                        diags.push(psp, "expected `?parameter`");
+                        p.bump();
+                        continue;
+                    }
                 };
                 p.expect(&Tok::Dash, "-", diags);
                 let ty = match p.peek().clone() {
-                    Tok::Upper(t) => { p.bump(); t }
-                    _ => { diags.push(p.span(), "expected a type name"); "Object".to_string() }
+                    Tok::Upper(t) => {
+                        p.bump();
+                        t
+                    }
+                    _ => {
+                        diags.push(p.span(), "expected a type name");
+                        "Object".to_string()
+                    }
                 };
                 params.push(ParamDecl { name: vn, ty, span: psp.merge(p.span()) });
                 if !p.eat(&Tok::Comma) {
@@ -509,7 +614,10 @@ fn parse_clauses(p: &mut Parser, diags: &mut Diagnostics) -> Vec<Clause> {
                 // `<arg> observes` / `<arg> aware`
                 let who = parse_arg(p, diags);
                 let which = match p.peek().clone() {
-                    Tok::Lower(k) if k == "observes" || k == "aware" => { p.bump(); k }
+                    Tok::Lower(k) if k == "observes" || k == "aware" => {
+                        p.bump();
+                        k
+                    }
                     _ => {
                         diags.push(p.span(), "expected `observes` or `aware`");
                         p.bump();
@@ -580,12 +688,22 @@ mod tests {
     fn parses_every_section_of_a_realistic_file() {
         let a = parse(COIN);
         assert_eq!(a.types.len(), 1);
-        assert_eq!(a.types[0].name, "Actor", "the subtype must be `Actor`, not swapped with its parent");
-        assert_eq!(a.types[0].parent, "Object", "the supertype must be `Object`, not swapped with the subtype");
+        assert_eq!(
+            a.types[0].name, "Actor",
+            "the subtype must be `Actor`, not swapped with its parent"
+        );
+        assert_eq!(
+            a.types[0].parent, "Object",
+            "the supertype must be `Object`, not swapped with the subtype"
+        );
         assert_eq!(a.objects.len(), 3, "one declaration per object even when comma-grouped");
         assert_eq!(a.agents.len(), 3);
         let agent_names: Vec<&str> = a.agents.iter().map(|(n, _)| n.as_str()).collect();
-        assert_eq!(agent_names, vec!["alice", "bob", "carol"], "agent names must be preserved, not blanked");
+        assert_eq!(
+            agent_names,
+            vec!["alice", "bob", "carol"],
+            "agent names must be preserved, not blanked"
+        );
         assert_eq!(a.props.len(), 2);
         let prop_names: Vec<&str> = a.props.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(prop_names, vec!["h", "d"], "prop names must be preserved, not blanked");
@@ -662,7 +780,10 @@ mod tests {
         let act = &a.actions[0];
         match &act.clauses[1] {
             Clause::Pre(Expr::Not(inner, _)) => {
-                assert!(matches!(**inner, Expr::Atom(ref t) if t.pred == "d"), "`pre !d` must negate `d`, not something else");
+                assert!(
+                    matches!(**inner, Expr::Atom(ref t) if t.pred == "d"),
+                    "`pre !d` must negate `d`, not something else"
+                );
             }
             other => panic!("expected Pre(!d), got {other:?}"),
         }
@@ -674,7 +795,9 @@ mod tests {
                 assert_eq!(lits[1].0.pred, "d");
                 assert!(!lits[1].1, "`!d` must be negative");
                 match cond {
-                    Some(Expr::Atom(t)) => assert_eq!(t.pred, "d", "the `if` guard must be kept, not dropped"),
+                    Some(Expr::Atom(t)) => {
+                        assert_eq!(t.pred, "d", "the `if` guard must be kept, not dropped")
+                    }
                     other => panic!("expected the `if d` guard, got {other:?}"),
                 }
             }
@@ -695,7 +818,10 @@ mod tests {
         assert!(!a.constants[0].negated, "`h` (unmarked) must not be negated");
         assert_eq!(a.constants[0].term.pred, "h");
         assert!(a.constants[1].negated, "`!d` must be negated");
-        assert_eq!(a.constants[1].term.pred, "d", "the negated entry's term must still be `d`, not dropped");
+        assert_eq!(
+            a.constants[1].term.pred, "d",
+            "the negated entry's term must still be `d`, not dropped"
+        );
     }
 
     #[test]
@@ -723,8 +849,12 @@ mod tests {
         let src = "types{} objects{} agents{} props{} initially{} state{} actions{}";
         let mut d = Diagnostics::default();
         let _ = parse_file(src, &mut d);
-        assert!(d.items().iter().any(|x| x.message.contains("initially")
-            || x.message.contains("state")), "should complain about the duplicate form");
+        assert!(
+            d.items()
+                .iter()
+                .any(|x| x.message.contains("initially") || x.message.contains("state")),
+            "should complain about the duplicate form"
+        );
     }
 
     #[test]
@@ -752,15 +882,21 @@ mod tests {
 
     #[test]
     fn a_causes_list_continues_across_a_comma_before_another_bare_literal() {
-        let a = parse(r#"
+        let a = parse(
+            r#"
             types{} objects{} agents{} props{ h, d }
             initially{}
             actions { go() { causes h, d } }
-        "#);
+        "#,
+        );
         match &a.actions[0].clauses[0] {
             Clause::Causes { lits, .. } => {
-                assert_eq!(lits.len(), 2, "a comma before another bare literal must \
-                    still extend the causes list, not stop at the first");
+                assert_eq!(
+                    lits.len(),
+                    2,
+                    "a comma before another bare literal must \
+                    still extend the causes list, not stop at the first"
+                );
                 assert_eq!(lits[0].0.pred, "h");
                 assert_eq!(lits[1].0.pred, "d");
             }
@@ -770,12 +906,18 @@ mod tests {
 
     #[test]
     fn a_comma_before_actor_ends_the_causes_list() {
-        let a = parse(r#"
+        let a = parse(
+            r#"
             types{ Actor - Object } objects{ x - Actor } agents{} props{ p }
             initially{}
             actions { go() { causes p, actor x } }
-        "#);
-        assert_eq!(a.actions[0].clauses.len(), 2, "`actor` must not be swallowed as a second literal");
+        "#,
+        );
+        assert_eq!(
+            a.actions[0].clauses.len(),
+            2,
+            "`actor` must not be swallowed as a second literal"
+        );
         match &a.actions[0].clauses[0] {
             Clause::Causes { lits, .. } => assert_eq!(lits.len(), 1),
             other => panic!("expected Causes, got {other:?}"),
@@ -785,12 +927,18 @@ mod tests {
 
     #[test]
     fn a_comma_before_pre_ends_the_causes_list() {
-        let a = parse(r#"
+        let a = parse(
+            r#"
             types{} objects{} agents{} props{ p, q }
             initially{}
             actions { go() { causes p, pre q } }
-        "#);
-        assert_eq!(a.actions[0].clauses.len(), 2, "`pre` must not be swallowed as a second literal");
+        "#,
+        );
+        assert_eq!(
+            a.actions[0].clauses.len(),
+            2,
+            "`pre` must not be swallowed as a second literal"
+        );
         match &a.actions[0].clauses[0] {
             Clause::Causes { lits, .. } => assert_eq!(lits.len(), 1),
             other => panic!("expected Causes, got {other:?}"),
@@ -800,11 +948,13 @@ mod tests {
 
     #[test]
     fn a_comma_before_a_second_causes_ends_the_first_list() {
-        let a = parse(r#"
+        let a = parse(
+            r#"
             types{} objects{} agents{} props{ p, q }
             initially{}
             actions { go() { causes p, causes q } }
-        "#);
+        "#,
+        );
         assert_eq!(a.actions[0].clauses.len(), 2, "the second `causes` must start its own clause");
         match &a.actions[0].clauses[0] {
             Clause::Causes { lits, .. } => assert_eq!(lits.len(), 1),
@@ -818,12 +968,18 @@ mod tests {
 
     #[test]
     fn a_comma_before_determines_ends_the_causes_list() {
-        let a = parse(r#"
+        let a = parse(
+            r#"
             types{} objects{} agents{} props{ p, q }
             initially{}
             actions { go() { causes p, determines q } }
-        "#);
-        assert_eq!(a.actions[0].clauses.len(), 2, "`determines` must not be swallowed as a second literal");
+        "#,
+        );
+        assert_eq!(
+            a.actions[0].clauses.len(),
+            2,
+            "`determines` must not be swallowed as a second literal"
+        );
         match &a.actions[0].clauses[0] {
             Clause::Causes { lits, .. } => assert_eq!(lits.len(), 1),
             other => panic!("expected Causes, got {other:?}"),
@@ -833,12 +989,18 @@ mod tests {
 
     #[test]
     fn a_comma_before_announces_ends_the_causes_list() {
-        let a = parse(r#"
+        let a = parse(
+            r#"
             types{} objects{} agents{} props{ p, q }
             initially{}
             actions { go() { causes p, announces q } }
-        "#);
-        assert_eq!(a.actions[0].clauses.len(), 2, "`announces` must not be swallowed as a second literal");
+        "#,
+        );
+        assert_eq!(
+            a.actions[0].clauses.len(),
+            2,
+            "`announces` must not be swallowed as a second literal"
+        );
         match &a.actions[0].clauses[0] {
             Clause::Causes { lits, .. } => assert_eq!(lits.len(), 1),
             other => panic!("expected Causes, got {other:?}"),
@@ -848,12 +1010,18 @@ mod tests {
 
     #[test]
     fn a_comma_before_an_observes_head_ends_the_causes_list() {
-        let a = parse(r#"
+        let a = parse(
+            r#"
             types{ Actor - Object } objects{ x - Actor } agents{ x } props{ p }
             initially{}
             actions { go() { causes p, x observes } }
-        "#);
-        assert_eq!(a.actions[0].clauses.len(), 2, "the `observes` head must not be swallowed as a second literal");
+        "#,
+        );
+        assert_eq!(
+            a.actions[0].clauses.len(),
+            2,
+            "the `observes` head must not be swallowed as a second literal"
+        );
         match &a.actions[0].clauses[0] {
             Clause::Causes { lits, .. } => assert_eq!(lits.len(), 1),
             other => panic!("expected Causes, got {other:?}"),
@@ -866,12 +1034,18 @@ mod tests {
 
     #[test]
     fn a_comma_before_an_aware_head_ends_the_causes_list() {
-        let a = parse(r#"
+        let a = parse(
+            r#"
             types{ Actor - Object } objects{ x - Actor } agents{ x } props{ p }
             initially{}
             actions { go() { causes p, x aware } }
-        "#);
-        assert_eq!(a.actions[0].clauses.len(), 2, "the `aware` head must not be swallowed as a second literal");
+        "#,
+        );
+        assert_eq!(
+            a.actions[0].clauses.len(),
+            2,
+            "the `aware` head must not be swallowed as a second literal"
+        );
         match &a.actions[0].clauses[0] {
             Clause::Causes { lits, .. } => assert_eq!(lits.len(), 1),
             other => panic!("expected Causes, got {other:?}"),

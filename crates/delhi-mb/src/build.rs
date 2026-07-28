@@ -28,22 +28,13 @@ pub struct ActionModel {
 }
 
 fn observes_disj(a: &ActionDef, s: &mut Store, i: AgentId) -> FormulaId {
-    let parts: Vec<FormulaId> = a
-        .observes
-        .iter()
-        .filter(|(j, _)| *j == i)
-        .map(|(_, f)| *f)
-        .collect();
+    let parts: Vec<FormulaId> =
+        a.observes.iter().filter(|(j, _)| *j == i).map(|(_, f)| *f).collect();
     s.any(&parts)
 }
 
 fn aware_disj(a: &ActionDef, s: &mut Store, i: AgentId) -> FormulaId {
-    let parts: Vec<FormulaId> = a
-        .aware
-        .iter()
-        .filter(|(j, _)| *j == i)
-        .map(|(_, f)| *f)
-        .collect();
+    let parts: Vec<FormulaId> = a.aware.iter().filter(|(j, _)| *j == i).map(|(_, f)| *f).collect();
     s.any(&parts)
 }
 
@@ -110,10 +101,7 @@ pub fn build(a: &ActionDef, s: &mut Store, n_agents: usize) -> ActionModel {
             // so exactly one designated event can fire at the designated world (§4.6).
             // k counts only conditional effects (cond ≠ ⊤); unconditional effects
             // always apply and don't contribute to the outcome split.
-            let k = effects
-                .iter()
-                .filter(|e| e.cond != top)
-                .count();
+            let k = effects.iter().filter(|e| e.cond != top).count();
             let n_outcomes = 1usize << k;
             let mut pre = Vec::with_capacity(n_outcomes + 1);
             let mut add = Vec::with_capacity(n_outcomes + 1);
@@ -282,8 +270,8 @@ mod tests {
             name: "mixed".into(),
             pre: t,
             kind: Kind::Ontic(vec![
-                Effect { lits: vec![(0, true)], cond: t },      // unconditional
-                Effect { lits: vec![(1, true)], cond: guard },  // conditional
+                Effect { lits: vec![(0, true)], cond: t }, // unconditional
+                Effect { lits: vec![(1, true)], cond: guard }, // conditional
             ]),
             observes: vec![(0, t)],
             aware: vec![],

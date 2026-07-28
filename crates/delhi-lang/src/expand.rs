@@ -225,8 +225,7 @@ pub fn expand_ast(ast: &mut Ast, defs: &Defs, diags: &mut Diagnostics) {
         ast.goal = Some(expand(&g, defs, diags));
     }
     let invariants = std::mem::take(&mut ast.invariants);
-    ast.invariants =
-        invariants.into_iter().map(|(e, s)| (expand(&e, defs, diags), s)).collect();
+    ast.invariants = invariants.into_iter().map(|(e, s)| (expand(&e, defs, diags), s)).collect();
 
     match ast.init.take() {
         Some(Init::Declarative(items, span)) => {
@@ -245,10 +244,7 @@ pub fn expand_ast(ast: &mut Ast, defs: &Defs, diags: &mut Diagnostics) {
     }
 
     let actions = std::mem::take(&mut ast.actions);
-    ast.actions = actions
-        .into_iter()
-        .map(|a| expand_action(a, defs, diags))
-        .collect();
+    ast.actions = actions.into_iter().map(|a| expand_action(a, defs, diags)).collect();
 }
 
 fn expand_action(mut a: ActionDecl, defs: &Defs, diags: &mut Diagnostics) -> ActionDecl {
@@ -263,22 +259,14 @@ fn expand_action(mut a: ActionDecl, defs: &Defs, diags: &mut Diagnostics) -> Act
                 for (t, _) in &lits {
                     reject_defined_term(t, defs, "`causes` needs something to set", diags);
                 }
-                Clause::Causes {
-                    lits,
-                    cond: cond.map(|c| expand(&c, defs, diags)),
-                    span,
-                }
+                Clause::Causes { lits, cond: cond.map(|c| expand(&c, defs, diags)), span }
             }
-            Clause::Observes { who, cond, span } => Clause::Observes {
-                who,
-                cond: cond.map(|c| expand(&c, defs, diags)),
-                span,
-            },
-            Clause::Aware { who, cond, span } => Clause::Aware {
-                who,
-                cond: cond.map(|c| expand(&c, defs, diags)),
-                span,
-            },
+            Clause::Observes { who, cond, span } => {
+                Clause::Observes { who, cond: cond.map(|c| expand(&c, defs, diags)), span }
+            }
+            Clause::Aware { who, cond, span } => {
+                Clause::Aware { who, cond: cond.map(|c| expand(&c, defs, diags)), span }
+            }
             other => other,
         })
         .collect();

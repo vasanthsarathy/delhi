@@ -135,7 +135,9 @@ pub fn lex(src: &str, diags: &mut Diagnostics) -> Vec<Token> {
             if i + 1 < b.len() && b[i + 1] == b'?' {
                 i += 2;
                 Tok::Undecided
-            } else if i + 1 < b.len() && ((b[i + 1] as char).is_ascii_alphabetic() || b[i + 1] == b'_') {
+            } else if i + 1 < b.len()
+                && ((b[i + 1] as char).is_ascii_alphabetic() || b[i + 1] == b'_')
+            {
                 i += 1;
                 let ns = i;
                 while i < b.len() && ((b[i] as char).is_ascii_alphanumeric() || b[i] == b'_') {
@@ -172,16 +174,25 @@ pub fn lex(src: &str, diags: &mut Diagnostics) -> Vec<Token> {
                     }
                 }
                 '&' => {
-                    if i < b.len() && b[i] == b'&' { i += 1; }
+                    if i < b.len() && b[i] == b'&' {
+                        i += 1;
+                    }
                     Tok::Amp
                 }
                 '|' => {
-                    if i < b.len() && b[i] == b'|' { i += 1; }
+                    if i < b.len() && b[i] == b'|' {
+                        i += 1;
+                    }
                     Tok::Bar
                 }
                 '!' => Tok::Bang,
                 '-' => {
-                    if i < b.len() && b[i] == b'>' { i += 1; Tok::Arrow } else { Tok::Dash }
+                    if i < b.len() && b[i] == b'>' {
+                        i += 1;
+                        Tok::Arrow
+                    } else {
+                        Tok::Dash
+                    }
                 }
                 '<' => {
                     if i < b.len() && b[i] == b'-' {
@@ -242,16 +253,30 @@ mod tests {
 
     #[test]
     fn skips_both_comment_forms() {
-        assert_eq!(kinds("a // trailing\n/* block\n spanning */ b"),
-                   vec![Tok::Lower("a".into()), Tok::Lower("b".into()), Tok::Eof]);
+        assert_eq!(
+            kinds("a // trailing\n/* block\n spanning */ b"),
+            vec![Tok::Lower("a".into()), Tok::Lower("b".into()), Tok::Eof]
+        );
     }
 
     #[test]
     fn lexes_operators_including_ascii_alternatives() {
         assert_eq!(
             kinds("& | ! -> <- ~ < <= [] ?? *"),
-            vec![Tok::Amp, Tok::Bar, Tok::Bang, Tok::Arrow, Tok::Gets, Tok::Tilde,
-                 Tok::Lt, Tok::Le, Tok::Box, Tok::Undecided, Tok::Star, Tok::Eof]
+            vec![
+                Tok::Amp,
+                Tok::Bar,
+                Tok::Bang,
+                Tok::Arrow,
+                Tok::Gets,
+                Tok::Tilde,
+                Tok::Lt,
+                Tok::Le,
+                Tok::Box,
+                Tok::Undecided,
+                Tok::Star,
+                Tok::Eof
+            ]
         );
     }
 
@@ -269,15 +294,19 @@ mod tests {
         // token: a leading digit is simply an unexpected character. Digits after the
         // first letter are part of the identifier, which `p0` and the printer's `w1`
         // both depend on.
-        assert_eq!(kinds("p0 w12"), vec![
-            Tok::Lower("p0".into()), Tok::Lower("w12".into()), Tok::Eof
-        ]);
+        assert_eq!(
+            kinds("p0 w12"),
+            vec![Tok::Lower("p0".into()), Tok::Lower("w12".into()), Tok::Eof]
+        );
         let mut d = Diagnostics::default();
         let toks = lex("7", &mut d);
         assert_eq!(toks.iter().map(|t| t.tok.clone()).collect::<Vec<_>>(), vec![Tok::Eof]);
         assert_eq!(d.len(), 1);
-        assert!(d.items()[0].message.contains("unexpected character"),
-                "got: {}", d.items()[0].message);
+        assert!(
+            d.items()[0].message.contains("unexpected character"),
+            "got: {}",
+            d.items()[0].message
+        );
     }
 
     #[test]

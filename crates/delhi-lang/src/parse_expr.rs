@@ -160,11 +160,8 @@ impl<'a> Parser<'a> {
             // `parse_primary`, so admitting prefix `!` adds no ambiguity — it only
             // stops `B^!q[a] p` collapsing into a cascade of unrelated complaints.
             // Anything looser would swallow the `[agents]` that has to follow.
-            let cond = if self.eat(&Tok::Caret) {
-                Some(Box::new(self.parse_unary(diags)))
-            } else {
-                None
-            };
+            let cond =
+                if self.eat(&Tok::Caret) { Some(Box::new(self.parse_unary(diags))) } else { None };
             self.expect(&Tok::LBracket, "[", diags);
             let agents = if self.eat(&Tok::Star) {
                 None

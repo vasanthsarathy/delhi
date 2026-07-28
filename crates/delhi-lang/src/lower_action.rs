@@ -336,12 +336,13 @@ mod tests {
         // agent 0" — both give `observes.len() == 3`. Assert the three distinct ids.
         let mut got: Vec<AgentId> = acts[0].def.observes.iter().map(|(id, _)| *id).collect();
         got.sort_unstable();
-        let mut want: Vec<AgentId> = ["alice", "bob", "carol"]
-            .iter()
-            .map(|n| sig.agent_id(n).unwrap())
-            .collect();
+        let mut want: Vec<AgentId> =
+            ["alice", "bob", "carol"].iter().map(|n| sig.agent_id(n).unwrap()).collect();
         want.sort_unstable();
-        assert_eq!(got, want, "?o must range over the three distinct declared agents, not duplicates");
+        assert_eq!(
+            got, want,
+            "?o must range over the three distinct declared agents, not duplicates"
+        );
     }
 
     #[test]
@@ -379,10 +380,12 @@ mod tests {
 
     #[test]
     fn a_missing_precondition_defaults_to_top() {
-        let (_, store, acts) = ground(r#"
+        let (_, store, acts) = ground(
+            r#"
             types{ Actor - Object } objects{ a - Actor } agents{ a } props{ p }
             initially{} actions { go() { actor a, causes p, a observes } }
-        "#);
+        "#,
+        );
         let mut s = store;
         assert_eq!(acts[0].def.pre, s.tru());
     }
@@ -399,8 +402,10 @@ mod tests {
         let c = Constants::build(&ast, &sig, &mut d);
         let mut s = Store::default();
         let _ = ground_actions(&ast.actions, &sig, &c, &mut s, &mut d);
-        assert!(d.items().iter().any(|x| x.message.contains("at most one")),
-                "the surface language allows one `pre`; write a conjunction instead");
+        assert!(
+            d.items().iter().any(|x| x.message.contains("at most one")),
+            "the surface language allows one `pre`; write a conjunction instead"
+        );
     }
 
     #[test]

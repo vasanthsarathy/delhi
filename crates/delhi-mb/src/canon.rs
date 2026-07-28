@@ -60,9 +60,8 @@ fn rank_by_sorted_key(keys: &[Vec<u64>]) -> Vec<usize> {
 /// order is a total order. The `debug_assert!` below enforces that.
 fn canonical_order(m: &Model) -> Vec<usize> {
     let rels = rels_full(m);
-    let mut keys: Vec<Vec<u64>> = (0..m.n_worlds)
-        .map(|w| m.val[w].ones().into_iter().map(|a| a as u64).collect())
-        .collect();
+    let mut keys: Vec<Vec<u64>> =
+        (0..m.n_worlds).map(|w| m.val[w].ones().into_iter().map(|a| a as u64).collect()).collect();
     let mut colour = rank_by_sorted_key(&keys);
     loop {
         keys = (0..m.n_worlds)
