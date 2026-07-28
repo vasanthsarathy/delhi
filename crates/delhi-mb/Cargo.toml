@@ -8,11 +8,11 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-delhi-syntax = { path = "../delhi-syntax", version = "0.1.0" }
-delhi-core = { path = "../delhi-core", version = "0.1.0" }
+delhi-syntax.workspace = true
+delhi-core.workspace = true
 
 [dev-dependencies]
-proptest = "1"
+proptest.workspace = true
 
 [lints]
 workspace = true

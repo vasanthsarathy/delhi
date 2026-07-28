@@ -65,7 +65,7 @@ jobs:
           # step fails the step, which on Linux is every run.
           if [ -f "$BIN.exe" ]; then BIN="$BIN.exe"; fi
           cp "$BIN" "dist/$NAME/"
-          cp README.md LICENSE-MIT LICENSE-APACHE "dist/$NAME/"
+          cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "dist/$NAME/"
           cp -r examples "dist/$NAME/"
           cd dist
           # The archive is what a stranger downloads, so it carries the examples and the
@@ -132,6 +132,8 @@ jobs:
           delhi check examples/coin_lie.delhi
           delhi gui .                # browser UI over the .delhi files here
           ```
+
+          What changed is in [CHANGELOG.md](https://github.com/vasanthsarathy/delhi/blob/master/CHANGELOG.md).
 
           Verify a download against `SHA256SUMS`. Building from source instead:
           `cargo install --git https://github.com/vasanthsarathy/delhi delhi-cli`

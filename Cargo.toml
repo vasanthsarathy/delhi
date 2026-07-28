@@ -11,7 +11,7 @@ members = [
 
 [workspace.package]
 edition = "2021"
-version = "0.1.0"
+version = "0.1.1"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/vasanthsarathy/delhi"
 homepage = "https://github.com/vasanthsarathy/delhi"
@@ -37,3 +37,17 @@ broken_intra_doc_links = "allow"
 lto = "fat"
 codegen-units = 1
 strip = true
+
+# Every internal dependency in one block, so a version bump is this list and nothing else.
+# It was previously repeated across six manifests, and the very first bump missed one —
+# the entry that carried `optional = true` after the version and so did not match.
+[workspace.dependencies]
+delhi-syntax = { path = "crates/delhi-syntax", version = "0.1.1" }
+delhi-core = { path = "crates/delhi-core", version = "0.1.1" }
+delhi-mb = { path = "crates/delhi-mb", version = "0.1.1" }
+delhi-lang = { path = "crates/delhi-lang", version = "0.1.1" }
+delhi-gui = { path = "crates/delhi-gui", version = "0.1.1" }
+tiny_http = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+proptest = "1"
