@@ -92,6 +92,75 @@ pub fn parse_query(p: &mut Problem, text: &str) -> Result<delhi_syntax::FormulaI
     }
 }
 
+/// `delhi step` — apply a sequence of actions and print the resulting state.
+pub fn cmd_step(src: &str, actions: &[String], out: &mut String) -> i32 {
+    let Some(mut p) = open(src, out) else {
+        return 1;
+    };
+    let n_agents = p.sig.n_agents();
+    let mut state = p.state.clone();
+
+    for name in actions {
+        let Some(g) = p.actions.iter().find(|a| &a.name == name) else {
+            let mut names: Vec<&str> = p.actions.iter().map(|a| a.name.as_str()).collect();
+            names.sort_unstable();
+            let _ = writeln!(out, "no action `{name}`; available: {}", names.join(", "));
+            return 2;
+        };
+        let def = g.def.clone();
+        let model = delhi_mb::build(&def, &mut p.store, n_agents);
+        match state.apply(&p.store, &model) {
+            Some(next) => {
+                state = next;
+                let _ = writeln!(out, "applied {name}");
+            }
+            None => {
+                let _ = writeln!(out, "`{name}` is not applicable in the current state");
+                return 1;
+            }
+        }
+    }
+
+    let _ = write!(out, "{}", print_state(&state, &p.sig));
+    0
+}
+
+/// `delhi dot` — Graphviz for the initial state.
+///
+/// One node per world, doubled for the designated one, labelled with the atoms true
+/// there. One edge per agent relation, reflexive edges omitted.
+pub fn cmd_dot(src: &str, out: &mut String) -> i32 {
+    let Some(p) = open(src, out) else {
+        return 1;
+    };
+    let m = &p.state.model;
+    let _ = writeln!(out, "digraph delhi {{");
+    let _ = writeln!(out, "  rankdir=LR;");
+    for w in 0..m.n_worlds {
+        let facts: Vec<&str> = m.val[w]
+            .ones()
+            .into_iter()
+            .filter(|a| *a < p.sig.n_atoms())
+            .map(|a| p.sig.atom_name(a as u32))
+            .collect();
+        let label = if facts.is_empty() { "∅".to_string() } else { facts.join(",") };
+        let peripheries = if w == p.state.designated { " peripheries=2" } else { "" };
+        let _ = writeln!(out, "  w{w} [shape=circle label=\"{label}\"{peripheries}];");
+    }
+    for i in 0..m.n_agents {
+        let agent = p.sig.agent_name(i as u32);
+        for u in 0..m.n_worlds {
+            for v in m.rel[i][u].ones() {
+                if u != v {
+                    let _ = writeln!(out, "  w{u} -> w{v} [label=\"{agent}\"];");
+                }
+            }
+        }
+    }
+    let _ = writeln!(out, "}}");
+    0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,5 +217,70 @@ mod tests {
         let (code, out) = run(|o| cmd_eval(GOOD, "K[nobody] h", o));
         assert_eq!(code, 2);
         assert!(out.contains("nobody"));
+    }
+
+    const COIN: &str = r#"
+        types{ Actor - Object } objects{ a, b - Actor } agents{ a, b } props{ h }
+        initially { h, ?[a] h, B[a] h }
+        actions {
+            tell() { actor b, announces !h, a observes, b observes }
+            look() { actor a, determines h, a observes }
+        }
+    "#;
+
+    #[test]
+    fn step_applies_a_sequence_and_prints_the_result() {
+        let (code, out) = run(|o| cmd_step(COIN, &["tell()".to_string()], o));
+        assert_eq!(code, 0, "got: {out}");
+        assert!(out.contains("state {"), "the resulting state is printed");
+    }
+
+    #[test]
+    fn step_reports_an_unknown_action_by_name() {
+        let (code, out) = run(|o| cmd_step(COIN, &["nosuch()".to_string()], o));
+        assert_eq!(code, 2);
+        assert!(out.contains("nosuch()"));
+        assert!(out.contains("tell()"), "the message should list what IS available");
+    }
+
+    #[test]
+    fn step_reports_an_inapplicable_action_rather_than_panicking() {
+        // `look()` senses h, whose two designated events have exhaustive preconditions,
+        // so it always applies. Use a precondition that cannot hold instead.
+        let src = r#"
+            types{ Actor - Object } objects{ a - Actor } agents{ a } props{ h, q }
+            initially { h }
+            actions { go() { actor a, pre q, causes h, a observes } }
+        "#;
+        let (code, out) = run(|o| cmd_step(src, &["go()".to_string()], o));
+        assert_eq!(code, 1);
+        assert!(out.to_lowercase().contains("not applicable"), "got: {out}");
+    }
+
+    #[test]
+    fn dot_emits_a_digraph_with_one_node_per_world() {
+        let (code, out) = run(|o| cmd_dot(COIN, o));
+        assert_eq!(code, 0);
+        assert!(out.starts_with("digraph"), "got: {out}");
+        assert_eq!(out.matches("shape=").count(), 2, "two worlds, two nodes");
+        assert!(out.contains("peripheries=2"), "the designated world is doubled");
+        assert!(out.contains("->"), "edges are drawn");
+        assert!(out.trim_end().ends_with('}'));
+    }
+
+    #[test]
+    fn dot_omits_reflexive_edges() {
+        // Every world in COIN is reflexively related to itself for both agents (a
+        // modal frame condition), so if the filter that skips `u == v` were removed,
+        // self-loops like `w0 -> w0` would appear. `starts_with("digraph")` alone
+        // would not catch this, so check for the absence of every self-loop directly.
+        let (code, out) = run(|o| cmd_dot(COIN, o));
+        assert_eq!(code, 0);
+        for w in 0..2 {
+            assert!(
+                !out.contains(&format!("w{w} -> w{w}")),
+                "reflexive edges must not be drawn:\n{out}"
+            );
+        }
     }
 }

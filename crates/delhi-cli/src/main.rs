@@ -58,6 +58,25 @@ fn main() {
                 c
             }
         },
+        Some("dot") if args.len() == 2 => match read(&args[1]) {
+            Err(c) => c,
+            Ok(src) => {
+                let mut out = String::new();
+                let c = cmd::cmd_dot(&src, &mut out);
+                print!("{out}");
+                c
+            }
+        },
+        Some("step") if args.len() >= 4 && args[2] == "-a" => match read(&args[1]) {
+            Err(c) => c,
+            Ok(src) => {
+                let acts: Vec<String> = args[3..].to_vec();
+                let mut out = String::new();
+                let c = cmd::cmd_step(&src, &acts, &mut out);
+                print!("{out}");
+                c
+            }
+        },
         _ => usage(),
     };
     std::process::exit(code);
