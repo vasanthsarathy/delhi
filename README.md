@@ -638,6 +638,8 @@ delhi gui -p 9000             # a different port
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │ delhi  [file ▾] [new] [name] [save] [check]    ok · 14 · goal ✓   │
+├──────────────────────────────────────────────────────────────────┤
+│ > a formula, or :ask B[alice] _ · :do action · :state            │
 ├───────────────────────────────┬─────────┬────────────────────────┤
 │ editor                        │ ACTIONS │ STATE                  │
 │                               │ announce│  actual world  h, d    │
@@ -648,12 +650,14 @@ delhi gui -p 9000             # a different port
 │                               │ 1. …    │  > B[alice] B[carol]!h │
 │                               │ 2. …    │    true                │
 │                               │ [undo]  │                        │
-├───────────────────────────────┴─────────┴────────────────────────┤
-│ > a formula, or :ask B[alice] _ · :do action · :state            │
-└──────────────────────────────────────────────────────────────────┘
+└───────────────────────────────┴─────────┴────────────────────────┘
 ```
 
-Three things about that arrangement are deliberate.
+Four things about that arrangement are deliberate.
+
+**The prompt is under the toolbar, not at the foot of the window.** It is a control, and it
+belongs with the other controls; at the bottom edge it was the furthest thing on screen from
+both the file it queries and the panel its answers land in.
 
 **Actions are a rail beside the editor**, not buried in the state panel. It doubles as an
 outline of what the file declares and a set of buttons that apply them, with the trace

@@ -14,9 +14,30 @@
     --colEditor: 38%; --colRail: 190px; --rowState: 40%;
   }
   * { box-sizing: border-box; }
+  /* Tells the browser the page is dark, which is what re-skins the things CSS cannot
+     reach: the native scrollbars, the `<select>` dropdown, and the caret. Without it a
+     dark page gets light-grey system chrome bolted to its edges. */
+  html { color-scheme: dark; }
   html, body { height: 100%; margin: 0; }
+
+  /* Firefox. `thin` rather than `auto` because these bars sit inside panels a few
+     hundred pixels wide, where the default width is a visible bite out of the content. */
+  * { scrollbar-width: thin; scrollbar-color: #3c434e var(--panel); }
+  /* Chrome and Safari, which ignore the two properties above. */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--panel); }
+  ::-webkit-scrollbar-thumb {
+    background: #3c434e; border-radius: 5px;
+    /* The border is the track colour, so the thumb reads as a rounded bar floating in
+       the gutter rather than filling it edge to edge. */
+    border: 2px solid var(--panel); background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #565f6e; }
+  ::-webkit-scrollbar-corner { background: var(--panel); }
   body {
-    background: var(--bg); color: var(--ink); display: grid; grid-template-rows: auto 1fr auto;
+    /* header · prompt · main. The prompt sits above the panels rather than below them,
+       so the thing you type into is next to the toolbar instead of at the far edge. */
+    background: var(--bg); color: var(--ink); display: grid; grid-template-rows: auto auto 1fr;
     font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   header {
@@ -133,7 +154,7 @@
   #results .m { color: var(--ink); padding-left: 12px; }
 
   #promptRow { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
-               border-top: 1px solid var(--line); background: var(--panel); }
+               border-bottom: 1px solid var(--line); background: var(--panel); }
   #promptRow span.caret { color: var(--dim); }
   #prompt { flex: 1; background: transparent; border: 0; outline: 0; color: var(--ink); font: inherit; }
 
@@ -158,6 +179,12 @@
   <span id="root" title="the directory being served — save writes here"></span>
   <span id="status">ready</span>
 </header>
+
+<div id="promptRow">
+  <span class="caret">&gt;</span>
+  <input id="prompt" spellcheck="false" autocomplete="off"
+         placeholder="a formula — B[alice] B[carol] !h — or :ask B[alice] _ · :do action · :clear · :help">
+</div>
 
 <main>
   <section>
@@ -209,12 +236,6 @@
     </section>
   </div>
 </main>
-
-<div id="promptRow">
-  <span class="caret">&gt;</span>
-  <input id="prompt" spellcheck="false" autocomplete="off"
-         placeholder="a formula — B[alice] B[carol] !h — or :ask B[alice] _ · :do action · :clear · :help">
-</div>
 
 <script>
 const $ = id => document.getElementById(id);
