@@ -89,7 +89,7 @@ fn coin_lie_from_a_file_matches_the_api_driven_trace() {
 }
 
 #[test]
-fn impossible_actions_never_appear_in_the_ground_set() {
+fn every_declared_action_grounds_to_exactly_one_ground_action() {
     let p = Problem::parse(SRC).unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(p.actions.len(), 3, "three declarations, none parameterised");
 }

@@ -74,7 +74,10 @@ fn mk_implies(store: &mut Store, a: FormulaId, b: FormulaId) -> FormulaId {
 }
 
 /// Resolves a term's arguments to concrete object names.
-fn resolve_args(
+///
+/// Shared with [`crate::build_explicit`], which resolves a world's facts the same way:
+/// a hand-rolled copy there drifted from this one and lost the undeclared-object check.
+pub(crate) fn resolve_args(
     term: &Term,
     sig: &Sig,
     binds: &Bindings,

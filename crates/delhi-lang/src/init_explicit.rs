@@ -1,6 +1,7 @@
 //! The explicit `state` form (§7.3): worlds and edges written out directly.
 
 use crate::ast::{Cmp, EdgeDecl, WorldDecl};
+use crate::lower_formula::{resolve_args, Bindings};
 use crate::{Ctx, Diagnostics, Span};
 use delhi_mb::{Model, State};
 use delhi_syntax::Store;
@@ -10,9 +11,14 @@ use std::collections::HashMap;
 ///
 /// Reflexive edges are implicit and the relation is transitively closed before the
 /// frame is validated, so the source states the shape rather than its closure.
+///
+/// `block` spans the whole `state { … }` block. Failures that are properties of the
+/// block rather than of any one world or edge are reported against it; everything else
+/// keeps the span of the entry that caused it.
 pub fn build_explicit(
     worlds: &[WorldDecl],
     edges: &[EdgeDecl],
+    block: Span,
     ctx: &Ctx,
     _store: &mut Store,
     diags: &mut Diagnostics,
@@ -21,7 +27,7 @@ pub fn build_explicit(
     let n_agents = ctx.sig.n_agents();
 
     if worlds.is_empty() {
-        diags.push(Span::new(0, 0), "a `state` block needs at least one world");
+        diags.push(block, "a `state` block needs at least one world");
         return None;
     }
 
@@ -40,7 +46,7 @@ pub fn build_explicit(
         .collect();
     if designated.len() != 1 {
         diags.push(
-            worlds[0].span,
+            block,
             format!(
                 "exactly one world must be designated with `*`; found {}",
                 designated.len()
@@ -50,19 +56,17 @@ pub fn build_explicit(
     }
 
     let mut model = Model::new(worlds.len(), n_agents, n_atoms.max(1));
+    // A world's facts resolve through the same helper as a formula's arguments, so a
+    // typo'd object is named as such rather than surfacing as a missing proposition,
+    // and a `?variable` — never legal here, as nothing binds one in a `state` block —
+    // is rejected once instead of being pushed on as an empty argument and drawing a
+    // second, nonsensical complaint about `at()`.
+    let binds = Bindings::default();
     for (i, w) in worlds.iter().enumerate() {
         for t in &w.facts {
-            let args: Vec<String> = t
-                .args
-                .iter()
-                .map(|a| match a {
-                    crate::ast::Arg::Obj(o) => o.clone(),
-                    other => {
-                        diags.push(t.span, format!("a world's facts must be ground: {other:?}"));
-                        String::new()
-                    }
-                })
-                .collect();
+            let Some(args) = resolve_args(t, ctx.sig, &binds, diags) else {
+                continue;
+            };
             match ctx.sig.atom_id(&t.pred, &args) {
                 Some(a) => model.val[i].set(a as usize),
                 None => diags.push(
@@ -133,7 +137,7 @@ pub fn build_explicit(
     }
 
     if let Err(e) = model.validate() {
-        diags.push(worlds[0].span, format!("the declared frame is invalid: {e:?}"));
+        diags.push(block, format!("the declared frame is invalid: {e:?}"));
         return None;
     }
 
@@ -152,12 +156,14 @@ mod tests {
         let sig = Sig::build(&ast, &mut d);
         let consts = Constants::build(&ast, &sig, &mut d);
         let ctx = Ctx { sig: &sig, consts: &consts };
-        let (worlds, edges) = match &ast.init {
-            Some(crate::ast::Init::Explicit { worlds, edges, .. }) => (worlds.clone(), edges.clone()),
+        let (worlds, edges, block) = match &ast.init {
+            Some(crate::ast::Init::Explicit { worlds, edges, span }) => {
+                (worlds.clone(), edges.clone(), *span)
+            }
             other => panic!("expected an explicit state, got {other:?}"),
         };
         let mut store = Store::default();
-        match build_explicit(&worlds, &edges, &ctx, &mut store, &mut d) {
+        match build_explicit(&worlds, &edges, block, &ctx, &mut store, &mut d) {
             Some(st) if d.is_empty() => Ok((sig, store, st)),
             _ => Err(d.render(src)),
         }
@@ -259,6 +265,18 @@ mod tests {
     }
 
     #[test]
+    fn an_empty_state_block_is_blamed_on_the_block_not_byte_zero() {
+        // There is no entry to blame, and the fallback used to be `Span::new(0, 0)` —
+        // the first byte of the file, which is somewhere in `types` and has nothing to
+        // do with the complaint. The block's own span is what the caret must mark.
+        let src = "types{ Actor - Object }\nobjects{ a - Actor }\nagents{ a }\nprops{ h }\nstate { }\nactions{}";
+        let err = build(src).unwrap_err();
+        assert!(err.contains("at least one world"), "got:\n{err}");
+        assert!(err.contains("5:1"), "the caret belongs on the `state` block, got:\n{err}");
+        assert!(!err.contains("1:1"), "not on byte zero of the file, got:\n{err}");
+    }
+
+    #[test]
     fn a_frame_that_is_not_locally_connected_is_rejected() {
         // u and v both reach w but cannot be compared with each other.
         let err = build(r#"
@@ -266,7 +284,72 @@ mod tests {
             state { *u <- { }, v <- { p }, w <- { q }, a: u <= w, a: v <= w }
             actions{}
         "#).unwrap_err();
-        assert!(err.contains("connected") || err.contains("frame"),
-                "expected a frame-condition complaint, got:\n{err}");
+        // Name the variant, not the sentence. Every rejection in `build_explicit` that
+        // reaches `validate` renders as "the declared frame is invalid: {e:?}", so
+        // `contains("frame")` is true for *any* frame failure — reflexivity,
+        // transitivity, or connectedness — and the old `connected || frame` disjunct
+        // could never discriminate. `{e:?}` prints the `FrameError` variant, so
+        // matching on `NotLocallyConnected` pins it to the condition this test names.
+        assert!(err.contains("NotLocallyConnected"),
+                "expected a local-connectedness complaint, got:\n{err}");
+    }
+
+    #[test]
+    fn a_typo_d_object_in_a_world_s_facts_is_named() {
+        // The undeclared object has to be named. Reporting only "no proposition
+        // `at(bogus)`" sends the author looking at the `props` declaration, which is
+        // fine — the fault is in `objects`.
+        let err = build(r#"
+            types{ Location - Object } objects{ hall - Location } agents{ } props{ at(Location) }
+            state { *u <- { at(bogus) } }
+            actions{}
+        "#).unwrap_err();
+        assert!(err.contains("`bogus` is not a declared object"),
+                "the undeclared object must be named as such, got:\n{err}");
+    }
+
+    #[test]
+    fn a_variable_in_a_world_s_facts_is_reported_once_and_readably() {
+        // Nothing binds a variable inside a `state` block, so `?x` is never legal
+        // here. Two things must hold: the message is prose rather than Rust's `Debug`
+        // rendering of the argument, and the bad fact is dropped instead of being
+        // pushed on with an empty argument, which used to draw a second, nonsensical
+        // complaint about the proposition `at()`.
+        let mut d = Diagnostics::default();
+        let src = r#"
+            types{ Location - Object } objects{ hall - Location } agents{ } props{ at(Location) }
+            state { *u <- { at(?x) } }
+            actions{}
+        "#;
+        let ast = parse_file(src, &mut d);
+        let sig = Sig::build(&ast, &mut d);
+        let consts = Constants::build(&ast, &sig, &mut d);
+        let ctx = Ctx { sig: &sig, consts: &consts };
+        let (worlds, edges, block) = match &ast.init {
+            Some(crate::ast::Init::Explicit { worlds, edges, span }) => {
+                (worlds.clone(), edges.clone(), *span)
+            }
+            other => panic!("expected an explicit state, got {other:?}"),
+        };
+        let mut store = Store::default();
+        let _ = build_explicit(&worlds, &edges, block, &ctx, &mut store, &mut d);
+        let msgs: Vec<&str> = d.items().iter().map(|x| x.message.as_str()).collect();
+        assert_eq!(msgs.len(), 1, "one mistake, one diagnostic; got {msgs:?}");
+        assert!(msgs[0].contains("?x"), "the offending variable must be named: {msgs:?}");
+        assert!(!msgs[0].contains("Var("), "no Rust `Debug` output in a diagnostic: {msgs:?}");
+        assert!(!msgs[0].contains("at()"), "no follow-on complaint about `at()`: {msgs:?}");
+    }
+
+    #[test]
+    fn an_unknown_predicate_in_a_world_s_facts_is_reported() {
+        // The arguments resolve cleanly, so this reaches `atom_id` and must still be
+        // caught there — the shared `resolve_args` must not swallow the case.
+        let err = build(r#"
+            types{ Location - Object } objects{ hall - Location } agents{ } props{ at(Location) }
+            state { *u <- { nosuch(hall) } }
+            actions{}
+        "#).unwrap_err();
+        assert!(err.contains("no proposition `nosuch(hall)`"),
+                "an unknown predicate must still be reported, got:\n{err}");
     }
 }

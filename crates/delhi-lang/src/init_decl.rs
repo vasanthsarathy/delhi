@@ -96,8 +96,14 @@ fn agent_ids(
 /// declaration that does not hold there is reported rather than passed over.
 ///
 /// Returns `None` if construction was impossible; diagnostics explain why.
+///
+/// `block` spans the whole `initially { … }` block. Failures that are properties of the
+/// block rather than of any one entry — the uncertainty limit, and a frame this
+/// construction should never have produced — are reported against it; per-entry
+/// failures keep the span of their entry.
 pub fn build_declarative(
     items: &[Expr],
+    block: crate::Span,
     ctx: &Ctx,
     store: &mut Store,
     diags: &mut Diagnostics,
@@ -105,7 +111,6 @@ pub fn build_declarative(
     let n_atoms = ctx.sig.n_atoms();
     let n_agents = ctx.sig.n_agents();
     let binds = Bindings::default();
-    let whole = items.first().map_or(crate::Span::new(0, 0), |e| e.span());
 
     let mut v0 = Bits::new(n_atoms.max(1));
     let mut uncertain: Vec<(AgentId, AtomId)> = Vec::new();
@@ -186,7 +191,7 @@ pub fn build_declarative(
     u_atoms.dedup();
     if u_atoms.len() > MAX_UNCERTAIN_ATOMS {
         diags.push(
-            whole,
+            block,
             format!(
                 "{} uncertain atoms would need 2^{} worlds; the limit is {}",
                 u_atoms.len(),
@@ -255,7 +260,7 @@ pub fn build_declarative(
 
     if let Err(e) = model.validate() {
         diags.push(
-            whole,
+            block,
             format!("constructed an invalid frame: {e:?} — this is a bug in delhi-lang"),
         );
         return None;
@@ -296,12 +301,12 @@ mod tests {
         let sig = Sig::build(&ast, &mut d);
         let consts = Constants::build(&ast, &sig, &mut d);
         let ctx = Ctx { sig: &sig, consts: &consts };
-        let items = match &ast.init {
-            Some(crate::ast::Init::Declarative(v, _)) => v.clone(),
+        let (items, block) = match &ast.init {
+            Some(crate::ast::Init::Declarative(v, block)) => (v.clone(), *block),
             other => panic!("expected a declarative initial state, got {other:?}"),
         };
         let mut store = Store::default();
-        let st = build_declarative(&items, &ctx, &mut store, &mut d);
+        let st = build_declarative(&items, block, &ctx, &mut store, &mut d);
         (sig, store, st, d)
     }
 
@@ -426,12 +431,12 @@ mod tests {
         let sig = Sig::build(&ast, &mut d);
         let consts = Constants::build(&ast, &sig, &mut d);
         let ctx = Ctx { sig: &sig, consts: &consts };
-        let items = match &ast.init {
-            Some(crate::ast::Init::Declarative(v, _)) => v.clone(),
+        let (items, block) = match &ast.init {
+            Some(crate::ast::Init::Declarative(v, block)) => (v.clone(), *block),
             _ => unreachable!(),
         };
         let mut store = Store::default();
-        let _ = build_declarative(&items, &ctx, &mut store, &mut d);
+        let _ = build_declarative(&items, block, &ctx, &mut store, &mut d);
         assert!(
             d.items().iter().any(|x| x.message.contains("does not hold")),
             "an unsatisfiable declaration must be reported, not ignored"
@@ -479,14 +484,44 @@ mod tests {
         let sig = Sig::build(&ast, &mut d);
         let consts = Constants::build(&ast, &sig, &mut d);
         let ctx = Ctx { sig: &sig, consts: &consts };
-        let items = match &ast.init {
-            Some(crate::ast::Init::Declarative(v, _)) => v.clone(),
+        let (items, block) = match &ast.init {
+            Some(crate::ast::Init::Declarative(v, block)) => (v.clone(), *block),
             _ => unreachable!(),
         };
         let mut store = Store::default();
-        let out = build_declarative(&items, &ctx, &mut store, &mut d);
+        let out = build_declarative(&items, block, &ctx, &mut store, &mut d);
         assert!(out.is_none());
         assert!(d.items().iter().any(|x| x.message.contains("uncertain")));
+    }
+
+    #[test]
+    fn a_whole_block_refusal_is_blamed_on_the_block_not_its_first_entry() {
+        // The uncertainty limit is a property of the block, not of whichever entry
+        // happens to be written first, and the caret has to say so. Anchoring it to
+        // `items.first()` pointed at one arbitrary declaration — here `?[a] p0`, on
+        // the line after the keyword — and at byte zero of the file for a block with
+        // no entries at all.
+        let atoms: Vec<String> = (0..13).map(|i| format!("p{i}")).collect();
+        let src = format!(
+            "types{{ Actor - Object }} objects{{ a - Actor }} agents{{ a }} props{{ {} }}\n\
+             initially {{\n{}\n}}\nactions{{}}",
+            atoms.join(", "),
+            atoms.iter().map(|p| format!("  ?[a] {p}")).collect::<Vec<_>>().join(",\n"),
+        );
+        let d = raw(&src).3;
+        let limit = d
+            .items()
+            .iter()
+            .find(|x| x.message.contains("uncertain"))
+            .expect("the limit must be refused");
+        // `initially` is the first token on line 2; the entries begin on line 3.
+        assert_eq!(
+            (limit.span.start, limit.span.end),
+            (src.find("initially").unwrap(), src.rfind("}\nactions").unwrap() + 1),
+            "the refusal must span the whole `initially` block:\n{}",
+            d.render(&src)
+        );
+        assert!(d.render(&src).contains("2:1"), "and render at the keyword:\n{}", d.render(&src));
     }
 
     #[test]
@@ -605,12 +640,12 @@ mod tests {
         let sig = Sig::build(&ast, &mut d);
         let consts = Constants::build(&ast, &sig, &mut d);
         let ctx = Ctx { sig: &sig, consts: &consts };
-        let items = match &ast.init {
-            Some(crate::ast::Init::Declarative(v, _)) => v.clone(),
+        let (items, block) = match &ast.init {
+            Some(crate::ast::Init::Declarative(v, block)) => (v.clone(), *block),
             _ => unreachable!(),
         };
         let mut store = Store::default();
-        let _ = build_declarative(&items, &ctx, &mut store, &mut d);
+        let _ = build_declarative(&items, block, &ctx, &mut store, &mut d);
         assert_eq!(d.len(), 1, "expected exactly one diagnostic, got:\n{}", d.render(src));
         assert!(d.items()[0].message.contains("nosuch"));
     }
@@ -629,12 +664,12 @@ mod tests {
         let sig = Sig::build(&ast, &mut d);
         let consts = Constants::build(&ast, &sig, &mut d);
         let ctx = Ctx { sig: &sig, consts: &consts };
-        let items = match &ast.init {
-            Some(crate::ast::Init::Declarative(v, _)) => v.clone(),
+        let (items, block) = match &ast.init {
+            Some(crate::ast::Init::Declarative(v, block)) => (v.clone(), *block),
             _ => unreachable!(),
         };
         let mut store = Store::default();
-        let _ = build_declarative(&items, &ctx, &mut store, &mut d);
+        let _ = build_declarative(&items, block, &ctx, &mut store, &mut d);
         assert!(
             d.items().iter().any(|x| x.message.contains("does not hold")),
             "a contradictory entry must still be reported:\n{}",

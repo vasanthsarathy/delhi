@@ -15,9 +15,14 @@ fn world_name(i: usize) -> String {
 /// prints once as `~`. Task 10 parses the result back to an equivalent state.
 ///
 /// # Preconditions
-/// `sig` must be the signature that built `st` (same agent count, and every atom set
-/// in `st` below `sig.n_atoms()`), or the printed agent and atom names will not match
-/// the state's actual structure.
+/// `sig` must be the signature that built `st` — same agent count — or the printed
+/// agent names will not match the state's actual structure.
+///
+/// Atom ids in `st` at or above `sig.n_atoms()` are *not* a precondition: they are
+/// skipped, and that is the defined behaviour rather than a silent violation. A
+/// `Model` pads its valuation to at least one bit, so a signature declaring no atoms
+/// still yields a one-bit valuation with no name behind it, and a printer asked for
+/// output must produce it rather than trip an assertion on a state it did not build.
 pub fn print_state(st: &State, sig: &Sig) -> String {
     let m = &st.model;
     debug_assert!(
@@ -31,6 +36,7 @@ pub fn print_state(st: &State, sig: &Sig) -> String {
         let facts: Vec<&str> = m.val[w]
             .ones()
             .into_iter()
+            // See the doc comment: unnamed padding bits are skipped, not asserted away.
             .filter(|a| *a < sig.n_atoms())
             .map(|a| sig.atom_name(a as u32))
             .collect();
@@ -82,12 +88,14 @@ mod tests {
         let sig = Sig::build(&ast, &mut d);
         let consts = Constants::build(&ast, &sig, &mut d);
         let ctx = Ctx { sig: &sig, consts: &consts };
-        let (w, e) = match &ast.init {
-            Some(crate::ast::Init::Explicit { worlds, edges, .. }) => (worlds.clone(), edges.clone()),
+        let (w, e, block) = match &ast.init {
+            Some(crate::ast::Init::Explicit { worlds, edges, span }) => {
+                (worlds.clone(), edges.clone(), *span)
+            }
             _ => unreachable!(),
         };
         let mut store = Store::default();
-        let st = build_explicit(&w, &e, &ctx, &mut store, &mut d).expect("builds");
+        let st = build_explicit(&w, &e, block, &ctx, &mut store, &mut d).expect("builds");
         assert!(d.is_empty(), "{}", d.render(&src));
         (sig, st)
     }
@@ -134,12 +142,14 @@ mod tests {
         let sig2 = Sig::build(&ast, &mut d);
         let consts = Constants::build(&ast, &sig2, &mut d);
         let ctx = Ctx { sig: &sig2, consts: &consts };
-        let (w, e) = match &ast.init {
-            Some(crate::ast::Init::Explicit { worlds, edges, .. }) => (worlds.clone(), edges.clone()),
+        let (w, e, block) = match &ast.init {
+            Some(crate::ast::Init::Explicit { worlds, edges, span }) => {
+                (worlds.clone(), edges.clone(), *span)
+            }
             other => panic!("printed output did not parse as a state: {other:?}\n{printed}"),
         };
         let mut store = Store::default();
-        let round = build_explicit(&w, &e, &ctx, &mut store, &mut d)
+        let round = build_explicit(&w, &e, block, &ctx, &mut store, &mut d)
             .unwrap_or_else(|| panic!("round trip failed:\n{}\n{}", printed, d.render(&src)));
         assert!(d.is_empty(), "round trip errors:\n{}", d.render(&src));
         assert!(st.equivalent(&round), "the round trip must preserve the state");

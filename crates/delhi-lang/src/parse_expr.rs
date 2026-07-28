@@ -146,9 +146,13 @@ impl<'a> Parser<'a> {
             for _ in 0..width {
                 self.bump();
             }
-            // Optional `^psi` for conditional belief.
+            // Optional `^psi` for conditional belief. `parse_unary`, not
+            // `parse_primary`: the condition already reaches modalities through
+            // `parse_primary`, so admitting prefix `!` adds no ambiguity — it only
+            // stops `B^!q[a] p` collapsing into a cascade of unrelated complaints.
+            // Anything looser would swallow the `[agents]` that has to follow.
             let cond = if self.eat(&Tok::Caret) {
-                Some(Box::new(self.parse_primary(diags)))
+                Some(Box::new(self.parse_unary(diags)))
             } else {
                 None
             };
@@ -339,6 +343,30 @@ mod tests {
                 assert!(matches!(*body, Expr::Atom(ref t) if t.pred == "p"));
             }
             other => panic!("expected conditional belief, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_negated_condition_needs_no_parentheses() {
+        // The condition of a conditional belief parses with `parse_unary`, so prefix
+        // `!` is admitted directly. With `parse_primary` there — which already reaches
+        // modalities, so `B^K[b]q[a] p` worked — only `!` was excluded, and `B^!q[a] p`
+        // produced a cascade of three unrelated diagnostics instead of one tree.
+        //
+        // `Expr` carries spans and derives `PartialEq`, so the two sources are padded
+        // to put `!`, `q()`, and `p()` at identical byte offsets; the trees are then
+        // equal outright rather than merely equal-up-to-spans.
+        let bare = parse("B^ !q() [a] p()");
+        let parens = parse("B^(!q())[a] p()");
+        assert_eq!(bare, parens, "`B^!q[a] p` must parse as `B^(!q)[a] p`");
+        match bare {
+            Expr::Modality { op: Modal::Believes, cond: Some(c), .. } => match *c {
+                Expr::Not(inner, _) => {
+                    assert!(matches!(*inner, Expr::Atom(ref t) if t.pred == "q"));
+                }
+                other => panic!("expected the condition to be a negation, got {other:?}"),
+            },
+            other => panic!("expected a conditional belief, got {other:?}"),
         }
     }
 

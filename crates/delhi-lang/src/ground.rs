@@ -73,7 +73,14 @@ impl Sig {
             if !objects.contains_key(a) {
                 diags.push(*sp, format!("agent `{a}` is not a declared object"));
             }
+            // `intern` merges a repeat into the existing id, so a duplicate would
+            // otherwise pass unremarked while duplicate types, objects, and
+            // predicates are all reported. Detect it by whether an id was added.
+            let before = agents.len();
             agents.intern(a);
+            if agents.len() == before {
+                diags.push(*sp, format!("duplicate agent `{a}`"));
+            }
         }
 
         let mut preds = HashMap::new();
@@ -288,6 +295,24 @@ mod tests {
             "types{} objects{ bob - Ghost } agents{} props{} initially{} actions{}", &mut d);
         let _ = Sig::build(&ast, &mut d);
         assert!(d.items().iter().any(|x| x.message.contains("Ghost")));
+    }
+
+    #[test]
+    fn a_duplicate_agent_is_reported() {
+        // `Interner::intern` merges a repeat into the existing id, so nothing about
+        // the resulting signature records that `alice` was written twice: the agent
+        // count is 1 either way. Duplicate types, objects, and predicates are all
+        // diagnosed, and this must be too.
+        let mut d = Diagnostics::default();
+        let ast = parse_file(
+            "types{} objects{ alice - Object } agents{ alice, alice } props{} initially{} actions{}",
+            &mut d,
+        );
+        let s = Sig::build(&ast, &mut d);
+        assert_eq!(s.n_agents(), 1, "the id space still dedups");
+        assert_eq!(d.len(), 1, "exactly one complaint, and it is the duplicate");
+        assert!(d.items()[0].message.contains("duplicate agent `alice`"),
+                "got: {}", d.items()[0].message);
     }
 
     #[test]

@@ -46,11 +46,14 @@ impl Problem {
         let state = {
             let ctx = Ctx { sig: &sig, consts: &consts };
             match &ast.init {
-                Some(Init::Declarative(items, _)) => {
-                    build_declarative(items, &ctx, &mut store, &mut diags)
+                // The block's own span goes through: it is what whole-block failures
+                // are reported against, and reconstructing one from the entries would
+                // blame an arbitrary entry (or, for an empty block, byte zero).
+                Some(Init::Declarative(items, block)) => {
+                    build_declarative(items, *block, &ctx, &mut store, &mut diags)
                 }
-                Some(Init::Explicit { worlds, edges, .. }) => {
-                    build_explicit(worlds, edges, &ctx, &mut store, &mut diags)
+                Some(Init::Explicit { worlds, edges, span }) => {
+                    build_explicit(worlds, edges, *span, &ctx, &mut store, &mut diags)
                 }
                 None => None,
             }

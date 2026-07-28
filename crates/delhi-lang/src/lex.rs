@@ -11,8 +11,6 @@ pub enum Tok {
     Lower(String),
     /// `?name` — an action parameter.
     Var(String),
-    /// A non-negative integer.
-    Int(u32),
     /// `{`
     LBrace,
     /// `}`
@@ -117,17 +115,6 @@ pub fn lex(src: &str, diags: &mut Diagnostics) -> Vec<Token> {
             }
             let s = src[start..i].to_string();
             if c.is_ascii_uppercase() { Tok::Upper(s) } else { Tok::Lower(s) }
-        } else if c.is_ascii_digit() {
-            while i < b.len() && (b[i] as char).is_ascii_digit() {
-                i += 1;
-            }
-            match src[start..i].parse::<u32>() {
-                Ok(n) => Tok::Int(n),
-                Err(_) => {
-                    diags.push(Span::new(start, i), "integer too large");
-                    Tok::Int(0)
-                }
-            }
         } else if c == '?' {
             // `?name` is a variable; a bare `?` is the ignorant-whether operator,
             // and `??` is suspends-judgement.
@@ -259,6 +246,23 @@ mod tests {
         let _ = lex("a /* never closed", &mut d);
         assert_eq!(d.len(), 1);
         assert!(d.items()[0].message.contains("unterminated"));
+    }
+
+    #[test]
+    fn digits_start_no_token_of_their_own_but_still_belong_inside_names() {
+        // No production in either parser consumes a number, so there is no integer
+        // token: a leading digit is simply an unexpected character. Digits after the
+        // first letter are part of the identifier, which `p0` and the printer's `w1`
+        // both depend on.
+        assert_eq!(kinds("p0 w12"), vec![
+            Tok::Lower("p0".into()), Tok::Lower("w12".into()), Tok::Eof
+        ]);
+        let mut d = Diagnostics::default();
+        let toks = lex("7", &mut d);
+        assert_eq!(toks.iter().map(|t| t.tok.clone()).collect::<Vec<_>>(), vec![Tok::Eof]);
+        assert_eq!(d.len(), 1);
+        assert!(d.items()[0].message.contains("unexpected character"),
+                "got: {}", d.items()[0].message);
     }
 
     #[test]

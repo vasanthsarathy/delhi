@@ -2,6 +2,7 @@
 //! tests can drive them without spawning a process.
 
 use delhi_lang::{print_state, Problem};
+use delhi_mb::State;
 use std::fmt::Write;
 
 /// Parses `src`, or writes the diagnostics and returns `None`.
@@ -58,7 +59,10 @@ pub fn cmd_eval(src: &str, formula: &str, out: &mut String) -> i32 {
             2
         }
         Ok(f) => {
-            let holds = p.state.entails(&p.store, f);
+            // Through `Problem::entails`, not `state.entails` directly: that is where
+            // the "formula must come from this problem's store" precondition is stated
+            // and checked, and `parse_query` lowers into exactly that store.
+            let holds = p.entails(f);
             let _ = writeln!(out, "{holds}");
             i32::from(!holds)
         }
@@ -140,6 +144,9 @@ pub fn cmd_dot(src: &str, out: &mut String) -> i32 {
         let facts: Vec<&str> = m.val[w]
             .ones()
             .into_iter()
+            // A `Model` pads its valuation to at least one bit, so a signature with no
+            // atoms still has a set bit with no name behind it. Skipping the unnamed
+            // ones is the defined behaviour here, exactly as in `print_state`.
             .filter(|a| *a < p.sig.n_atoms())
             .map(|a| p.sig.atom_name(a as u32))
             .collect();
@@ -160,8 +167,6 @@ pub fn cmd_dot(src: &str, out: &mut String) -> i32 {
     let _ = writeln!(out, "}}");
     0
 }
-
-use delhi_mb::State;
 
 /// Whether the interactive loop should keep going.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
