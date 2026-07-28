@@ -42,10 +42,35 @@
   h2 .note { text-transform: none; letter-spacing: 0; margin-left: auto; }
   .body { overflow: auto; padding: 10px 12px; }
 
-  #editor {
-    width: 100%; height: 100%; resize: none; border: 0; outline: 0; padding: 10px 12px;
-    background: transparent; color: var(--ink); font: inherit; tab-size: 4; white-space: pre;
+  /* Highlighting is a coloured <pre> sitting exactly behind a transparent <textarea>.
+     Every metric that affects where a glyph lands — font, size, line-height, padding,
+     tab-size, whitespace handling — must match between the two, or the text drifts
+     apart as you scroll. Keeping a real textarea is what preserves native editing:
+     undo, selection, IME, spellcheck-off, and the caret. */
+  #editorWrap { position: relative; overflow: hidden; }
+  #highlight, #editor {
+    position: absolute; inset: 0; margin: 0; padding: 10px 12px; border: 0;
+    font: inherit; line-height: 1.5; tab-size: 4; white-space: pre; word-wrap: normal;
   }
+  #highlight { pointer-events: none; overflow: hidden; color: var(--ink); }
+  #editor {
+    resize: none; outline: 0; overflow: auto;
+    background: transparent; color: transparent; caret-color: var(--ink);
+  }
+  #editor::selection { background: #3a5570; color: transparent; }
+
+  /* Colour only. Nothing here may change glyph advance — no italic, no bold, no
+     letter-spacing — because the visible text is the <pre> while the caret and
+     selection come from the <textarea> underneath. A style that shifts one and not
+     the other puts the caret in the wrong place, and it would do so only on fonts
+     whose italic is not metric-compatible, which is the worst kind of bug to chase. */
+  .hl-comment  { color: #5c6370; }
+  .hl-section  { color: var(--a4); }
+  .hl-clause   { color: var(--a3); }
+  .hl-modal    { color: var(--a0); }
+  .hl-var      { color: var(--a1); }
+  .hl-type     { color: var(--a2); }
+  .hl-op       { color: var(--dim); }
 
   .facts { color: var(--good); margin-bottom: 10px; word-break: break-word; }
   table.att { border-collapse: collapse; width: 100%; }
@@ -92,7 +117,11 @@
   <div class="col">
     <section>
       <h2>editor <span class="note" id="editorNote"></span></h2>
-      <textarea id="editor" spellcheck="false" placeholder="pick an example, or write a .delhi file here"></textarea>
+      <div id="editorWrap">
+        <pre id="highlight" aria-hidden="true"></pre>
+        <textarea id="editor" spellcheck="false" wrap="off"
+                  placeholder="pick an example, or write a .delhi file here"></textarea>
+      </div>
     </section>
   </div>
 
@@ -128,6 +157,55 @@ let agentOrder = [];
 
 function esc(s) {
   return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+// Highlighting rules, tried in order — the first that matches at the cursor wins, so
+// the sequence encodes the precedence. Comments come first so nothing inside one is
+// styled; `?name` precedes bare `?` so a variable is not read as the ignorance
+// modality; and a capitalised word is only a modality when an agent list or a
+// condition follows it, which is what separates `K[alice]` from the type `Kettle`.
+const RULES = [
+  [/^\/\/[^\n]*/,                          'hl-comment'],
+  [/^\/\*[\s\S]*?(\*\/|$)/,                'hl-comment'],
+  [/^\?[A-Za-z_]\w*/,                      'hl-var'],
+  [/^(?:types|objects|agents|props|constants|initially|state|goal|actions)\b/, 'hl-section'],
+  [/^(?:actor|pre|causes|determines|announces|observes|aware|if)\b/,           'hl-clause'],
+  [/^(?:Kw|Bw|K|B|C|S)['′]?(?=\s*[\^\[])/, 'hl-modal'],
+  [/^(?:\[\]|□|\?\?|¿|\?)(?=\s*\[)/,  'hl-modal'],
+  [/^[A-Z][A-Za-z0-9_]*/,                  'hl-type'],
+  [/^(?:->|<=|[&|!~<>*^])/,                'hl-op'],
+];
+
+/// Renders `src` as highlighted HTML, leaving anything unmatched as plain text.
+function highlight(src) {
+  let out = '', i = 0;
+  while (i < src.length) {
+    const rest = src.slice(i);
+    let hit = null;
+    for (const [re, cls] of RULES) {
+      const m = re.exec(rest);
+      if (m && m[0]) { hit = [m[0], cls]; break; }
+    }
+    if (hit) {
+      out += `<span class="${hit[1]}">${esc(hit[0])}</span>`;
+      i += hit[0].length;
+    } else {
+      // Consume one character rather than scanning ahead: the rules are anchored, so
+      // the next position is where the next token could start.
+      out += esc(src[i]);
+      i += 1;
+    }
+  }
+  // A trailing newline would otherwise collapse and the last line's highlighting would
+  // sit one row above the caret.
+  return out + '\n';
+}
+
+function paintEditor() {
+  const ta = $('editor'), pre = $('highlight');
+  pre.innerHTML = highlight(ta.value);
+  pre.scrollTop = ta.scrollTop;
+  pre.scrollLeft = ta.scrollLeft;
 }
 function colourOf(agent) {
   const i = agentOrder.indexOf(agent);
@@ -336,9 +414,16 @@ $('undo').onclick = async () => { trace.pop(); await refresh(); };
 // pretending actions applied to an older file still describe this one.
 let timer = null;
 $('editor').addEventListener('input', () => {
+  // Repaint immediately so typing never lags behind the caret; only the round trip to
+  // the server is debounced.
+  paintEditor();
   clearTimeout(timer);
   setStatus('checking…');
   timer = setTimeout(refresh, 220);
+});
+$('editor').addEventListener('scroll', () => {
+  $('highlight').scrollTop = $('editor').scrollTop;
+  $('highlight').scrollLeft = $('editor').scrollLeft;
 });
 
 (async function start() {
@@ -353,6 +438,7 @@ $('editor').addEventListener('input', () => {
     // the last one happened to be scrolled to.
     $('state').scrollTop = 0;
     $('editor').scrollTop = 0;
+    paintEditor();
     await refresh();
   };
   const initial = names.includes('coin_lie.delhi') ? 'coin_lie.delhi' : names[0];

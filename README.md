@@ -331,6 +331,11 @@ built by clicking; and the console takes the same input the REPL does — a form
 `:undo`, `:reset`. Diagnostics arrive with line, column and caret exactly as they do on the
 command line, and every error at once rather than the first.
 
+The editor is syntax-highlighted: sections, clause keywords, modalities, variables and types
+each get a colour, and `?[a]` reads as the ignorance modality while `?who` reads as a
+variable — so `B[?who] secret(?whose)` distinguishes all three parts. It is a coloured layer
+behind a real `<textarea>`, which keeps undo, selection and the caret working natively.
+
 The graph labels each world with only the propositions that **differ between worlds**. In
 Grapevine that is the difference between nine atoms truncated to `at(a,r1),at…` and the three
 secrets, which is what the worlds actually disagree about.
