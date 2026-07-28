@@ -109,28 +109,59 @@ fn the_ice_cream_van_produces_a_second_order_false_belief() {
 }
 
 #[test]
-fn the_bicycle_lie_lands_and_then_loses_to_the_evidence() {
+fn sally_anne_second_order_makes_anne_wrong_about_being_seen() {
+    // The variant where nobody misses an event: Sally watches, and Anne's mistake is
+    // about *observability itself*. Anne's most plausible worlds have `watching`
+    // false, so in those worlds she computes Sally as oblivious.
+    let mut p = run(
+        include_str!("../../../examples/sally_anne_second_order.delhi"),
+        &["anne_moves()"],
+    );
+    expect(
+        &mut p,
+        &[
+            ("box", true),
+            ("K[sally] box", true),            // she watched it happen
+            ("K[anne] box", true),             // and anne moved it herself
+            ("B[anne] B[sally] basket", true), // yet expects sally to look in the basket
+            ("B[anne] B[sally] box", false),
+        ],
+    );
+    let goal = p.goal.expect("the file declares a goal");
+    assert!(p.state.entails(&p.store, goal), "the declared goal holds");
+}
+
+#[test]
+fn the_birthday_bicycle_revises_timmy_and_leaves_his_mother_wrong() {
     let src = include_str!("../../../examples/bicycle.delhi");
 
     // Before anything: belief without knowledge.
     let mut p = run(src, &[]);
-    expect(&mut p, &[("B[theo] !broken", true), ("K[theo] !broken", false)]);
+    expect(&mut p, &[("B[timmy] !bicycle", true), ("K[timmy] !bicycle", false)]);
 
-    // The lie reorders his plausibility, but confers no knowledge — and crucially
-    // is *not* safe belief, since a true announcement can dislodge it.
-    let mut p = run(src, &["mira_lies()"]);
+    // The lie holds his belief in place but confers no knowledge — and crucially is
+    // not *safe* belief, since a true announcement can dislodge it.
+    let mut p = run(src, &["mom_tells_him_no()"]);
     expect(
         &mut p,
         &[
-            ("B[theo] broken", true),
-            ("K[theo] broken", false),
-            ("[][theo] broken", false),
+            ("B[timmy] !bicycle", true),
+            ("K[timmy] !bicycle", false),
+            ("[][timmy] !bicycle", false),
         ],
     );
 
-    // Looking reorders it back, and this time he knows.
-    let mut p = run(src, &["mira_lies()", "theo_looks()"]);
-    expect(&mut p, &[("K[theo] !broken", true), ("B[theo] !broken", true)]);
+    // Looking reorders it back — and his mother, who never saw him go, is left
+    // holding a second-order false belief.
+    let mut p = run(src, &["mom_tells_him_no()", "timmy_looks_in_the_basement()"]);
+    expect(
+        &mut p,
+        &[
+            ("K[timmy] bicycle", true),
+            ("K[mom] bicycle", true),             // she hid it; she is not confused
+            ("B[mom] B[timmy] !bicycle", true),   // ...about the bicycle
+        ],
+    );
     let goal = p.goal.expect("the file declares a goal");
     assert!(p.state.entails(&p.store, goal), "the declared goal holds");
 }

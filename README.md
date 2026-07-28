@@ -124,15 +124,16 @@ state and paste the result back.
 
 ## Examples
 
-Six domains in `examples/`, each runnable and each pinned by a test in
+Seven domains in `examples/`, each runnable and each pinned by a test in
 `crates/delhi-lang/tests/` so the file, the test, and this README cannot drift apart.
 
 | File | What it is for |
 |---|---|
 | `coin_lie.delhi` | Second-order false belief, from Buckingham's thesis (Figs 5.4–5.10). The reference trace. |
 | `sally_anne.delhi` | The canonical false-belief task — Wimmer & Perner (1983) |
-| `ice_cream_van.delhi` | The second-order follow-up — Perner & Wimmer (1985) |
-| `bicycle.delhi` | Belief revision: a lie lands, then evidence overturns it |
+| `sally_anne_second_order.delhi` | Its second-order variant — Bräuner et al. (2016); Example 1 of KR 2024 |
+| `ice_cream_van.delhi` | Second-order false belief by missing an event — Perner & Wimmer (1985) |
+| `bicycle.delhi` | The Birthday Bicycle — Sullivan, Zaitchik & Tager-Flusberg (1994); the story KR 2021 opens with |
 | `coin_in_the_box.delhi` | The standard epistemic-planning benchmark |
 | `muddy_children.delhi` | The canonical multi-agent puzzle |
 
@@ -157,20 +158,38 @@ wrong about the van. Then the driver tells Mary, and John does not see that happ
 wrong about *Mary's mind*, which is a different and later-developing competence:
 `B[john] B[mary] at_park` alongside `K[mary] !at_park`.
 
-**The bicycle** is the argument for plausibility orderings in three lines. Mira lies that
-Theo's bicycle is broken; he believes her; he looks and sees it is fine. Under a flat belief
-set that sequence is a contradiction with nowhere to put the correction. Here it is just a
-reordering, twice:
+**The second-order Sally-Anne** changes one line and asks something harder. Sally does not
+leave — she stays and watches secretly, and Anne does not realise she has been seen. Nobody
+misses an event here; Anne's mistake is about *observability itself*, about whether Sally was
+in a position to see. That is what the conditions on observer clauses are for:
 
 ```
-> B[theo] !broken          true      # he assumes it is fine
-> :do mira_lies()
-> B[theo] broken           true      # the lie lands
-> K[theo] broken           false     #   ...as belief, not knowledge
-> [][theo] broken          false     #   ...and not safely: evidence can dislodge it
-> :do theo_looks()
-> K[theo] !broken          true      # and now he knows
+sally observes if watching     // true in fact, false in anne's picture
 ```
+
+Anne's most plausible worlds have `watching` false, so in those worlds she computes Sally as
+oblivious and her model of Sally never updates: `K[sally] box` and `B[anne] B[sally] basket`
+both hold.
+
+**The Birthday Bicycle** is the story KR 2021 opens with, and it does two jobs at once. It is
+Timmy's birthday; his mother has hidden a bicycle in the basement and tells him she is not
+giving him one, to keep the surprise. He believes her — then goes down and sees it.
+
+```
+> B[timmy] !bicycle           true      # he has no reason to expect one
+> :do mom_tells_him_no()
+> B[timmy] !bicycle           true      # the lie holds
+> K[timmy] !bicycle           false     #   ...as belief, not knowledge
+> [][timmy] !bicycle          false     #   ...and not safely: evidence can dislodge it
+> :do timmy_looks_in_the_basement()
+> K[timmy] bicycle            true      # he works it out
+> B[mom] B[timmy] !bicycle    true      # and she never learns that he did
+```
+
+The first half is the argument for plausibility orderings: under a flat belief set, believing
+`!bicycle` and then learning `bicycle` is a contradiction with nowhere to put the correction.
+Here it is a reordering, twice. The second half is the second-order false belief — his
+mother knows exactly where the bicycle is, and is wrong only about him.
 
 **Coin in the Box** is the benchmark, and it exists to separate three epistemic positions:
 seeing, hearing, and missing entirely. Alice peeks while Bob is in earshot but not looking,
@@ -316,6 +335,82 @@ belief-revision tradition, but not in this action language); the surface languag
 own rather than DEPL; and two known semantic gaps are pinned by tests that fail *by design*
 and are marked ignored, rather than going undocumented.
 
+## Where this sits
+
+Epistemic planning has two traditions that pull against each other. One starts from
+**expressiveness** — dynamic epistemic logic will represent anything, at the cost of the
+modeller hand-building event models and of undecidable plan existence. The other starts from
+**tractability** — restrict the representation until an off-the-shelf planner can be pointed
+at it. Action languages sit in between: keep a semantics grounded in DEL, but let the
+modeller declare who observes what and derive the event models from that.
+
+delhi is in the third camp, and specifically it implements **mB**, which is the branch of
+that lineage that swapped knowledge for belief.
+
+### Expressiveness
+
+| | Belief ≠ knowledge | Revision on contradicting evidence | Second-order false belief | False belief about *who observed* | Conditional `B^ψ` / safe `□` |
+|---|---|---|---|---|---|
+| **DEL** (Baltag–Moss–Solecki; van Ditmarsch et al.) | yes | via specific update rules | yes | yes | in extensions |
+| **Baltag & Smets** (2006, 2008) | yes | yes — this is where it comes from | yes | — | **yes, its home ground** |
+| **mA\*** (Baral, Gelfond, Pontelli & Son) | limited | crude — collapses *all* uncertainty | no | no | no |
+| **mA\* + higher-order observability** (KR 2024) | limited | as mA\* | yes | yes | no |
+| **mB** (Buckingham thesis; KR 2021) | yes | yes, preserving other uncertainty | yes | yes (local dynamic observability) | in the models, not the language |
+| **mB+ / delhi** | yes | yes | yes | yes | **yes, as query operators** |
+| **EFP / EFP 2.0** (Le, Fabiano, Son & Pontelli) | knowledge-oriented | — | — | — | no |
+| **PDKB / RP-MEP** (Muise et al.) | yes (in the belief work) | bounded | to the depth bound | no | no |
+
+### Machinery
+
+| | Event models | State representation | Planner | Notes |
+|---|---|---|---|---|
+| **DEL** | hand-built per problem | Kripke models | none inherent; plan existence undecidable in general | The complaint the action languages exist to answer |
+| **Baltag & Smets** | action-priority update | plausibility models | none | A logic, not a planning system |
+| **mA\*** | derived from observability declarations | Kripke (S5) | via EFP and others | The ancestor of everything below it |
+| **mB** | derived, per possible world | plausibility models | mecaPlanner (Java) | Adds local dynamic observability and hypothetical actions |
+| **mB+ / delhi** | derived, per possible world | plausibility models, bitset-backed | **none yet** | Model checking and reasoning only |
+| **EFP 2.0** | derived | *two* — Kripke and possibilities | forward search (C++) | Possibilities sidestep bisimulation contraction entirely |
+| **PDKB / RP-MEP** | compiled away | bounded-depth modal literals | any classical planner | Buys enormous scale by giving up disjunctive uncertainty |
+
+### What the differences actually amount to
+
+**mA\* → mB is the belief step**, and the sharpest way to see it is what each does when an
+agent is contradicted. mA\*'s revision removes *all* of an agent's uncertainty and hands it
+certain knowledge of the true state — so in the Birthday Bicycle story, Timmy peeking in the
+basement would teach him not only that the bicycle is there but everything else besides. mB
+revises what was actually contradicted and leaves the rest of the agent's uncertainty
+standing. That is the difference between a system that can model a *specific* false belief
+being corrected and one that can only reset an agent to omniscience.
+
+**Baltag & Smets is where the semantics comes from, and it is not an action language.** The
+plausibility preorders, the conditional belief `B^ψ`, the safe belief `□` — all of that is
+theirs. What mB contributes is putting it under an action language, so a modeller writes
+`announces !bicycle` and `mom observes` rather than drawing an event model. delhi's `+` is
+narrow and worth stating precisely: it exposes `B^ψ` and `□` as operators you can *query*,
+alongside the derived attitudes, rather than leaving them implicit in the models.
+
+**EFP and PDKB are solving the problem delhi has not started on.** Both are planners; delhi
+is not. They are also the two most interesting reference points for what a delhi planner
+should do, and they answer the scaling question in opposite ways. EFP 2.0 carries two state
+representations and can use "possibilities" to avoid bisimulation contraction altogether —
+directly relevant, since `research/bisimulation/` measures what contraction costs and what it
+leaves on the table. PDKB goes the other way and restricts the representation until a
+classical planner applies, trading away disjunctive uncertainty and unbounded modal depth for
+orders of magnitude of scale. delhi currently pays the full price of the general
+representation and gets none of the planning benefit, which is exactly the gap to close.
+
+**On the KR 2024 line.** delhi implements the thesis and KR 2021 semantics. The KR 2024
+paper's Example 1 — the second-order Sally-Anne, where Anne is wrong about whether she was
+seen — does work here, and `examples/sally_anne_second_order.delhi` is that example with its
+trace pinned by a test. But KR 2024's treatment of higher-order action observability is more
+general than what was implemented, and two related gaps are open and marked as such: the
+hypothetical-actions treatment in `§4.8` of the design spec, and `§4.7(a)`. Do not read the
+table as a claim that delhi covers KR 2024.
+
+*This table is my reading of the literature and the code, not a surveyed claim. The rows for
+EFP and PDKB in particular are the ones I am least sure of — corrections welcome, and they
+should be made here rather than carried in someone's head.*
+
 ## Why Rust
 
 The honest short answer is that this problem is small-but-brutal, and constant factors decide
@@ -354,7 +449,7 @@ things down. It also never once produced a wrong answer at runtime.
 
 ## What validates it
 
-202 tests, plus 2 that fail by design and are marked ignored — they pin known gaps rather
+203 tests, plus 2 that fail by design and are marked ignored — they pin known gaps rather
 than pretending they are absent.
 
 The load-bearing one is `examples/coin_lie.delhi`, which reproduces the published figures
@@ -384,9 +479,22 @@ changing anything in `delhi-mb`.
 delhi is a rewrite of mecaPlanner (Java, DEPL) with its own surface language. The semantics
 comes from:
 
-- Buckingham, *Epistemic Planning with Attitudes and Revision* (thesis) — the mB+ semantics
-  and the Coin Lie figures
-- Buckingham, Sarathy, Scheutz & Son, *Epistemic Planning with Perspectives* (KR 2021)
-- Buckingham et al. (KR 2024)
+- Buckingham, thesis — the mB semantics and the Coin Lie figures (5.4–5.10)
+- Buckingham, Sarathy, Scheutz & Son, *A Multi-Agent Epistemic and Doxastic Action Language
+  with Belief Revision and Local Dynamic Observability* (KR 2021)
+- Buckingham, Scheutz, Son & Fabiano, *Action Language mA\* with Higher-Order Action
+  Observability* (KR 2024) — not implemented; see the note in **Where this sits**
+- Baral, Gelfond, Pontelli & Son — mA\*, the action language mB builds on
+- Baltag & Smets (2006, 2008) — the plausibility models, conditional belief and safe belief
+
+Referenced for comparison rather than implemented: Baltag, Moss & Solecki (1998) and van
+Ditmarsch, van der Hoek & Kooi (2007) for DEL; Le, Fabiano, Son & Pontelli for EFP and
+Fabiano et al. for EFP 2.0; Muise, Belle, Felli, McIlraith, Miller, Pearce & Sonenberg for
+RP-MEP and the PDKB representation.
+
+The examples cite their own sources: Wimmer & Perner (1983) and Baron-Cohen, Leslie & Frith
+(1985) for Sally-Anne; Bräuner, Blackburn & Polyanskaya (2016) for its second-order variant;
+Perner & Wimmer (1985) for the ice-cream van; Sullivan, Zaitchik & Tager-Flusberg (1994) for
+the Birthday Bicycle.
 
 PDFs and the original Java source are in `refs/`.

@@ -62,7 +62,7 @@ Plan: **`docs/superpowers/plans/2026-07-27-delhi-v0.1-surface-language.md`** —
 - [x] **Task 15** — CLI `repl`
 - [x] Final whole-branch review + one fix wave + scoped re-review
 
-**Delivered:** 26 commits, 194 passing tests (132 new), 2 ignored by design, clippy clean under
+**Delivered:** 26 commits, 194 passing tests at merge (203 with the examples added since), 2 ignored by design, clippy clean under
 `--all-targets`, zero runtime dependencies. `delhi-mb` and `delhi-syntax` have a literally empty
 diff — the semantic core was consumed, never modified.
 
@@ -112,8 +112,17 @@ Smaller, each with its reason for standing:
 - [ ] **§4.7(a) needs settling against the primary source** before anyone attempts the θ/τ
       announcement fix — see the correction note in the spec. The documented defect does not
       manifest as described.
-- [ ] Is the §4.8 hypothetical-actions gap deliberate scoping in mB, or an oversight?
-      Pinned by an ignored failing test either way. **Needs Vasanth's judgement.**
+- [ ] **§4.8 hypothetical actions — the question was mis-posed, and the abstract answers it.**
+      I had this as "deliberate scoping in mB, or an oversight?". It is neither. The KR 2021
+      abstract lists it as a *contribution*: "incorporate the effects of actions that do not
+      occur, but that could have occurred according to the agent's knowledge", and the
+      introduction contrasts it with Buckingham, Kasenberg & Scheutz (2020), where an
+      oblivious agent could gain unwarranted knowledge that *that* action, but no other,
+      could have occurred. So it is a specified feature of the language that Plan 1 did not
+      implement — a missing feature, not an open design question. The ignored failing test
+      that pins it is therefore correctly ignored and correctly failing.
+      Still **needs Vasanth's call** on whether to implement it, and it likely pairs with
+      Plan 1's Task 16 (`𝒦^eff` / `𝒦^obs`).
 
 ## Deferred minors (triaged at final review, not blocking)
 

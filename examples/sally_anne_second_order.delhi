@@ -1,0 +1,52 @@
+// Sally-Anne, second-order variant.
+//
+// Bräuner, Blackburn & Polyanskaya (2016). This is Example 1 of the KR 2024 paper,
+// used there to show what an action language needs before it can express the case.
+//
+// Same room, same marble, same box and basket. The difference is one line: Sally
+// does not leave. She stays and watches secretly, and Anne does not realise she has
+// been seen.
+//
+//     "Where does Anne expect Sally to look for the marble?"
+//
+// The basket. Sally in fact knows perfectly well the marble is in the box, because
+// she watched it move. Anne is wrong about Sally's belief, which makes this a
+// second-order task rather than the first-order one in `sally_anne.delhi`.
+//
+// What this file demonstrates about the language is narrower and more specific than
+// "it does second-order beliefs" -- the ice-cream van already shows that, by having
+// an agent simply miss an event. Here nobody misses anything. Anne's mistake is
+// about *observability itself*: about whether Sally was in a position to see. That
+// is what local dynamic observability buys, and it is why the observer clauses take
+// conditions rather than being fixed per action:
+//
+//     sally observes if watching
+//
+// Anne's most plausible worlds are ones where `watching` is false, so in those
+// worlds she computes Sally as oblivious, and her model of Sally never updates.
+
+types   { Actor - Object }
+objects { sally, anne - Actor }
+agents  { sally, anne }
+props   { watching, basket, box }
+
+initially {
+    basket                         // the marble starts in the basket
+    watching                       // and sally really is watching
+
+    ?[anne] watching               // anne cannot tell whether she is being watched
+    B[anne] !watching              // and assumes she is not
+}
+
+// Sally knows where the marble is; Anne expects her to look in the basket anyway.
+goal { K[sally] box & B[anne] B[sally] basket }
+
+actions {
+    anne_moves() {
+        actor  anne
+        pre    basket
+        causes box, !basket
+        anne  observes
+        sally observes if watching     // true in fact, false in anne's picture
+    }
+}

@@ -1,42 +1,57 @@
-// The bicycle — belief revision, and why plausibility orderings earn their keep.
+// The Birthday Bicycle Story.
 //
-// Theo's bicycle is fine. Mira tells him it is broken; she is lying. Theo believes
-// her. Then he goes and looks, and sees that it is fine.
+// Sullivan, Zaitchik & Tager-Flusberg (1994), a second-order false-belief task from
+// the developmental literature. It is also the story the KR 2021 paper opens with,
+// as the thing its action language was built to represent.
 //
-// That sequence is the whole argument for ordering worlds by plausibility rather
-// than carrying a flat set of believed propositions. Under flat belief, Theo
-// believes `broken`, then learns `!broken`, and his belief set is contradictory --
-// there is nowhere to put the correction. Here nothing breaks: the lie reorders
-// which world Theo finds most plausible, and the evidence reorders it back. His
-// *knowledge* never changed at any point, because he never knew either way until
-// he looked.
+// It is Timmy's birthday and his mother has hidden a bicycle in the basement. To
+// keep the surprise she tells him she does *not* intend to give him one. Timmy
+// believes her. Then, unbeknownst to her, he goes down to the basement, sees the
+// bicycle, and works out what she meant to do.
+//
+//     "What does Timmy's mother think Timmy believes?"
+//
+// She thinks he still believes there is no bicycle. She is wrong, and she is wrong
+// about his mind rather than about the world -- she knows perfectly well the bicycle
+// is down there.
+//
+// Two things are happening at once, and the story needs both:
+//
+//   * Timmy is lied to, believes it, and then revises when the evidence arrives.
+//     Under a flat belief set that sequence is a contradiction with nowhere to put
+//     the correction. Here it is a reordering of which world he finds most
+//     plausible, and then a reordering back.
+//
+//   * His mother never sees him look, so her picture of him goes stale and stays
+//     stale. That is the second-order part.
 //
 // Ported from the mecaPlanner corpus (problems/aamas/bicycle1.depl).
 
 types   { Actor - Object }
-objects { theo, mira - Actor }
-agents  { theo, mira }
-props   { broken }
+objects { timmy, mom - Actor }
+agents  { timmy, mom }
+props   { bicycle }                // there is a bicycle in the basement for him
 
 initially {
-    // `broken` is unlisted, so it is false: the bicycle is fine.
-    ?[theo] broken                 // theo cannot tell from here
-    B[theo] !broken                // but he has no reason to worry
+    bicycle                        // there really is one
+    ?[timmy] bicycle               // but he cannot see the basement from here
+    B[timmy] !bicycle              // and has no particular reason to expect it
 }
 
-// Mira's lie lands, and then loses to the evidence.
-goal { K[theo] !broken }
+// He works out the truth; she never learns that he did.
+goal { K[timmy] bicycle & B[mom] B[timmy] !bicycle }
 
 actions {
-    mira_lies() {
-        actor     mira
-        announces broken           // false, and `announces` does not require truth
-        theo observes, mira observes
+    mom_tells_him_no() {
+        actor     mom
+        announces !bicycle         // a lie, told to protect the surprise
+        timmy observes, mom observes
     }
 
-    theo_looks() {
-        actor      theo
-        determines broken          // sensing: he comes to KNOW, not merely believe
-        theo observes
+    timmy_looks_in_the_basement() {
+        actor      timmy
+        determines bicycle         // sensing: he comes to KNOW, not merely believe
+        timmy observes
+        // mom is not listed, so she is oblivious -- she has no idea he went down.
     }
 }
