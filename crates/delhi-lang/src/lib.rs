@@ -11,6 +11,7 @@ pub mod lower_action;
 pub mod lower_formula;
 pub mod parse_expr;
 pub mod parse_file;
+pub mod print;
 pub mod span;
 
 pub use ast::{Arg, Ast, Expr, Modal, Term};
@@ -23,4 +24,5 @@ pub use lower_action::{ground_actions, Ctx, GroundAction};
 pub use lower_formula::{lower_formula, Bindings};
 pub use parse_expr::Parser;
 pub use parse_file::parse_file;
+pub use print::print_state;
 pub use span::{Diagnostic, Diagnostics, Span};
