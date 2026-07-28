@@ -4,12 +4,19 @@ An epistemic model checker and reasoning system. It represents what agents know 
 believe, how those attitudes change when things happen, and — the part that makes it
 interesting — how an agent can end up confidently wrong about what another agent believes.
 
-Written in Rust, no runtime dependencies.
+[![ci](https://github.com/vasanthsarathy/delhi/actions/workflows/ci.yml/badge.svg)](https://github.com/vasanthsarathy/delhi/actions/workflows/ci.yml)
+[![licence](https://img.shields.io/badge/licence-MIT%20OR%20Apache--2.0-blue)](LICENSE.md)
+
+Written in Rust. A single self-contained binary, and — apart from the optional browser UI
+— no dependencies at all.
 
 ```
 $ delhi eval examples/coin_lie.delhi -f "B[carol] h"
 true
 ```
+
+[Install](#install) · [The language](#the-language) · [Querying](#querying) ·
+[Benchmarks](#how-fast-and-does-it-blow-up)
 
 ## Why
 
@@ -24,27 +31,99 @@ considers possible; belief is what holds across the ones it finds *most* plausib
 lie lands, the agent's ordering shifts without its knowledge changing — and when the truth
 arrives, the ordering shifts back.
 
+## Install
+
+`delhi` is a single self-contained binary. Four ways to get one, in order of how little
+they ask of you.
+
+**A prebuilt binary — no Rust needed.** Grab the archive for your platform from
+[Releases](https://github.com/vasanthsarathy/delhi/releases), unpack it, and put `delhi`
+somewhere on your `PATH`. Each archive carries the binary, the examples, and the licences,
+and `SHA256SUMS` is published beside them.
+
+**A script that does the above.** It downloads one archive, checks it against
+`SHA256SUMS`, and unpacks it to `~/.local/bin` (or `%LOCALAPPDATA%\delhi\bin`). It does
+not edit your shell profile — it tells you whether that directory is on `PATH` and leaves
+the change to you.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vasanthsarathy/delhi/master/install.sh | sh
+```
+```powershell
+irm https://raw.githubusercontent.com/vasanthsarathy/delhi/master/install.ps1 | iex
+```
+
+**From the repository, with `cargo`.** Compiles from source and installs into
+`~/.cargo/bin`, which the Rust installer already puts on your `PATH` — so it is globally
+available with no clone and no further steps. Needs a Rust toolchain and a couple of
+minutes.
+
+```bash
+cargo install --git https://github.com/vasanthsarathy/delhi delhi-cli
+```
+
+**From a clone**, if you are working on delhi itself:
+
+```bash
+git clone https://github.com/vasanthsarathy/delhi && cd delhi
+cargo install --path crates/delhi-cli    # or: cargo build --release
+```
+
+Whichever route: `delhi --version` should answer, and `delhi --help` lists the
+subcommands.
+
+Adding `--no-default-features` to either `cargo install` builds the CLI with **no external
+dependencies at all** — everything except `delhi gui`, which is the only part that needs
+any. CI builds that configuration on every push, so it stays real.
+
+Minimum supported Rust is **1.78**, checked in CI. It is a promise about *using* delhi:
+running the test suite wants a newer compiler, because a test-only dependency does.
+
 ## Quick start
 
-Put `delhi` on your `PATH` once and stop typing `cargo run`:
-
 ```bash
-cargo install --path crates/delhi-cli
-delhi check examples/coin_lie.delhi
+delhi check examples/coin_lie.delhi        # is this file well-formed?
+delhi state examples/coin_lie.delhi        # what is true, and who believes what
+delhi eval  examples/coin_lie.delhi -f "B[carol] h"
+delhi repl  examples/coin_lie.delhi        # poke at it interactively
+delhi gui                                  # browser UI over the .delhi files here
 ```
 
-If you would rather not install, `cargo build --release` leaves the binary at
-`target/release/delhi` — that is the same thing without the copy, and it is what you want
-for timing anything, since `cargo run` defaults to an unoptimised build.
+`delhi gui` serves whatever directory you point it at — your own folder of `.delhi` files,
+not this repository:
 
 ```bash
-cargo build --release
-./target/release/delhi repl examples/coin_lie.delhi
+cd ~/my-domains && delhi gui        # or: delhi gui ~/my-domains -p 9000
 ```
+
+The ten examples are compiled into the binary, so a fresh download opens on something to
+read even in an empty directory. They are read-only; saving one writes a copy into the
+directory being served.
 
 Output is coloured when stdout is a terminal, and plain otherwise — so
 `delhi dot … | dot -Tpng` stays byte-clean. `NO_COLOR=1` turns it off, `CLICOLOR_FORCE=1`
 turns it on through a pipe.
+
+## Using delhi from another project
+
+The semantics and the language are libraries, and the CLI is one consumer of them.
+`delhi-lang` is the layer most projects want: it turns source text into a checked
+`Problem` and answers questions about it.
+
+```toml
+[dependencies]
+delhi-lang = { git = "https://github.com/vasanthsarathy/delhi" }
+```
+
+```rust
+let problem = delhi_lang::Problem::parse(src)?;
+let f = /* … lower a formula … */;
+assert!(problem.entails(f));
+```
+
+`delhi-mb` underneath it is the model checker proper — plausibility models, product
+update, bisimulation — and `delhi-syntax` is the hash-consed formula store. All three have
+zero external dependencies.
 
 ## The language
 
@@ -518,12 +597,13 @@ true
 
 ### The browser UI
 
-For working through a scenario, `delhi-gui` is easier than the REPL: it shows the file, the
+For working through a scenario, `delhi gui` is easier than the REPL: it shows the file, the
 state, and the model at once, and re-checks as you type.
 
 ```bash
-cargo run -p delhi-gui        # then open http://127.0.0.1:8080
-cargo run -p delhi-gui 9000   # a different port
+delhi gui                     # this directory, on http://127.0.0.1:8080
+delhi gui ~/my-domains        # a different directory
+delhi gui -p 9000             # a different port
 ```
 
 ```
@@ -562,10 +642,15 @@ too. Every error is reported at once, as on the command line.
 
 A `clear` button sits on the results tab, and `:clear` does the same from the prompt.
 
-`new` starts from a small template, and `save` writes to a gitignored `scratch/` directory
-that the file dropdown lists alongside `examples/`. Only `scratch/` is writable, so the UI
-cannot overwrite a curated example; names are restricted to plain `.delhi` filenames, since
-they arrive from a query string.
+**Every divider is draggable.** Sizes persist across reloads, and double-clicking one
+handle resets that split alone. They clamp: a panel dragged to zero would take its own
+handle off-screen and leave nothing to grab.
+
+`new` starts from a small template, and `save` writes into the directory being served. The
+file dropdown lists that directory's `.delhi` files first, then the bundled examples under
+an `examples/` prefix — those live inside the binary, so they are read-only and saving one
+writes a copy under whatever name you give it. Names are restricted to plain `.delhi`
+filenames, since they arrive from a query string.
 
 The editor is syntax-highlighted: sections, clause keywords, modalities, variables and types
 each get a colour, and `?[a]` reads as the ignorance modality while `?who` reads as a
@@ -583,9 +668,10 @@ machine it runs on. Do not expose it.
 and `serde_json`. The rule exists so that the crates carrying the semantics and the language
 stay auditable and keep building years from now; a debugging UI makes no such claim, and
 hand-rolling HTTP to honour a rule whose reason does not reach it would buy nothing. The
-exemption is kept honest by giving the crate no logic of its own: every answer it renders
-comes from `delhi-lang`, where it is tested. `cargo build` and `cargo test` at the workspace
-root skip it, so the core stays fast to build.
+exemption is kept honest two ways: the crate has no logic of its own — every answer it
+renders comes from `delhi-lang`, where it is tested — and it sits behind the `gui` feature,
+so `cargo install --no-default-features` yields a `delhi` with an empty dependency graph
+and everything but this one subcommand. CI builds that configuration on every push.
 
 ### Pictures
 
@@ -688,8 +774,10 @@ changes that.
 | `delhi-core` | the backend-agnostic trait a planner would be generic over |
 | `delhi-lang` | the front end: lex → parse → ground → lower |
 | `delhi-cli` | the `delhi` binary |
+| `delhi-gui` | the browser UI, behind `delhi-cli`'s default-on `gui` feature |
 
-`delhi-lang` depends on the semantics; the semantics does not depend on the front end.
+`delhi-lang` depends on the semantics; the semantics does not depend on the front end. Only
+`delhi-gui` has external dependencies, and only it is optional.
 
 ## What is new here
 

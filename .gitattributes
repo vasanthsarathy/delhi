@@ -1,0 +1,11 @@
+# Everything is stored with LF in the repository. Without this, a Windows checkout
+# commits CRLF back and every cross-platform diff is the whole file.
+* text=auto eol=lf
+
+# Shell scripts must keep LF even on a Windows checkout: a CRLF shebang line makes the
+# interpreter unfindable, and `install.sh` is run by people who did not clone the repo.
+*.sh text eol=lf
+
+*.png binary
+*.jpg binary
+*.pdf binary

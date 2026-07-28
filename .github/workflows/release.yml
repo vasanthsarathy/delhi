@@ -1,0 +1,138 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  # Lets a release be rehearsed against a branch without minting a tag first. The draft
+  # release step is skipped unless a tag is what triggered the run.
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-13 # the last x86 runner; macos-latest is Apple silicon
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # `--locked` so the artefact is built from the committed Cargo.lock. A release that
+      # silently picked up a newer dependency would not be the thing that was tested.
+      - name: build
+        run: cargo build --release --locked -p delhi-cli --target ${{ matrix.target }}
+
+      - name: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ "$GITHUB_REF_TYPE" = "tag" ] || VERSION="dev"
+          NAME="delhi-${VERSION}-${{ matrix.target }}"
+          mkdir -p "dist/$NAME"
+          BIN="target/${{ matrix.target }}/release/delhi"
+          # `if`, not `[ … ] && …`: under `set -e` a false test as the last command of a
+          # step fails the step, which on Linux is every run.
+          if [ -f "$BIN.exe" ]; then BIN="$BIN.exe"; fi
+          cp "$BIN" "dist/$NAME/"
+          cp README.md LICENSE-MIT LICENSE-APACHE "dist/$NAME/"
+          cp -r examples "dist/$NAME/"
+          cd dist
+          # The archive is what a stranger downloads, so it carries the examples and the
+          # licences alongside the binary — a bare executable leaves them with nothing to
+          # open and no statement of terms.
+          if [[ "${{ matrix.target }}" == *windows* ]]; then
+            7z a -tzip "$NAME.zip" "$NAME" >/dev/null
+            echo "ASSET=dist/$NAME.zip" >> "$GITHUB_ENV"
+          else
+            tar czf "$NAME.tar.gz" "$NAME"
+            echo "ASSET=dist/$NAME.tar.gz" >> "$GITHUB_ENV"
+          fi
+
+      # Proves the packaged binary runs on a clean path before it is offered to anyone.
+      - name: smoke test the packaged binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$(dirname "$ASSET")"
+          DIR="$(basename "$ASSET")"; DIR="${DIR%.zip}"; DIR="${DIR%.tar.gz}"
+          BIN="$PWD/$DIR/delhi"
+          if [ -f "$BIN.exe" ]; then BIN="$BIN.exe"; fi
+          "$BIN" --version
+          "$BIN" eval "$DIR/examples/coin_lie.delhi" -f "B[carol] h"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  release:
+    name: publish
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # One checksum file over every archive, so a download can be verified without
+      # trusting the page it came from.
+      - name: checksums
+        run: |
+          cd dist
+          # `delhi-*`, not `*`: globbing the whole directory risks the checksum file
+          # listing itself, depending on when the shell creates the redirect target.
+          sha256sum delhi-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: notes
+        run: |
+          cat > notes.md <<'NOTES'
+          Download the archive for your platform, unpack it, and put `delhi` somewhere on
+          your `PATH`. No Rust toolchain needed.
+
+          ```
+          delhi check examples/coin_lie.delhi
+          delhi gui .                # browser UI over the .delhi files here
+          ```
+
+          Verify a download against `SHA256SUMS`. Building from source instead:
+          `cargo install --git https://github.com/vasanthsarathy/delhi delhi-cli`
+          NOTES
+
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "delhi $GITHUB_REF_NAME" \
+            --notes-file notes.md

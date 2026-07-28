@@ -1,0 +1,97 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch cancels the previous run: the old answer is about code
+# nobody is looking at any more.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      # One platform is enough for formatting: rustfmt's output does not vary by OS, and
+      # running it three times only buys three copies of the same diff.
+      - name: format
+        if: matrix.os == 'ubuntu-latest'
+        run: cargo fmt --all --check
+
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: test
+        run: cargo test --workspace
+
+      # The dependency-free build is a claim the README makes, so it gets a job rather
+      # than a promise. Without this, a stray `use serde::…` in delhi-lang would break it
+      # and nothing would notice until someone tried the build.
+      - name: build without default features
+        run: cargo build -p delhi-cli --no-default-features
+
+      # A downloaded binary must work outside the repository — the bug this whole
+      # packaging effort started from. Run it from a directory that is not the checkout.
+      - name: smoke test the installed binary
+        shell: bash
+        run: |
+          cargo build --release -p delhi-cli
+          BIN="$PWD/target/release/delhi"
+          # `if`, not `[ … ] && …`: GitHub runs bash with -e, where a false test as the
+          # last command of a step fails the step.
+          if [ -f "$BIN.exe" ]; then BIN="$BIN.exe"; fi
+          mkdir -p "$RUNNER_TEMP/elsewhere"
+          cp examples/coin_lie.delhi "$RUNNER_TEMP/elsewhere/"
+          cd "$RUNNER_TEMP/elsewhere"
+          "$BIN" --version
+          "$BIN" check coin_lie.delhi
+          "$BIN" eval coin_lie.delhi -f "B[carol] h"
+          "$BIN" step coin_lie.delhi -a "announce_not_heads()" "distract_a()" "peek_c()"
+
+  msrv:
+    name: msrv
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Pinned to the `rust-version` in Cargo.toml. It is a promise to anyone on a
+      # distribution's Rust rather than rustup's, so it is checked rather than assumed.
+      - uses: dtolnay/rust-toolchain@1.78.0
+      - uses: Swatinem/rust-cache@v2
+      # Deliberately not `--all-targets`. The MSRV is a promise about *using* delhi, and
+      # the test-only tree does not ship: proptest pulls a getrandom that needs edition
+      # 2024, which would drag the stated floor up to 1.85 for a dependency no consumer
+      # ever builds. Everything that ships is covered here.
+      - run: cargo check --workspace
+
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # delhi-lang is meant to be used from other projects, so a broken intra-doc link is
+      # a defect in the public surface, not a cosmetic issue.
+      - run: cargo doc --workspace --no-deps
