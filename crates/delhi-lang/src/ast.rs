@@ -191,6 +191,20 @@ pub enum Clause {
     },
 }
 
+/// `head(?a, ?b) :- b0, b1` in the `rules` section.
+///
+/// A Horn clause over constants. Bodies carry no negation, so the program is monotone and
+/// its least fixpoint is reached by iterating to saturation.
+#[derive(Clone, Debug)]
+pub struct RuleDecl {
+    /// What the rule derives.
+    pub head: Term,
+    /// What must hold for it to fire.
+    pub body: Vec<Term>,
+    /// Source location.
+    pub span: Span,
+}
+
 /// `name(?a, ?b) = <formula>` in the `define` section.
 ///
 /// A named formula, expanded before lowering. Parameters are variables substituted with
@@ -301,6 +315,8 @@ pub struct Ast {
     pub constants: Vec<ConstDecl>,
     /// `define` — named formulas, expanded away before lowering.
     pub defines: Vec<DefDecl>,
+    /// `rules` — Horn clauses over constants, saturated into the constant table.
+    pub rules: Vec<RuleDecl>,
     /// `initially` or `state`
     pub init: Option<Init>,
     /// `goal`, if written.

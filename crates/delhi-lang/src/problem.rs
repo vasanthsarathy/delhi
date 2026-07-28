@@ -55,7 +55,10 @@ impl Problem {
         crate::expand_ast(&mut ast, &defs, &mut diags);
 
         let sig = Sig::build(&ast, &mut diags);
-        let consts = Constants::build(&ast, &sig, &mut diags);
+        let mut consts = Constants::build(&ast, &sig, &mut diags);
+        // Horn rules saturate into the constant table, so a derived predicate is an
+        // ordinary constant by the time anything is lowered.
+        crate::rules::saturate(&ast, &sig, &mut consts, &mut diags);
         let mut store = Store::default();
 
         let state = {

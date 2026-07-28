@@ -38,16 +38,27 @@ fn run(src: &str, actions: &[&str]) -> Problem {
 
 /// Lowers a formula against an already-checked problem, so tests read as the surface
 /// language rather than as store calls.
+///
+/// Two things here are load-bearing, and an earlier version had neither. It **expands
+/// definitions**, so a test may use a `define` name exactly as the file and the prompt
+/// do. And it **panics on any diagnostic** rather than discarding them: lowering returns
+/// `⊥` on failure, so a mistyped or unexpanded name would quietly read as `false` and
+/// make a `("…", false)` assertion pass for entirely the wrong reason.
 fn q(p: &mut Problem, text: &str) -> FormulaId {
-    delhi_lang::lower_formula(
-        &delhi_lang::Parser::new(&delhi_lang::lex(text, &mut delhi_lang::Diagnostics::default()))
-            .parse_expr(&mut delhi_lang::Diagnostics::default()),
+    let mut diags = delhi_lang::Diagnostics::default();
+    let toks = delhi_lang::lex(text, &mut diags);
+    let expr = delhi_lang::Parser::new(&toks).parse_expr(&mut diags);
+    let expr = delhi_lang::expand(&expr, &p.defs, &mut diags);
+    let f = delhi_lang::lower_formula(
+        &expr,
         &p.sig,
         &p.consts,
         &delhi_lang::Bindings::default(),
         &mut p.store,
-        &mut delhi_lang::Diagnostics::default(),
-    )
+        &mut diags,
+    );
+    assert!(diags.is_empty(), "`{text}` did not lower:\n{}", diags.render(text));
+    f
 }
 
 /// Asserts each `(formula, expected)` pair in the problem's current state.
@@ -260,6 +271,33 @@ fn grapevine_spreads_a_secret_to_one_agent_and_not_another() {
     );
     let goal = p.goal.expect("the file declares a goal");
     assert!(p.state.entails(&p.store, goal), "the declared goal holds");
+}
+
+#[test]
+fn reachability_derives_a_closure_that_prunes_impossible_actions() {
+    // Rules, definitions and invariants in one file. The map is static, so `reach` is a
+    // parse-time fixpoint that folds away: it never becomes a proposition, and the
+    // `walk` groundings whose `adjacent` guard folded to false are never built.
+    let mut p = run(include_str!("../../../examples/reachability.delhi"), &[]);
+    assert_eq!(p.sig.n_atoms(), 4, "only at(Actor, Room) expands into atoms");
+    assert_eq!(p.actions.len(), 2, "10 of 12 walk groundings are impossible");
+    assert!(p.action("walk(alice,hall,study)").is_some());
+    assert!(p.action("walk(alice,hall,cellar)").is_none(), "not adjacent");
+
+    expect(
+        &mut p,
+        &[
+            ("reach(hall, study)", true),      // one step
+            ("reach(hall, attic)", true),      // two — only the recursive rule gives this
+            ("reach(hall, cellar)", false),    // no path
+            ("reach(attic, hall)", false),     // not symmetric
+            ("can_get(alice, attic)", true),   // a definition over a derived predicate
+            ("can_get(alice, cellar)", false),
+        ],
+    );
+    let goal = p.goal.expect("the file declares a goal");
+    assert!(p.state.entails(&p.store, goal), "the declared goal holds");
+    assert!(p.violated(&p.state).is_empty(), "and the invariant holds");
 }
 
 #[test]

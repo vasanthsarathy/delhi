@@ -131,9 +131,81 @@ state {
 This is also exactly what `delhi show` prints, so you can inspect a declaratively-built
 state and paste the result back.
 
+### Constraints, definitions and rules
+
+Three optional sections, each answering a different need.
+
+**`invariants`** — claims that must hold in every state, not only the first. An `initially`
+entry that drives no construction is already an assertion about the start; an invariant is
+the same claim made about the whole run, which is usually what a domain constraint means.
+
+```
+invariants { !((B[a] p & B[b] !p) | (B[a] !p & B[b] p)) }
+```
+```
+$ delhi step domain.delhi -a "lie()"
+applied lie()
+invariant violated after lie():
+  !((B[a] p & B[b] !p) | (B[a] !p & B[b] p))
+```
+
+Checked when the initial state is built and after every action, in `step`, the REPL and the
+browser. `check` refuses a domain inconsistent with its own constraint; `step` exits 1; the
+REPL reports and keeps going, since exploring past a break is usually what you want.
+
+**`define`** — a named formula, expanded before anything is lowered, so the semantics never
+learns it existed. Parameters substitute objects and may stand where an agent name does.
+
+```
+define {
+    blocked(?r)       = !lit(?r) | locked(?r)
+    can_enter(?w, ?r) = !blocked(?r) & K[?w] !blocked(?r)
+}
+```
+
+Usable anywhere a formula is — preconditions, goals, invariants, and at the prompt.
+Definitions may call definitions; a cycle is rejected when the table is built rather than
+caught by a depth limit. Two things are refused deliberately: a definition cannot be
+`causes`d or written as a world fact, since both need an atom the semantics can *set*; and
+parameters range over objects, not formulas, so `define f(?p) = K[a] ?p` is a second-order
+macro and not supported.
+
+**`rules`** — Horn clauses over constants, saturated to a least fixpoint at parse time.
+
+```
+constants { !adjacent(Room, Room)  adjacent(hall, study)  adjacent(study, attic) }
+rules {
+    reach(?x, ?y) :- adjacent(?x, ?y)
+    reach(?x, ?z) :- adjacent(?x, ?y), reach(?y, ?z)
+}
+```
+
+`reach(hall, attic)` folds to `true` like any other constant. Derived predicates never
+become propositions, so they cost no bit in any world — in `examples/reachability.delhi`
+the signature stays at four atoms, and ten of the twelve `walk` groundings are pruned
+before they are built because their `adjacent` guard folded to false.
+
+**Constants only, and that is the interesting restriction.** The fixpoint runs once, which
+is sound only because the constant table is static. A rule over a *fluent* would have an
+extension that varies per world and per action, so computing it would mean either a
+fixpoint per world at evaluation or maintaining derived atoms through product update — the
+frame problem again. It is refused with a message rather than half-supported. Bodies carry
+no negation, which keeps the program monotone so the least fixpoint exists; and every head
+variable must appear in the body, or the head would assert facts the body never justified.
+
+### Axioms are a different matter
+
+Logical axioms are **not** assertable, deliberately. S5 for knowledge, KD45 for belief and
+the bridges between them are properties of the *frame*, enforced by `Model::validate` and
+relied on by the semantics and the soundness proof. Asserting one is a no-op because it
+already holds; weakening one means a different frame class, which is a change to the
+semantics rather than to a domain, and would invalidate results a file has no business
+invalidating. Anything strictly *stronger* than the frame gives is a domain constraint —
+write it as an invariant.
+
 ## Examples
 
-Nine domains in `examples/`, each runnable and each pinned by a test in
+Ten domains in `examples/`, each runnable and each pinned by a test in
 `crates/delhi-lang/tests/` so the file, the test, and this README cannot drift apart.
 
 | File | What it is for |
@@ -147,6 +219,7 @@ Nine domains in `examples/`, each runnable and each pinned by a test in
 | `muddy_children.delhi` | The canonical multi-agent puzzle |
 | `selective_communication.delhi` | SC_3_4 from the EFP suite — third-order goals, position-dependent audiences |
 | `grapevine.delhi` | Grapevine from the EFP suite — gossip, with a *negative* goal conjunct |
+| `reachability.delhi` | Rules, definitions and invariants together — a derived transitive closure |
 
 The last two are ports of published benchmarks (from the mecaPlanner corpus in `refs/`), so
 delhi's numbers on them can be set against EFP's and PDKB's. Grapevine is also the compactness
@@ -780,7 +853,7 @@ things down. It also never once produced a wrong answer at runtime.
 
 ## What validates it
 
-253 tests, plus 2 that fail by design and are marked ignored — they pin known gaps rather
+274 tests, plus 2 that fail by design and are marked ignored — they pin known gaps rather
 than pretending they are absent.
 
 The load-bearing one is `examples/coin_lie.delhi`, which reproduces the published figures

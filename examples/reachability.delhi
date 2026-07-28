@@ -1,0 +1,42 @@
+// Rules, definitions and invariants together.
+//
+// The map is static, so `reach` — the transitive closure of `adjacent` — can be
+// computed once at parse time by a Horn fixpoint and folded away. It never becomes
+// a proposition and never occupies a bit in any world.
+
+types   { Actor - Object, Room - Object }
+objects { alice - Actor
+          hall, study, attic, cellar - Room }
+agents  { alice }
+props   { at(Actor, Room) }
+
+constants {
+    !adjacent(Room, Room)          // nothing is adjacent unless said otherwise
+    adjacent(hall, study)
+    adjacent(study, attic)
+}
+
+rules {
+    reach(?x, ?y) :- adjacent(?x, ?y)
+    reach(?x, ?z) :- adjacent(?x, ?y), reach(?y, ?z)
+}
+
+define {
+    stuck(?w)     = !reach(hall, cellar) & at(?w, hall)
+    can_get(?w, ?r) = at(?w, hall) & reach(hall, ?r)
+}
+
+initially { at(alice, hall) }
+
+goal { can_get(alice, attic) }
+
+invariants { !at(alice, cellar) }     // she can never get there, so she never is there
+
+actions {
+    walk(?w - Actor, ?from - Room, ?to - Room) {
+        actor  ?w
+        pre    at(?w, ?from) & adjacent(?from, ?to)
+        causes at(?w, ?to), !at(?w, ?from)
+        ?o observes
+    }
+}

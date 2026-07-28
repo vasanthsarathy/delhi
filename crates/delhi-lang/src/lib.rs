@@ -14,6 +14,7 @@ pub mod parse_file;
 pub mod ask;
 pub mod attitudes;
 pub mod expand;
+pub mod rules;
 pub mod print;
 pub mod problem;
 pub mod span;

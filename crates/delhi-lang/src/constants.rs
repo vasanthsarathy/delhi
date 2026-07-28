@@ -83,6 +83,25 @@ impl Constants {
         out
     }
 
+    /// Registers `pred` as constant even before any instance of it is known.
+    ///
+    /// A derived predicate has to be constant from the outset: `is_constant_pred` is the
+    /// gate that makes an unlisted instance fold to `false` rather than being reported as
+    /// an undeclared proposition, and a rule that derives nothing still needs its head
+    /// name to read as constant-and-false.
+    pub fn declare_pred(&mut self, pred: &str) {
+        self.preds.insert(pred.to_string());
+    }
+
+    /// Records a derived fact as true.
+    ///
+    /// Used by the rule fixpoint. Derived facts are indistinguishable from written ones
+    /// afterwards, which is the point: everything downstream folds them the same way.
+    pub fn add_fact(&mut self, pred: &str, args: &[String]) {
+        self.preds.insert(pred.to_string());
+        self.vals.insert(crate::atom_key(pred, args), true);
+    }
+
     /// Whether `pred` was declared in the `constants` section.
     pub fn is_constant_pred(&self, pred: &str) -> bool {
         self.preds.contains(pred)

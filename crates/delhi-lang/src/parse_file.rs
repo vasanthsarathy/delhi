@@ -42,6 +42,7 @@ pub fn parse_file(src: &str, diags: &mut Diagnostics) -> Ast {
             "props" => parse_props(&mut p, &mut ast, diags),
             "constants" => parse_constants(&mut p, &mut ast, diags),
             "define" => parse_defines(&mut p, &mut ast, diags),
+            "rules" => parse_rules(&mut p, &mut ast, diags),
             "initially" => parse_initially(&mut p, &mut ast, diags, head_span),
             "state" => parse_state(&mut p, &mut ast, diags, head_span),
             "goal" => {
@@ -204,6 +205,72 @@ fn parse_constants(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
         p.eat(&Tok::Comma);
     }
     p.expect(&Tok::RBrace, "}", diags);
+}
+
+/// `rules { head(?a, ?b) :- b0(?a), b1(?b) }`
+///
+/// `:-` is lexed as `:` then `-`; no separate token is needed, since `-` only becomes an
+/// arrow when followed by `>`.
+fn parse_rules(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
+    while !matches!(p.peek(), Tok::RBrace | Tok::Eof) {
+        let span = p.span();
+        let Some(head) = parse_rule_term(p, diags) else {
+            skip_block(p);
+            return;
+        };
+        if !p.expect(&Tok::Colon, ":", diags) || !p.expect(&Tok::Dash, "-", diags) {
+            skip_block(p);
+            return;
+        }
+        let mut body = Vec::new();
+        while let Some(t) = parse_rule_term(p, diags) {
+            body.push(t);
+            if !p.eat(&Tok::Comma) {
+                break;
+            }
+        }
+        ast.rules.push(RuleDecl { head, body, span });
+    }
+    p.expect(&Tok::RBrace, "}", diags);
+}
+
+/// One `pred(arg, ?var)` inside a rule. Arguments are objects or variables only.
+fn parse_rule_term(p: &mut Parser, diags: &mut Diagnostics) -> Option<Term> {
+    let span = p.span();
+    let pred = match p.peek().clone() {
+        Tok::Lower(n) => {
+            p.bump();
+            n
+        }
+        _ => {
+            diags.push(span, "expected a predicate name");
+            return None;
+        }
+    };
+    let mut args = Vec::new();
+    if p.eat(&Tok::LParen) {
+        while !matches!(p.peek(), Tok::RParen | Tok::Eof) {
+            match p.peek().clone() {
+                Tok::Lower(o) => {
+                    p.bump();
+                    args.push(Arg::Obj(o));
+                }
+                Tok::Var(v) => {
+                    p.bump();
+                    args.push(Arg::Var(v));
+                }
+                _ => {
+                    diags.push(p.span(), "a rule's arguments are objects or `?variables`");
+                    p.bump();
+                }
+            }
+            if !p.eat(&Tok::Comma) {
+                break;
+            }
+        }
+        p.expect(&Tok::RParen, ")", diags);
+    }
+    Some(Term { pred, args, span })
 }
 
 /// `define { name(?a, ?b) = <formula>  other = <formula> }`
