@@ -578,6 +578,7 @@ async function runCommand(line) {
     say(':do <action>    apply one      :undo  drop the last      :reset  clear the trace', 'm');
     say(':state          re-show the state panel', 'm');
     say(':clear          empty this panel', 'm');
+    say('up / down       walk previous commands   ·   esc  clear the line', 'm');
     return;
   }
   // Cleared *after* the echo above, so the panel ends genuinely empty rather than
@@ -631,9 +632,78 @@ async function runCommand(line) {
   else say(String(d.value), d.value ? 't' : 'f');
 }
 
+// ---- command history --------------------------------------------------------
+// Up and Down walk previous commands, as a shell does, and the list survives a reload.
+// Not scoped to the open file, for the same reason a shell does not scope history by
+// directory: the query you want again is usually the one you just ran, whatever it was
+// against.
+const HISTORY_KEY = 'delhi.history';
+const HISTORY_MAX = 200;
+let history = [];
+// Where the walk currently sits. `history.length` means "not walking" — on the live line.
+let hpos = 0;
+// Whatever was half-typed when the walk began. Without it, pressing Up out of curiosity
+// and Down to come back would silently eat the line you were in the middle of writing.
+let draft = '';
+
+function loadHistory() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    if (Array.isArray(saved)) {
+      history = saved.filter(s => typeof s === 'string').slice(-HISTORY_MAX);
+    }
+  } catch (e) {}
+  hpos = history.length;
+}
+
+function remember(line) {
+  // A command repeated immediately does not earn a second slot: re-running the same
+  // query is the common case, and one Up should reach past it rather than land on it.
+  if (history[history.length - 1] !== line) history.push(line);
+  if (history.length > HISTORY_MAX) history = history.slice(-HISTORY_MAX);
+  hpos = history.length;
+  draft = '';
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch (e) {}
+}
+
+function walkHistory(delta) {
+  if (!history.length) return;
+  const el = $('prompt');
+  if (hpos === history.length) draft = el.value;
+  hpos = clamp(hpos + delta, 0, history.length);
+  el.value = hpos === history.length ? draft : history[hpos];
+  // To the end explicitly: replacing an input's value leaves the caret where it was,
+  // which after a longer recalled line puts it in the middle of the text.
+  el.setSelectionRange(el.value.length, el.value.length);
+}
+
+loadHistory();
+
 // ---- wiring -----------------------------------------------------------------
 $('prompt').addEventListener('keydown', async e => {
-  if (e.key === 'Enter') { const v = e.target.value; e.target.value = ''; await runCommand(v); }
+  // Up and Down would otherwise jump the caret to the start or end of the input.
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    walkHistory(-1);
+    return;
+  }
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    walkHistory(1);
+    return;
+  }
+  if (e.key === 'Escape') {
+    e.target.value = '';
+    hpos = history.length;
+    draft = '';
+    return;
+  }
+  if (e.key === 'Enter') {
+    const v = e.target.value;
+    e.target.value = '';
+    if (v.trim()) remember(v.trim());
+    await runCommand(v);
+  }
 });
 $('reset').onclick = async () => { trace = []; await refresh(); };
 $('undo').onclick = async () => { trace.pop(); await refresh(); };

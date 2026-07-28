@@ -675,6 +675,11 @@ too. Every error is reported at once, as on the command line.
 
 A `clear` button sits on the results tab, and `:clear` does the same from the prompt.
 
+**The prompt keeps a history.** Up and Down walk previous commands as a shell does, `esc`
+clears the line, and the list survives a reload. A half-typed line is preserved when you go
+looking: walk back, find nothing useful, walk forward, and the line you were writing is
+still there.
+
 **Every divider is draggable.** Sizes persist across reloads, and double-clicking one
 handle resets that split alone. They clamp: a panel dragged to zero would take its own
 handle off-screen and leave nothing to grab.
