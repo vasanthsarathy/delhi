@@ -137,33 +137,56 @@ pub fn cmd_ask(
     let Some(mut p) = open(src, out) else {
         return 1;
     };
+    let state = match apply_trace(&mut p, actions, out) {
+        Ok(s) => s,
+        Err(code) => return code,
+    };
+    render_ask(&mut p, &state, pattern, depth, out)
+}
+
+/// Applies a trace to the initial state, contracting after each step.
+///
+/// Shared by `ask` and `eval`, whose need is identical: reach the state a trace
+/// describes, or say why it cannot be reached. The error carries the exit code the
+/// caller should return — `2` for a name that is not an action of this domain, which is
+/// a usage error, and `1` for one that is but does not apply here, which is an answer.
+fn apply_trace(p: &mut Problem, actions: &[String], out: &mut String) -> Result<State, i32> {
     let n_agents = p.sig.n_agents();
     let mut state = p.state.clone();
     for name in actions {
         let Some(g) = p.actions.iter().find(|a| &a.name == name) else {
             let _ = writeln!(out, "no action `{name}`");
-            return 2;
+            return Err(2);
         };
         let def = g.def.clone();
         let model = delhi_mb::build(&def, &mut p.store, n_agents);
         match state.apply(&p.store, &model) {
+            // Contracted after every step, without which a long trace grows the model
+            // exponentially — see the benchmark section of the README.
             Some(next) => state = contracted(&next),
             None => {
                 let _ = writeln!(out, "`{name}` is not applicable in the current state");
-                return 1;
+                return Err(1);
             }
         }
     }
-    render_ask(&mut p, &state, pattern, depth, out)
+    Ok(state)
 }
 
 /// `delhi state` — the actual world's facts and every agent's attitude to every
-/// proposition. The readable counterpart to `show`, which prints the model itself.
-pub fn cmd_state(src: &str, out: &mut String) -> i32 {
+/// proposition, optionally after a trace. The readable counterpart to `show`, which
+/// prints the model itself.
+pub fn cmd_state(src: &str, actions: &[String], out: &mut String) -> i32 {
     let Some(mut p) = open(src, out) else {
         return 1;
     };
-    let state = p.state.clone();
+    let state = match apply_trace(&mut p, actions, out) {
+        Ok(s) => s,
+        Err(code) => return code,
+    };
+    // Reported here but not in `eval` or `ask`: this command's whole output is a
+    // description of the state, so a constraint the state breaks belongs in it.
+    report_violations(&p, &state, "in this state", out);
     let text = attitudes(&mut p, &state);
     let _ = write!(out, "{text}");
     0
@@ -180,13 +203,19 @@ pub fn cmd_show(src: &str, out: &mut String) -> i32 {
     }
 }
 
-/// `delhi eval` — evaluate a formula in the initial state.
+/// `delhi eval` — evaluate a formula, optionally after a trace of actions.
 ///
 /// Exit code is `0` when the formula holds, `1` when it does not, and `2` when the
 /// formula itself is malformed — so shell scripts can branch on the answer.
-pub fn cmd_eval(src: &str, formula: &str, out: &mut String) -> i32 {
+pub fn cmd_eval(src: &str, actions: &[String], formula: &str, out: &mut String) -> i32 {
     let Some(mut p) = open(src, out) else {
         return 1;
+    };
+    // The reached state replaces the initial one, so the query below is answered against
+    // it — and `Problem::entails` keeps checking that the formula came from this store.
+    p.state = match apply_trace(&mut p, actions, out) {
+        Ok(s) => s,
+        Err(code) => return code,
     };
     match parse_query(&mut p, formula) {
         Err(e) => {
@@ -744,18 +773,49 @@ mod tests {
 
     #[test]
     fn eval_reports_true_and_false_with_different_codes() {
-        let (code, out) = run(|o| cmd_eval(GOOD, "K[a] h", o));
+        let (code, out) = run(|o| cmd_eval(GOOD, &[], "K[a] h", o));
         assert_eq!(code, 1, "a is uncertain, so K[a]h is false");
         assert!(out.contains("false"));
 
-        let (code, out) = run(|o| cmd_eval(GOOD, "B[a] h", o));
+        let (code, out) = run(|o| cmd_eval(GOOD, &[], "B[a] h", o));
         assert_eq!(code, 0, "a believes h");
         assert!(out.contains("true"));
     }
 
     #[test]
+    fn eval_answers_against_the_state_the_trace_reaches() {
+        // The assertions are chosen so that dropping `-a` on the floor cannot pass: each
+        // formula has the *opposite* truth value before the trace and after it.
+        for (trace, formula, before, after) in [
+            // `tell()` is b announcing !h to a, who believes h. It flips her belief.
+            (vec!["tell()".to_string()], "B[a] !h", false, true),
+            (vec!["tell()".to_string()], "B[a] h", true, false),
+            // `look()` is a sensing h, which she could not settle beforehand.
+            (vec!["look()".to_string()], "K[a] h", false, true),
+            // Order matters: the lie lands, then she looks and recovers the truth.
+            (vec!["tell()".to_string(), "look()".to_string()], "B[a] h", true, true),
+        ] {
+            let (code, out) = run(|o| cmd_eval(COIN, &[], formula, o));
+            assert_eq!(code, i32::from(!before), "`{formula}` initially: {out}");
+            let (code, out) = run(|o| cmd_eval(COIN, &trace, formula, o));
+            assert_eq!(code, i32::from(!after), "`{formula}` after {trace:?}: {out}");
+        }
+    }
+
+    #[test]
+    fn eval_distinguishes_an_unknown_action_from_an_inapplicable_one() {
+        // 2 is a usage error — the name is not an action of this domain at all. 1 is an
+        // answer — it is, but not here. Collapsing them would make a typo look like a
+        // false formula, which is the one thing a script branching on the code cannot
+        // recover from.
+        let (code, out) = run(|o| cmd_eval(COIN, &["nope()".to_string()], "h", o));
+        assert_eq!(code, 2, "got: {out}");
+        assert!(out.contains("no action `nope()`"), "got: {out}");
+    }
+
+    #[test]
     fn eval_reports_a_malformed_formula_rather_than_panicking() {
-        let (code, out) = run(|o| cmd_eval(GOOD, "K[nobody] h", o));
+        let (code, out) = run(|o| cmd_eval(GOOD, &[], "K[nobody] h", o));
         assert_eq!(code, 2);
         assert!(out.contains("nobody"));
     }
@@ -912,7 +972,7 @@ mod tests {
         // In COIN, `b` knows h outright while `a` only believes it — the whole point of
         // the view is that those read differently. A version that reported both as
         // "knows" would still look plausible, so assert the distinction directly.
-        let (code, out) = run(|o| cmd_state(COIN, o));
+        let (code, out) = run(|o| cmd_state(COIN, &[], o));
         assert_eq!(code, 0, "got: {out}");
         assert!(out.contains("actual world"), "got: {out}");
 
@@ -921,6 +981,22 @@ mod tests {
         assert!(line_a.contains("believes h"), "a believes h without knowing: {line_a}");
         assert!(!line_a.contains("knows h"), "a must not be reported as knowing: {line_a}");
         assert!(line_b.contains("knows h"), "b knows h: {line_b}");
+    }
+
+    #[test]
+    fn state_describes_the_state_the_trace_reaches() {
+        // `tell()` is b announcing !h to a, who believed h. The view must move with it,
+        // or `-a` is decoration.
+        let a_line = |out: &str| {
+            out.lines().find(|l| l.trim_start().starts_with("a ")).unwrap_or("").to_string()
+        };
+        let (_, before) = run(|o| cmd_state(COIN, &[], o));
+        assert!(a_line(&before).contains("believes h"), "got: {before}");
+
+        let (code, after) = run(|o| cmd_state(COIN, &["tell()".to_string()], o));
+        assert_eq!(code, 0, "got: {after}");
+        assert!(a_line(&after).contains("believes !h"), "the lie landed: {after}");
+        assert!(!a_line(&after).contains("believes h,"), "and the old belief is gone: {after}");
     }
 
     #[test]
@@ -933,7 +1009,7 @@ mod tests {
             initially { h, ?[a] h }
             actions {}
         "#;
-        let (code, out) = run(|o| cmd_state(src, o));
+        let (code, out) = run(|o| cmd_state(src, &[], o));
         assert_eq!(code, 0, "got: {out}");
         assert!(out.contains("undecided h"), "got: {out}");
         assert!(!out.contains("believes"), "a flat order is not a belief: {out}");
@@ -1062,7 +1138,7 @@ mod tests {
 
     #[test]
     fn state_rejects_a_bad_file() {
-        let (code, out) = run(|o| cmd_state(BAD, o));
+        let (code, out) = run(|o| cmd_state(BAD, &[], o));
         assert_eq!(code, 1);
         assert!(out.contains("ghost"), "got: {out}");
     }

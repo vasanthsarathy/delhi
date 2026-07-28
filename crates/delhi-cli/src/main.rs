@@ -8,9 +8,9 @@ const USAGE: &str = "delhi — an epistemic model checker
 
 USAGE:
     delhi check <FILE>
-    delhi state <FILE>              facts, and each agent's attitudes
+    delhi state <FILE> [-a ACTION]...  facts, and each agent's attitudes
     delhi show  <FILE>              the model itself, in the explicit form
-    delhi eval  <FILE> -f <FORMULA>
+    delhi eval  <FILE> [-a ACTION]... -f <FORMULA>
     delhi ask   <FILE> [-d DEPTH] [-a ACTION]... -q <PATTERN>
     delhi step  <FILE> -a <ACTION>...
     delhi dot   <FILE>
@@ -109,28 +109,84 @@ fn main() {
             0
         }
         Some("gui") => cmd_gui(&args[1..]),
-        Some("check") | Some("show") | Some("state") if args.len() == 2 => match read(&args[1]) {
+        Some("check") | Some("show") if args.len() == 2 => match read(&args[1]) {
             Err(c) => c,
             Ok(src) => {
                 let mut out = String::new();
-                let c = match args[0].as_str() {
-                    "check" => cmd::cmd_check(&src, &mut out),
-                    "state" => cmd::cmd_state(&src, &mut out),
-                    _ => cmd::cmd_show(&src, &mut out),
+                let c = if args[0] == "check" {
+                    cmd::cmd_check(&src, &mut out)
+                } else {
+                    cmd::cmd_show(&src, &mut out)
                 };
                 print!("{out}");
                 c
             }
         },
-        Some("eval") if args.len() == 4 && args[2] == "-f" => match read(&args[1]) {
-            Err(c) => c,
-            Ok(src) => {
-                let mut out = String::new();
-                let c = cmd::cmd_eval(&src, &args[3], &mut out);
-                print!("{out}");
-                c
+        // `state <FILE> [-a ACTION]...` — the only flag, so everything after `-a` is an
+        // action name and anything else is an error.
+        Some("state") if args.len() >= 2 => {
+            let acts: Option<Vec<String>> = match &args[2..] {
+                [] => Some(Vec::new()),
+                [flag, rest @ ..] if flag == "-a" && !rest.is_empty() => Some(rest.to_vec()),
+                _ => None,
+            };
+            match acts {
+                None => usage(),
+                Some(acts) => match read(&args[1]) {
+                    Err(c) => c,
+                    Ok(src) => {
+                        let mut out = String::new();
+                        let c = cmd::cmd_state(&src, &acts, &mut out);
+                        print!("{out}");
+                        c
+                    }
+                },
             }
-        },
+        }
+        // `eval <FILE> [-a ACTION]... -f <FORMULA>`. Scanned rather than positional for
+        // the same reason as `ask`: `-a` takes a variable number of values, so `-f` has
+        // to be able to sit on either side of it.
+        Some("eval") if args.len() >= 4 => {
+            let mut formula = String::new();
+            let mut acts: Vec<String> = Vec::new();
+            let mut i = 2;
+            let mut bad = None;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "-f" if i + 1 < args.len() => {
+                        formula = args[i + 1].clone();
+                        i += 2;
+                    }
+                    "-a" => {
+                        i += 1;
+                        while i < args.len() && !args[i].starts_with('-') {
+                            acts.push(args[i].clone());
+                            i += 1;
+                        }
+                    }
+                    other => {
+                        bad = Some(format!("unexpected argument `{other}`"));
+                        break;
+                    }
+                }
+            }
+            match (bad, formula.is_empty()) {
+                (Some(msg), _) => {
+                    eprintln!("{msg}");
+                    2
+                }
+                (None, true) => usage(),
+                (None, false) => match read(&args[1]) {
+                    Err(c) => c,
+                    Ok(src) => {
+                        let mut out = String::new();
+                        let c = cmd::cmd_eval(&src, &acts, &formula, &mut out);
+                        print!("{out}");
+                        c
+                    }
+                },
+            }
+        }
         Some("dot") if args.len() == 2 => match read(&args[1]) {
             Err(c) => c,
             Ok(src) => {

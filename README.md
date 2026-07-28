@@ -408,8 +408,14 @@ model the Coin Lie at all.
 | `delhi ask -q π` | which formulas of this shape are true? | you don't yet know what to look for |
 | `delhi state` | every agent's stance on every proposition | you want the lay of the land |
 
-All three take `-a ACTION…` to run a trace first, and all three exist at the REPL prompt and
-in the browser console as a bare formula, `:ask`, and `:state`.
+All three take `-a ACTION…` to run a trace first, and all three exist at the REPL prompt
+and in the browser console as a bare formula, `:ask`, and `:state`.
+
+```bash
+$ delhi eval  examples/coin_lie.delhi -a "distract_a()" "peek_c()" -f "K[bob] Kw[carol] h"
+true
+$ delhi state examples/coin_lie.delhi -a "distract_a()" "peek_c()"
+```
 
 ### Recipes
 
@@ -567,10 +573,10 @@ grammar and both semantics formally.
 
 ```
 delhi check <FILE>                        parse, ground, and validate
-delhi state <FILE>                        facts, and each agent's attitudes
+delhi state <FILE> [-a ACTION]…         facts, and each agent's attitudes
 delhi show  <FILE>                        the model itself, in the explicit form
-delhi eval  <FILE> -f <FORMULA>           evaluate one formula
-delhi ask   <FILE> -q <PATTERN>           enumerate what holds; `_` is the hole
+delhi eval  <FILE> [-a ACTION]… -f φ    evaluate one formula
+delhi ask   <FILE> [-a ACTION]… -q π    enumerate what holds; `_` is the hole
 delhi step  <FILE> -a <ACTION>…           apply actions in sequence
 delhi dot   <FILE>                        Graphviz
 delhi repl  <FILE>                        explore interactively
