@@ -1,6 +1,10 @@
 [package]
 name = "delhi-syntax"
+description = "Hash-consed formula store and epistemic operator sugar for delhi"
 edition.workspace = true
 version.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]

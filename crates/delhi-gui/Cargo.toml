@@ -1,17 +1,22 @@
 [package]
 name = "delhi-gui"
+description = "Local browser UI for exploring delhi epistemic models"
 edition.workspace = true
 version.workspace = true
-description = "Local web UI for exploring delhi files"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
-[[bin]]
-name = "delhi-gui"
-path = "src/main.rs"
+# A library, not a binary. It is reached as `delhi gui`, so that a downloaded `delhi`
+# is one file rather than two that have to be kept beside each other.
+[lib]
+name = "delhi_gui"
+path = "src/lib.rs"
 
 [dependencies]
-delhi-lang = { path = "../delhi-lang" }
-delhi-mb = { path = "../delhi-mb" }
-delhi-syntax = { path = "../delhi-syntax" }
+delhi-lang = { path = "../delhi-lang", version = "0.1.0" }
+delhi-mb = { path = "../delhi-mb", version = "0.1.0" }
+delhi-syntax = { path = "../delhi-syntax", version = "0.1.0" }
 tiny_http = "0.12"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

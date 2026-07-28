@@ -9,23 +9,23 @@ members = [
     "crates/delhi-gui",
 ]
 
-# `cargo build` and `cargo test` at the root skip the GUI, which is the only crate with
-# an external dependency and by far the slowest to compile. It is still a workspace
-# member, so `--workspace` covers it and `-p delhi-gui` builds it directly.
-#
-# The zero-dependency rule is scoped deliberately: it exists so the crates carrying the
-# semantics and the language stay auditable and still build years from now. A debugging
-# UI carries no such claim, and hand-rolling HTTP to honour a rule whose reason does not
-# reach it would buy nothing. `delhi-gui` holds no logic of its own — every answer it
-# renders comes from `delhi-lang`, where it is tested.
-default-members = [
-    "crates/delhi-syntax",
-    "crates/delhi-core",
-    "crates/delhi-mb",
-    "crates/delhi-lang",
-    "crates/delhi-cli",
-]
-
 [workspace.package]
 edition = "2021"
 version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/vasanthsarathy/delhi"
+homepage = "https://github.com/vasanthsarathy/delhi"
+readme = "README.md"
+keywords = ["epistemic", "logic", "planning", "modal", "belief"]
+categories = ["science", "command-line-utilities"]
+# Raise this only with a CI job proving the new floor: it is the promise that decides
+# whether someone on a distribution's Rust can use delhi at all.
+rust-version = "1.74"
+
+# Release profile for the published binaries: one codegen unit and fat LTO buy a
+# meaningful amount on a workload that is almost entirely tight loops over bitsets, and
+# the artefacts are built once per tag, so the compile time is nobody's problem.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true

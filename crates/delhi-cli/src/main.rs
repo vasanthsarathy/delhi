@@ -4,9 +4,7 @@
 mod cmd;
 mod style;
 
-fn usage() -> i32 {
-    eprintln!(
-        "delhi — an epistemic model checker
+const USAGE: &str = "delhi — an epistemic model checker
 
 USAGE:
     delhi check <FILE>
@@ -18,11 +16,69 @@ USAGE:
     delhi dot   <FILE>
     delhi repl  <FILE>
     delhi bench <FILE> [-n CYCLES] -a <ACTION>...
+    delhi gui   [DIR] [-p PORT]     browser UI over a folder of .delhi files
+    delhi --version
 
 EXIT CODES:
     0  success, or the formula holds
     1  the file was rejected, or the formula does not hold
-    2  usage error, or a malformed formula"
+    2  usage error, or a malformed formula";
+
+/// Prints usage as a *failure*: to stderr, with the exit code for a usage error. An
+/// explicit `--help` takes the other path — stdout and 0 — because a user who asked for
+/// help got what they asked for.
+fn usage() -> i32 {
+    eprintln!("{USAGE}");
+    2
+}
+
+/// `delhi gui [DIR] [-p PORT]`. `DIR` defaults to the current directory, which is the
+/// case this subcommand exists for: a folder of `.delhi` files that is not this
+/// repository.
+#[cfg(feature = "gui")]
+fn cmd_gui(rest: &[String]) -> i32 {
+    let mut port: u16 = 8080;
+    let mut dir: Option<&str> = None;
+    let mut i = 0;
+    while i < rest.len() {
+        match rest[i].as_str() {
+            "-p" | "--port" if i + 1 < rest.len() => match rest[i + 1].parse() {
+                Ok(p) => {
+                    port = p;
+                    i += 2;
+                }
+                Err(_) => {
+                    eprintln!("-p needs a port number, got `{}`", rest[i + 1]);
+                    return 2;
+                }
+            },
+            d if !d.starts_with('-') && dir.is_none() => {
+                dir = Some(d);
+                i += 1;
+            }
+            other => {
+                eprintln!("unexpected argument `{other}`");
+                return 2;
+            }
+        }
+    }
+    match delhi_gui::serve(port, std::path::Path::new(dir.unwrap_or("."))) {
+        Ok(()) => 0,
+        Err(e) => {
+            eprintln!("{e}");
+            2
+        }
+    }
+}
+
+/// The same subcommand in a `--no-default-features` build. It exists so the failure is a
+/// sentence about how this binary was compiled, rather than `delhi gui` falling through
+/// to the usage text as if no such command had ever existed.
+#[cfg(not(feature = "gui"))]
+fn cmd_gui(_rest: &[String]) -> i32 {
+    eprintln!(
+        "this build has no GUI: it was compiled with --no-default-features.\n\
+         Rebuild with the `gui` feature, or use `delhi repl <FILE>`."
     );
     2
 }
@@ -44,6 +100,15 @@ fn main() {
     }
     let args: Vec<String> = std::env::args().skip(1).collect();
     let code = match args.first().map(String::as_str) {
+        Some("--version") | Some("-V") => {
+            println!("delhi {}", env!("CARGO_PKG_VERSION"));
+            0
+        }
+        Some("--help") | Some("-h") | Some("help") => {
+            println!("{USAGE}");
+            0
+        }
+        Some("gui") => cmd_gui(&args[1..]),
         Some("check") | Some("show") | Some("state") if args.len() == 2 => {
             match read(&args[1]) {
                 Err(c) => c,

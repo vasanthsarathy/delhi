@@ -1,13 +1,25 @@
 [package]
 name = "delhi-cli"
+description = "Command-line tool for the delhi epistemic model checker"
 edition.workspace = true
 version.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [[bin]]
 name = "delhi"
 path = "src/main.rs"
 
+# `gui` is on by default so that an installed `delhi` has `delhi gui` and needs no
+# second step. `--no-default-features` builds the CLI with no external dependencies at
+# all, which is the build to reach for when the dependency graph is the point.
+[features]
+default = ["gui"]
+gui = ["dep:delhi-gui"]
+
 [dependencies]
-delhi-lang = { path = "../delhi-lang" }
-delhi-mb = { path = "../delhi-mb" }
-delhi-syntax = { path = "../delhi-syntax" }
+delhi-lang = { path = "../delhi-lang", version = "0.1.0" }
+delhi-mb = { path = "../delhi-mb", version = "0.1.0" }
+delhi-syntax = { path = "../delhi-syntax", version = "0.1.0" }
+delhi-gui = { path = "../delhi-gui", version = "0.1.0", optional = true }

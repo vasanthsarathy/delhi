@@ -8,6 +8,10 @@
     --bg: #14161a; --panel: #1b1e24; --line: #2b3038; --ink: #d7dbe2;
     --dim: #7d8593; --key: #e5b567; --good: #8fbf7f; --bad: #e07a6f;
     --a0: #6fb3d2; --a1: #d18ec2; --a2: #8fbf7f; --a3: #e5b567; --a4: #b39ddb;
+    /* Panel sizes, written by the drag handles and restored from localStorage. The two
+       column figures are percentages so the layout survives a window resize; the rail
+       is pixels, because a narrow list of action buttons wants a width, not a share. */
+    --colEditor: 38%; --colRail: 190px; --rowState: 40%;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
@@ -27,13 +31,33 @@
   input.name { cursor: text; width: 150px; }
   button:hover { border-color: #4a525f; }
   button.primary { border-color: #3d5a6b; color: #cfe6f2; }
-  #status { margin-left: auto; color: var(--dim); }
+  #root { margin-left: auto; color: var(--dim); font-size: 11.5px;
+          max-width: 42ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          direction: rtl; }
+  #status { color: var(--dim); }
   #status.bad { color: var(--bad); }
   #status.good { color: var(--good); }
 
-  /* editor | actions rail | right column */
-  main { display: grid; grid-template-columns: 1fr 190px 1fr; min-height: 0; }
-  section { display: grid; grid-template-rows: auto 1fr; min-height: 0; overflow: hidden; }
+  /* editor | actions rail | right column, with a drag handle between each pair */
+  main {
+    display: grid; min-height: 0;
+    grid-template-columns: var(--colEditor) 6px var(--colRail) 6px 1fr;
+  }
+  section { display: grid; grid-template-rows: auto 1fr; min-height: 0; min-width: 0; overflow: hidden; }
+
+  /* The handle is also the divider line, so dragging grabs the thing you can see.
+     `touch-action: none` keeps a pen or touch drag from scrolling the page instead. */
+  .gutter { background: var(--line); touch-action: none; position: relative; z-index: 5; }
+  .gutter.v { cursor: col-resize; }
+  .gutter.h { cursor: row-resize; }
+  .gutter:hover, .gutter.dragging { background: var(--a0); }
+  /* A 6px line is the right thickness to look at and the wrong one to hit — aiming at
+     it costs real effort with a mouse. The pseudo-element widens the target to 16px
+     without widening the rule, and belongs to the gutter, so a press on it is a press
+     on the handle. */
+  .gutter::before { content: ''; position: absolute; }
+  .gutter.v::before { inset: 0 -5px; }
+  .gutter.h::before { inset: -5px 0; }
   h2 {
     font-size: 10.5px; margin: 0; padding: 5px 10px; color: var(--dim);
     letter-spacing: .1em; text-transform: uppercase; background: var(--panel);
@@ -66,8 +90,7 @@
   .hl-op      { color: var(--dim); }
 
   /* actions rail */
-  #rail { border-left: 1px solid var(--line); border-right: 1px solid var(--line);
-          display: grid; grid-template-rows: auto 1fr auto auto; min-height: 0; }
+  #rail { display: grid; grid-template-rows: auto 1fr auto auto; min-height: 0; min-width: 0; }
   #actions { overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 5px; }
   #actions button { text-align: left; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
   #trace { padding: 7px 8px; border-top: 1px solid var(--line); max-height: 150px; overflow: auto; }
@@ -75,8 +98,8 @@
   #traceBtns { display: flex; gap: 5px; padding: 7px 8px; border-top: 1px solid var(--line); }
   #traceBtns button { flex: 1; font-size: 12px; }
 
-  /* right column: state fixed on top, tabs beneath */
-  .right { display: grid; grid-template-rows: minmax(120px, 40%) 1fr; min-height: 0; }
+  /* right column: state on top, tabs beneath, handle between */
+  .right { display: grid; grid-template-rows: var(--rowState) 6px 1fr; min-height: 0; min-width: 0; }
   .tabs { display: flex; gap: 4px; margin-left: -2px; }
   .tabs button {
     border: 0; border-bottom: 2px solid transparent; background: none; border-radius: 0;
@@ -132,6 +155,7 @@
   <input class="name" id="saveName" placeholder="name.delhi" spellcheck="false">
   <button id="save">save</button>
   <button id="check" class="primary">check</button>
+  <span id="root" title="the directory being served — save writes here"></span>
   <span id="status">ready</span>
 </header>
 
@@ -145,6 +169,8 @@
     </div>
   </section>
 
+  <div class="gutter v" id="gEditor" title="drag to resize · double-click to reset"></div>
+
   <div id="rail">
     <h2>actions <span class="note" id="actionCount"></span></h2>
     <div id="actions"></div>
@@ -155,11 +181,14 @@
     </div>
   </div>
 
+  <div class="gutter v" id="gRail" title="drag to resize · double-click to reset"></div>
+
   <div class="right">
     <section>
       <h2>state <span class="note" id="stateNote"></span></h2>
       <div class="body" id="state"></div>
     </section>
+    <div class="gutter h" id="gState" title="drag to resize · double-click to reset"></div>
     <section>
       <h2>
         <span class="tabs">
@@ -216,6 +245,11 @@ actions {
 let trace = [];
 let latest = null;
 let agentOrder = [];
+// The path currently open. A bundled example lives in the binary, so it is read-only and
+// `save` writes a copy into the served directory instead.
+let openPath = '';
+const BUNDLED = 'examples/';
+const isBundled = p => p.startsWith(BUNDLED);
 
 function esc(s) {
   return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -241,6 +275,78 @@ function clearResults() {
   $('results').innerHTML = '';
 }
 $('clear').onclick = () => { clearResults(); showTab('results'); };
+
+// ---- draggable panels -------------------------------------------------------
+// Each handle writes one CSS custom property that a grid template reads, so a drag is
+// a single property assignment and the browser does the relayout. Clamps are not
+// cosmetic: a panel dragged to zero takes its own handle off-screen with it, and there
+// would be nothing left to grab to undo it.
+const LAYOUT = { '--colEditor': '38%', '--colRail': '190px', '--rowState': '40%' };
+const LAYOUT_KEY = 'delhi.layout';
+const root = document.documentElement;
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+function setPanel(name, value) { root.style.setProperty(name, value); }
+
+function savePanels() {
+  const out = {};
+  for (const k of Object.keys(LAYOUT)) {
+    const v = root.style.getPropertyValue(k).trim();
+    if (v) out[k] = v;
+  }
+  // Private browsing and a full quota both throw here. A layout that fails to persist
+  // is not a reason to break the drag that produced it.
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(out)); } catch (e) {}
+}
+
+function loadPanels() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}'); } catch (e) {}
+  for (const [k, v] of Object.entries(saved)) {
+    // Only known keys, and only values that look like a CSS length — this string went
+    // through storage, where a stale or hand-edited entry could otherwise wedge the grid.
+    if (k in LAYOUT && typeof v === 'string' && /^\d+(\.\d+)?(%|px)$/.test(v)) setPanel(k, v);
+  }
+}
+
+function draggable(el, name, measure) {
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    el.classList.add('dragging');
+    // The listeners go on `window`, not the handle: the pointer leaves a 6px strip
+    // immediately, and every later move belongs to this drag wherever it lands.
+    // Pointer capture is an optimisation on top — it stops the textarea underneath
+    // from taking a selection mid-drag — and it throws for a pointer id the browser
+    // has no record of, so it must not be what the drag depends on.
+    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    const move = ev => setPanel(name, measure(ev));
+    const up = () => {
+      el.classList.remove('dragging');
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      savePanels();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  });
+  el.addEventListener('dblclick', () => { setPanel(name, LAYOUT[name]); savePanels(); });
+}
+
+loadPanels();
+draggable($('gEditor'), '--colEditor', ev => {
+  const r = document.querySelector('main').getBoundingClientRect();
+  return clamp(((ev.clientX - r.left) / r.width) * 100, 15, 70).toFixed(2) + '%';
+});
+draggable($('gRail'), '--colRail', ev =>
+  // Measured from the rail's own left edge, which does not move while its right edge is
+  // being dragged.
+  clamp(ev.clientX - $('rail').getBoundingClientRect().left, 120, 420).toFixed(0) + 'px');
+draggable($('gState'), '--rowState', ev => {
+  const r = document.querySelector('.right').getBoundingClientRect();
+  return clamp(((ev.clientY - r.top) / r.height) * 100, 12, 78).toFixed(2) + '%';
+});
 
 // ---- highlighting -----------------------------------------------------------
 // Rules in order: the first that matches at the cursor wins, so the sequence encodes
@@ -305,7 +411,7 @@ async function refresh() {
   agentOrder = d.agents.map(a => a.agent);
   const goal = d.goal === null ? '' : (d.goal ? ' · goal holds' : ' · goal not yet');
   setStatus(`ok · ${d.n_worlds} world${d.n_worlds === 1 ? '' : 's'}${goal}`, d.goal ? 'good' : '');
-  $('editorNote').textContent = '';
+  $('editorNote').textContent = isBundled(openPath) ? 'bundled — save writes a copy' : openPath;
   renderActions(d);
   renderState(d);
   renderGraph(d);
@@ -519,6 +625,7 @@ $('check').onclick = async () => {
 $('new').onclick = async () => {
   $('editor').value = TEMPLATE;
   $('saveName').value = '';
+  openPath = '';
   trace = [];
   $('results').innerHTML = '';
   paintEditor();
@@ -558,7 +665,11 @@ async function loadFileList(select) {
 
 async function openFile(path) {
   $('editor').value = await (await fetch('/api/file?name=' + encodeURIComponent(path))).text();
-  $('saveName').value = path.startsWith('scratch/') ? path.slice('scratch/'.length) : '';
+  openPath = path;
+  // Prefilled either way: for a file in the served directory `save` overwrites it, and
+  // for a bundled example the same name becomes a local copy — one keystroke either way,
+  // and neither can silently write over the other.
+  $('saveName').value = isBundled(path) ? path.slice(BUNDLED.length) : path;
   trace = [];
   $('results').innerHTML = '';
   $('state').scrollTop = 0;
@@ -568,9 +679,13 @@ async function openFile(path) {
 }
 
 (async function start() {
+  $('root').textContent = await (await fetch('/api/root')).text();
   const names = await loadFileList();
   $('files').onchange = () => openFile($('files').value);
-  const initial = names.includes('examples/coin_lie.delhi') ? 'examples/coin_lie.delhi' : names[0];
+  // A file the user brought wins over a bundled example: if the served directory has
+  // any of their own, opening on a demo would bury the reason they ran the command.
+  const own = names.find(n => !isBundled(n));
+  const initial = own || (names.includes('examples/coin_lie.delhi') ? 'examples/coin_lie.delhi' : names[0]);
   if (initial) { $('files').value = initial; await openFile(initial); }
   else { $('editor').value = TEMPLATE; paintEditor(); await refresh(); }
 })();

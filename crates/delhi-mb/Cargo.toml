@@ -1,11 +1,15 @@
 [package]
 name = "delhi-mb"
+description = "mB+ plausibility-model semantics: entailment, product update, bisimulation"
 edition.workspace = true
 version.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
-delhi-syntax = { path = "../delhi-syntax" }
-delhi-core = { path = "../delhi-core" }
+delhi-syntax = { path = "../delhi-syntax", version = "0.1.0" }
+delhi-core = { path = "../delhi-core", version = "0.1.0" }
 
 [dev-dependencies]
 proptest = "1"

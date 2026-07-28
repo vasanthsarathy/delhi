@@ -1,6 +1,10 @@
 [package]
 name = "delhi-core"
+description = "Core traits and shared types for the delhi epistemic model checker"
 edition.workspace = true
 version.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
