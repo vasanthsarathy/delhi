@@ -23,3 +23,6 @@ delhi-lang = { path = "../delhi-lang", version = "0.1.0" }
 delhi-mb = { path = "../delhi-mb", version = "0.1.0" }
 delhi-syntax = { path = "../delhi-syntax", version = "0.1.0" }
 delhi-gui = { path = "../delhi-gui", version = "0.1.0", optional = true }
+
+[lints]
+workspace = true

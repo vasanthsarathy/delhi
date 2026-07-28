@@ -156,8 +156,8 @@ pub fn build(a: &ActionDef, s: &mut Store, n_agents: usize) -> ActionModel {
             let mut q = empty_q(n_agents, n_outcomes + 1, top);
             for i in 0..n_agents as AgentId {
                 let nn = n_label(a, s, i);
-                for e in 0..n_outcomes {
-                    q[i as usize][e][ev_top] = Some(nn);
+                for row in q[i as usize].iter_mut().take(n_outcomes) {
+                    row[ev_top] = Some(nn);
                 }
             }
             ActionModel {

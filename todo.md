@@ -249,78 +249,78 @@ worktree that only builds under `cargo run` and only sees files inside this repo
 
 ### Task 1 — draggable splitters in the GUI
 
-- [ ] Three drag handles: editor↔rail, rail↔right column, and state↔tabs inside the
+- [x] Three drag handles: editor↔rail, rail↔right column, and state↔tabs inside the
       right column. Grid templates read CSS custom properties; the handles write them.
-- [ ] Persist to `localStorage`; double-click a handle resets that one to its default.
-- [ ] Clamp so no panel can be dragged to zero width — an invisible panel with no
+- [x] Persist to `localStorage`; double-click a handle resets that one to its default.
+- [x] Clamp so no panel can be dragged to zero width — an invisible panel with no
       handle left to grab is a dead end.
-- [ ] Verify in Chrome: drag each, reload, confirm the layout survives.
+- [x] Verify in Chrome: drag each, reload, confirm the layout survives.
 
 ### Task 2 — the GUI serves a directory, not this repo
 
-- [ ] `serve(port, root)`; `root` defaults to the current working directory.
-- [ ] File list = `*.delhi` directly in `root` (readable **and** writable) + the ten
+- [x] `serve(port, root)`; `root` defaults to the current working directory.
+- [x] File list = `*.delhi` directly in `root` (readable **and** writable) + the ten
       bundled examples, embedded with `include_str!` and marked read-only.
-- [ ] Embedding matters for a fresh download: `delhi gui` in an empty directory still
+- [x] Embedding matters for a fresh download: `delhi gui` in an empty directory still
       has something to show. Opening an example and saving writes to `root`, never over
       the built-in.
-- [ ] Keep every traversal guard in `is_plain_delhi` — the reason it exists (names
+- [x] Keep every traversal guard in `is_plain_delhi` — the reason it exists (names
       arrive from a query string) is unchanged, and `root` is now the user's own cwd.
-- [ ] Header shows which directory is being served.
+- [x] Header shows which directory is being served.
 
 ### Task 3 — one binary, `delhi gui`
 
-- [ ] `delhi-gui` becomes a library (`pub fn serve(port, root) -> io::Result<()>`); its
+- [x] `delhi-gui` becomes a library (`pub fn serve(port, root) -> io::Result<()>`); its
       `[[bin]]` goes away.
-- [ ] `delhi-cli` gains a `gui` feature, **on by default**, and the subcommand
+- [x] `delhi-cli` gains a `gui` feature, **on by default**, and the subcommand
       `delhi gui [DIR] [-p PORT]`.
-- [ ] `--no-default-features` still builds the CLI with zero dependencies. The
+- [x] `--no-default-features` still builds the CLI with zero dependencies. The
       zero-dependency claim was always about the semantic crates; that stays true and
       gets said plainly in the README rather than implied by the workspace layout.
-- [ ] `default-members` can then include every crate — the reason for excluding the GUI
+- [x] `default-members` can then include every crate — the reason for excluding the GUI
       (slow, only crate with deps) is now a feature flag instead.
-- [ ] Usage text, README, and `--version`/`--help` handling.
+- [x] Usage text, README, and `--version`/`--help` handling.
 
 ### Task 4 — licence and crate metadata
 
-- [ ] `LICENSE` at the root.
-- [ ] `[workspace.package]`: `license`, `description`, `repository`, `homepage`,
+- [x] `LICENSE` at the root.
+- [x] `[workspace.package]`: `license`, `description`, `repository`, `homepage`,
       `keywords`, `categories`, `readme`, `rust-version` (MSRV).
-- [ ] Per-crate `description`, so `delhi-lang` is usable as a dependency from another
+- [x] Per-crate `description`, so `delhi-lang` is usable as a dependency from another
       project and reads sensibly on docs.rs.
 
 ### Task 5 — rustfmt and CI
 
-- [ ] `rustfmt.toml` — `max_width = 100`, `use_small_heuristics = "Max"`. Tuned to the
+- [x] `rustfmt.toml` — `max_width = 100`, `use_small_heuristics = "Max"`. Tuned to the
       style already in the tree: the default `fn_call_width = 60` would rewrite 4 847
       lines; this config rewrites 2 069, still touching `delhi-mb` and `delhi-syntax`.
       **Formatting-only, in its own commit, tests green either side.** ⚠️ needs a call.
-- [ ] `.github/workflows/ci.yml` — ubuntu / macos / windows × stable: `cargo fmt
+- [x] `.github/workflows/ci.yml` — ubuntu / macos / windows × stable: `cargo fmt
       --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test
       --workspace`, plus a `--no-default-features` build so the dep-free path stays
       real, plus an MSRV job.
 
 ### Task 6 — release workflow
 
-- [ ] `.github/workflows/release.yml`, triggered by a `v*` tag.
-- [ ] Targets: `x86_64-unknown-linux-gnu`, `x86_64-apple-darwin`,
+- [x] `.github/workflows/release.yml`, triggered by a `v*` tag.
+- [x] Targets: `x86_64-unknown-linux-gnu`, `x86_64-apple-darwin`,
       `aarch64-apple-darwin`, `x86_64-pc-windows-msvc`.
-- [ ] Each archive carries the `delhi` binary, `README.md`, `LICENSE`, and `examples/`,
+- [x] Each archive carries the `delhi` binary, `README.md`, `LICENSE`, and `examples/`,
       named `delhi-<version>-<target>.tar.gz` (`.zip` on Windows).
-- [ ] `SHA256SUMS`, `--locked` builds, and a GitHub Release created from the tag.
+- [x] `SHA256SUMS`, `--locked` builds, and a GitHub Release created from the tag.
 
 ### Task 7 — install routes, documented
 
-- [ ] README **Install** section covering four routes and what each costs:
+- [x] README **Install** section covering four routes and what each costs:
       prebuilt archive · `install.sh` / `install.ps1` · `cargo install --git` ·
       from source.
-- [ ] `install.sh` and `install.ps1`: resolve the latest release, detect the platform,
+- [x] `install.sh` and `install.ps1`: resolve the latest release, detect the platform,
       unpack to `~/.local/bin` (or `%LOCALAPPDATA%\delhi\bin`), and say plainly whether
       that directory is on `PATH` rather than silently editing a shell profile.
 
 ### Task 8 — repo, push, tag
 
-- [ ] Create the GitHub repo, push `master`, confirm CI green.
+- [x] Create the GitHub repo, push `master` — done; CI confirmation pending.
 - [ ] Tag `v0.1.0`, confirm the release workflow produces working archives.
 - [ ] Download one archive on this machine and run it against a folder outside the repo
       — the actual thing a stranger does, which nothing until this step tests.

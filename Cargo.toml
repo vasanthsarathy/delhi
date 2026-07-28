@@ -22,6 +22,14 @@ categories = ["science", "command-line-utilities"]
 # whether someone on a distribution's Rust can use delhi at all.
 rust-version = "1.78"
 
+# delhi's doc comments cite sources in brackets — [T] for the thesis, [KR21], [MBD] — and
+# rustdoc reads every one of those as an intra-doc link it cannot resolve. There are 207
+# across 45 files; escaping them all would put `\[KR21\]` in the source to satisfy a tool,
+# which is the wrong way round. The rest of the docs build stays strict (`-D warnings` in
+# CI), so a malformed doc comment or a bad code block still fails.
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "allow"
+
 # Release profile for the published binaries: one codegen unit and fat LTO buy a
 # meaningful amount on a workload that is almost entirely tight loops over bitsets, and
 # the artefacts are built once per tag, so the compile time is nobody's problem.
