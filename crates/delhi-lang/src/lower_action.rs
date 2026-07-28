@@ -319,9 +319,18 @@ mod tests {
                 shout() { actor alice, announces p, ?o observes }
             }
         "#;
-        let (_, _, acts) = ground(src);
+        let (sig, _, acts) = ground(src);
         assert_eq!(acts.len(), 1);
-        assert_eq!(acts[0].def.observes.len(), 3, "?o ranges over every declared agent");
+        // A count alone cannot tell "every declared agent" from "three copies of
+        // agent 0" — both give `observes.len() == 3`. Assert the three distinct ids.
+        let mut got: Vec<AgentId> = acts[0].def.observes.iter().map(|(id, _)| *id).collect();
+        got.sort_unstable();
+        let mut want: Vec<AgentId> = ["alice", "bob", "carol"]
+            .iter()
+            .map(|n| sig.agent_id(n).unwrap())
+            .collect();
+        want.sort_unstable();
+        assert_eq!(got, want, "?o must range over the three distinct declared agents, not duplicates");
     }
 
     #[test]

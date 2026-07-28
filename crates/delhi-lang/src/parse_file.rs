@@ -141,6 +141,12 @@ fn parse_agents(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
     p.expect(&Tok::RBrace, "}", diags);
 }
 
+/// Words a clause head can start with. Reserved as proposition names (below) so
+/// that `comma_starts_new_clause` never has to guess: once none of these can be a
+/// proposition, seeing one right after a comma in a `causes` list is unambiguous.
+const RESERVED_CLAUSE_WORDS: [&str; 7] =
+    ["actor", "pre", "causes", "determines", "announces", "observes", "aware"];
+
 fn parse_props(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
     while !matches!(p.peek(), Tok::RBrace | Tok::Eof) {
         let sp = p.span();
@@ -148,6 +154,12 @@ fn parse_props(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
             Tok::Lower(n) => { p.bump(); n }
             _ => { diags.push(sp, "expected a predicate name"); p.bump(); continue; }
         };
+        if RESERVED_CLAUSE_WORDS.contains(&name.as_str()) {
+            diags.push(
+                sp,
+                format!("`{name}` is a reserved clause keyword and cannot name a proposition"),
+            );
+        }
         let mut params = Vec::new();
         if p.eat(&Tok::LParen) {
             while !matches!(p.peek(), Tok::RParen | Tok::Eof) {
@@ -287,16 +299,19 @@ fn parse_actions(p: &mut Parser, ast: &mut Ast, diags: &mut Diagnostics) {
 }
 
 /// Whether the tokens right after the cursor's current comma start a new clause,
-/// rather than continuing a `causes` literal list. Every clause begins with one of
-/// the fixed keywords below, or with `<arg> observes|aware`; a bare zero-arity
-/// literal like `p` cannot be confused with either check.
+/// rather than continuing a `causes` literal list. This is exact, not a heuristic:
+/// `parse_props` rejects [`RESERVED_CLAUSE_WORDS`] as proposition names, so a bare
+/// `actor`/`pre`/`causes`/`determines`/`announces` can never legally be a `causes`
+/// literal, and `observes`/`aware` can never begin a clause on their own — the
+/// grammar has no rule that lets a bare `observes`/`aware` stand as a literal, so
+/// `<word> observes|aware` with no comma between them is always the start of an
+/// `<arg> observes|aware` clause, never `word` followed by a new clause.
 ///
 /// Precondition: `p.peek()` is the comma being considered.
 fn comma_starts_new_clause(p: &Parser) -> bool {
     debug_assert!(matches!(p.peek(), Tok::Comma), "must be called at a comma");
-    const KEYWORDS: [&str; 5] = ["actor", "pre", "causes", "determines", "announces"];
     match p.peek_at(1) {
-        Tok::Lower(k) if KEYWORDS.contains(&k.as_str()) => true,
+        Tok::Lower(k) if RESERVED_CLAUSE_WORDS[..5].contains(&k.as_str()) => true,
         Tok::Lower(_) | Tok::Var(_) => {
             matches!(p.peek_at(2), Tok::Lower(k2) if k2 == "observes" || k2 == "aware")
         }
@@ -597,5 +612,154 @@ mod tests {
         let mut d = Diagnostics::default();
         let _ = parse_file(src, &mut d);
         assert!(d.items().iter().any(|x| x.message.contains("actions")));
+    }
+
+    // --- `comma_starts_new_clause` boundary tests -------------------------------
+    //
+    // These pin the comma boundary inside a `causes` literal list directly, rather
+    // than relying on the grounding fixtures in `lower_action.rs` to exercise it
+    // indirectly. Each keyword and both lookahead words get their own case.
+
+    #[test]
+    fn a_causes_list_continues_across_a_comma_before_another_bare_literal() {
+        let a = parse(r#"
+            types{} objects{} agents{} props{ h, d }
+            initially{}
+            actions { go() { causes h, d } }
+        "#);
+        match &a.actions[0].clauses[0] {
+            Clause::Causes { lits, .. } => {
+                assert_eq!(lits.len(), 2, "a comma before another bare literal must \
+                    still extend the causes list, not stop at the first");
+                assert_eq!(lits[0].0.pred, "h");
+                assert_eq!(lits[1].0.pred, "d");
+            }
+            other => panic!("expected Causes, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_comma_before_actor_ends_the_causes_list() {
+        let a = parse(r#"
+            types{ Actor - Object } objects{ x - Actor } agents{} props{ p }
+            initially{}
+            actions { go() { causes p, actor x } }
+        "#);
+        assert_eq!(a.actions[0].clauses.len(), 2, "`actor` must not be swallowed as a second literal");
+        match &a.actions[0].clauses[0] {
+            Clause::Causes { lits, .. } => assert_eq!(lits.len(), 1),
+            other => panic!("expected Causes, got {other:?}"),
+        }
+        assert!(matches!(&a.actions[0].clauses[1], Clause::Actor(Arg::Obj(n), _) if n == "x"));
+    }
+
+    #[test]
+    fn a_comma_before_pre_ends_the_causes_list() {
+        let a = parse(r#"
+            types{} objects{} agents{} props{ p, q }
+            initially{}
+            actions { go() { causes p, pre q } }
+        "#);
+        assert_eq!(a.actions[0].clauses.len(), 2, "`pre` must not be swallowed as a second literal");
+        match &a.actions[0].clauses[0] {
+            Clause::Causes { lits, .. } => assert_eq!(lits.len(), 1),
+            other => panic!("expected Causes, got {other:?}"),
+        }
+        assert!(matches!(&a.actions[0].clauses[1], Clause::Pre(_)));
+    }
+
+    #[test]
+    fn a_comma_before_a_second_causes_ends_the_first_list() {
+        let a = parse(r#"
+            types{} objects{} agents{} props{ p, q }
+            initially{}
+            actions { go() { causes p, causes q } }
+        "#);
+        assert_eq!(a.actions[0].clauses.len(), 2, "the second `causes` must start its own clause");
+        match &a.actions[0].clauses[0] {
+            Clause::Causes { lits, .. } => assert_eq!(lits.len(), 1),
+            other => panic!("expected the first Causes, got {other:?}"),
+        }
+        match &a.actions[0].clauses[1] {
+            Clause::Causes { lits, .. } => assert_eq!(lits[0].0.pred, "q"),
+            other => panic!("expected the second Causes, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_comma_before_determines_ends_the_causes_list() {
+        let a = parse(r#"
+            types{} objects{} agents{} props{ p, q }
+            initially{}
+            actions { go() { causes p, determines q } }
+        "#);
+        assert_eq!(a.actions[0].clauses.len(), 2, "`determines` must not be swallowed as a second literal");
+        match &a.actions[0].clauses[0] {
+            Clause::Causes { lits, .. } => assert_eq!(lits.len(), 1),
+            other => panic!("expected Causes, got {other:?}"),
+        }
+        assert!(matches!(&a.actions[0].clauses[1], Clause::Determines(_)));
+    }
+
+    #[test]
+    fn a_comma_before_announces_ends_the_causes_list() {
+        let a = parse(r#"
+            types{} objects{} agents{} props{ p, q }
+            initially{}
+            actions { go() { causes p, announces q } }
+        "#);
+        assert_eq!(a.actions[0].clauses.len(), 2, "`announces` must not be swallowed as a second literal");
+        match &a.actions[0].clauses[0] {
+            Clause::Causes { lits, .. } => assert_eq!(lits.len(), 1),
+            other => panic!("expected Causes, got {other:?}"),
+        }
+        assert!(matches!(&a.actions[0].clauses[1], Clause::Announces(_)));
+    }
+
+    #[test]
+    fn a_comma_before_an_observes_head_ends_the_causes_list() {
+        let a = parse(r#"
+            types{ Actor - Object } objects{ x - Actor } agents{ x } props{ p }
+            initially{}
+            actions { go() { causes p, x observes } }
+        "#);
+        assert_eq!(a.actions[0].clauses.len(), 2, "the `observes` head must not be swallowed as a second literal");
+        match &a.actions[0].clauses[0] {
+            Clause::Causes { lits, .. } => assert_eq!(lits.len(), 1),
+            other => panic!("expected Causes, got {other:?}"),
+        }
+        assert!(matches!(
+            &a.actions[0].clauses[1],
+            Clause::Observes { who: Arg::Obj(n), .. } if n == "x"
+        ));
+    }
+
+    #[test]
+    fn a_comma_before_an_aware_head_ends_the_causes_list() {
+        let a = parse(r#"
+            types{ Actor - Object } objects{ x - Actor } agents{ x } props{ p }
+            initially{}
+            actions { go() { causes p, x aware } }
+        "#);
+        assert_eq!(a.actions[0].clauses.len(), 2, "the `aware` head must not be swallowed as a second literal");
+        match &a.actions[0].clauses[0] {
+            Clause::Causes { lits, .. } => assert_eq!(lits.len(), 1),
+            other => panic!("expected Causes, got {other:?}"),
+        }
+        assert!(matches!(
+            &a.actions[0].clauses[1],
+            Clause::Aware { who: Arg::Obj(n), .. } if n == "x"
+        ));
+    }
+
+    #[test]
+    fn a_reserved_clause_word_cannot_name_a_proposition() {
+        let mut d = Diagnostics::default();
+        let src = "types{} objects{} agents{} props{ pre } initially{} actions{}";
+        let _ = parse_file(src, &mut d);
+        assert!(
+            d.items().iter().any(|x| x.message.contains("pre") && x.message.contains("reserved")),
+            "a proposition named after a clause keyword must be rejected"
+        );
     }
 }
