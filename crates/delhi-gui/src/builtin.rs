@@ -264,86 +264,6 @@ actions {
 "#,
     ),
     (
-        "handover.delhi",
-        r#"// A shift handover, and a robot deciding whether to speak up.
-//
-// The capability: an assistant notices that a person holds a false belief and must decide
-// whether, and how, to correct it. Doing that well requires four things at once ---
-// representing her belief separately from the fact, knowing whether she would find out
-// anyway, knowing what *telling* her would achieve as against *showing* her, and knowing
-// who else is in the room. This file is the paper's running example.
-//
-// The situation: the medication was NOT given. Nurse believes it was --- she handed off
-// mid-task and assumes it happened. Robot saw that it did not. Doctor has no idea.
-//
-// The goal is the interesting part:
-//
-//     goal { [][nurse] !given }
-//
-// Not "nurse believes the truth" but "nurse believes the truth *safely*" --- that no
-// further true information will unsettle it. That goal cannot be written at all in a
-// language whose only attitudes are knowledge and belief.
-//
-//     delhi eval examples/handover.delhi -f "B[nurse] given & !given"   // she is wrong
-//     delhi eval examples/handover.delhi -a "robot_tells()" -f "[][nurse] !given"
-//     delhi eval examples/handover.delhi -a "robot_lies()"  -f "[][nurse] given"
-//
-// See https://vsarathy.com/delhi/
-
-types   { Actor - Object }
-objects { nurse, robot, doctor - Actor }
-agents  { nurse, robot, doctor }
-props   { given, busy }        // the dose was administered; the doctor is occupied
-
-initially {
-    !given                     // it was NOT given
-    !busy                      // the doctor is free, so she is in the room
-    B[nurse] given             // the nurse believes it was --- a false belief
-    ?[nurse] given             // she has not verified it
-    ?[doctor] given            // the doctor has no idea either way
-}
-
-// Safely believing the truth, which is stronger than believing it and weaker than
-// knowing it. This is the goal the capability actually has.
-goal { [][nurse] !given }
-
-actions {
-    // Speaking. The nurse comes to BELIEVE, because a speaker may be wrong or lying.
-    // The doctor overhears only if she is in the room.
-    robot_tells() {
-        actor     robot
-        announces !given
-        nurse observes, robot observes
-        doctor aware if !busy
-    }
-
-    // The same speech act with a false content, to show that a lie moves belief but
-    // cannot make it safe.
-    robot_lies() {
-        actor     robot
-        announces given
-        nurse observes, robot observes
-    }
-
-    // Showing. Sensing rather than announcement, so the nurse comes to KNOW.
-    robot_shows() {
-        actor      nurse
-        determines given
-        nurse observes
-        robot observes
-        doctor aware if !busy
-    }
-
-    // The doctor gets pulled away, which removes her from anything that follows.
-    doctor_paged() {
-        actor  doctor
-        causes busy
-        nurse observes, robot observes, doctor observes
-    }
-}
-"#,
-    ),
-    (
         "ice_cream_van.delhi",
         r#"// The ice-cream van — a *second-order* false belief.
 //
@@ -707,6 +627,108 @@ actions {
         causes box, !basket
         anne  observes
         sally observes if watching     // true in fact, false in anne's picture
+    }
+}
+"#,
+    ),
+    (
+        "search_rescue.delhi",
+        r#"// Urban search and rescue: a drone watching a team's beliefs come apart.
+//
+// This is the paper's running example. A team searches a partly collapsed building. The
+// members are physically separated, coordinate by radio, and each sees only their own
+// sector -- so their beliefs diverge for reasons nobody intends. A drone with a thermal
+// camera sees more than any of them, and the interesting questions are about what it can
+// work out concerning *their* beliefs.
+//
+// The scenario, in order:
+//
+//   * There IS someone trapped in the east wing.
+//   * Ana swept that wing and found it empty -- before the aftershock. Her belief is
+//     false, and blamelessly so: it was true when she formed it.
+//   * Ben is working elsewhere and has no view of the east wing.
+//   * The drone's camera sees the casualty.
+//
+// What the file is built to exhibit:
+//
+//   FIRST-ORDER FALSE BELIEF   B[ana] !trapped & trapped
+//   DECEPTION WITHOUT LYING    radio_fails() then drone_reports(): the drone tells the
+//                              truth, nobody lies, and Ben is left believing otherwise.
+//   SECOND-ORDER FALSE BELIEF  after the same two actions, B[ana] B[ben] trapped holds
+//                              while B[ben] trapped does not. Ana thinks Ben heard the
+//                              call. She did not see his radio die.
+//   LYING                      ana_reports_clear() after she has been corrected: she
+//                              asserts what she believes to be false.
+//   KNOWLEDGE RESISTS IT       ben_enters() then ana_reports_clear(): Ben saw the
+//                              casualty, so the lie cannot move him. Belief is revisable
+//                              by announcement; knowledge is not.
+//
+// The goal is safe belief rather than belief:
+//
+//     goal { [][ben] trapped }
+//
+// Not that Ben believes someone is trapped, but that he believes it in a way no further
+// true information would unsettle. Telling him over a working radio achieves it; telling
+// him a falsehood cannot; showing him achieves knowledge as well.
+//
+//     delhi eval examples/search_rescue.delhi -f "B[ana] !trapped & trapped"
+//     delhi eval examples/search_rescue.delhi -a "radio_fails()" "drone_reports()" \
+//           -f "B[ana] B[ben] trapped & !B[ben] trapped"
+//
+// See https://vsarathy.com/delhi/
+
+types   { Actor - Object }
+objects { ana, ben, drone - Actor }
+agents  { ana, ben, drone }
+props   { trapped, linked }     // a casualty in the east wing; ben's radio is working
+
+initially {
+    trapped                     // there is someone there
+    linked                      // ben's radio is up, for now
+    B[ana] !trapped             // ana swept the wing pre-aftershock: honest, and stale
+    ?[ana] trapped              // she has not been back
+    ?[ben] trapped              // ben has no view of that wing
+}
+
+goal { [][ben] trapped }
+
+actions {
+    // Ben's radio fails. He notices, and so does the drone. Ana does not -- she is inside
+    // a different sector. This one clause is what makes her second-order belief go wrong.
+    radio_fails() {
+        actor  ben
+        causes !linked
+        ben observes, drone observes
+    }
+
+    // The drone reports what its camera sees. Truthful, and carried by radio, so it
+    // reaches Ben only while his radio is up.
+    drone_reports() {
+        actor     drone
+        announces trapped
+        drone observes
+        ana observes
+        ben observes if linked
+    }
+
+    // Ana reports the wing clear. Said before she is corrected this is an honest error;
+    // said after, it is a lie -- and `announces` does not care which, because a speaker
+    // may assert what is false.
+    ana_reports_clear() {
+        actor     ana
+        announces !trapped
+        ana observes, drone observes
+        ben observes if linked
+    }
+
+    // Ben goes in and looks. Sensing, not testimony, so he comes to KNOW -- and what he
+    // knows cannot afterwards be talked away.
+    ben_enters() {
+        actor      ben
+        determines trapped
+        ben observes
+        drone observes
+        ana aware              // she hears him go in without seeing what he finds
     }
 }
 "#,

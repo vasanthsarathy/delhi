@@ -411,63 +411,87 @@ fn a_true_announcement_makes_a_belief_safe_and_a_lie_never_can() {
 }
 
 #[test]
-fn the_handover_capability_needs_safe_belief_to_state_its_goal() {
+fn the_search_and_rescue_goal_needs_safe_belief_to_state_it() {
     // The paper's running example. Its headline claim is that the success criterion is
-    // *safe* belief rather than belief: telling the truth achieves it, telling a lie
-    // cannot, and showing achieves knowledge as well. Those three rows are the
-    // acquisition table of the safe-belief section, on the domain that motivates it.
-    let src = include_str!("../../../examples/handover.delhi");
+    // *safe* belief rather than belief: a truthful report over a working radio achieves
+    // it, a lie cannot, and going in and looking achieves knowledge as well. Those three
+    // rows are the acquisition table of the safe-belief section, on the domain that
+    // motivates it.
+    let src = include_str!("../../../examples/search_rescue.delhi");
 
-    // She is wrong, and the robot knows she is wrong.
+    // Ana is wrong -- blamelessly, her sweep predates the aftershock -- and the drone
+    // can see that she is wrong.
     let mut p = run(src, &[]);
     expect(
         &mut p,
         &[
-            ("B[nurse] given & !given", true),
-            ("K[robot] (B[nurse] given & !given)", true),
+            ("B[ana] !trapped & trapped", true),
+            ("K[drone] (B[ana] !trapped & trapped)", true),
             // The goal does not hold yet -- and `[]` is what lets it be stated at all.
-            ("[][nurse] !given", false),
+            ("[][ben] trapped", false),
+            ("B[ben] trapped", false),
         ],
     );
 
-    // Telling: belief, safely, but not knowledge. This is the row that motivates `[]`.
-    let mut told = run(src, &["robot_tells()"]);
+    // Telling, over a radio that is up: belief, safely, but not knowledge. This is the
+    // row that motivates `[]`.
+    let mut told = run(src, &["drone_reports()"]);
     expect(
         &mut told,
-        &[("B[nurse] !given", true), ("[][nurse] !given", true), ("K[nurse] !given", false)],
+        &[("B[ben] trapped", true), ("[][ben] trapped", true), ("K[ben] trapped", false)],
     );
     let goal = told.goal.expect("the file declares a goal");
-    assert!(told.state.entails(&told.store, goal), "telling the truth discharges the goal");
+    assert!(told.state.entails(&told.store, goal), "a truthful report discharges the goal");
 
-    // Showing: knowledge, hence also safe belief.
-    let mut shown = run(src, &["robot_shows()"]);
-    expect(&mut shown, &[("K[nurse] !given", true), ("[][nurse] !given", true)]);
+    // Going in and looking: knowledge, hence also safe belief.
+    let mut seen = run(src, &["ben_enters()"]);
+    expect(&mut seen, &[("K[ben] trapped", true), ("[][ben] trapped", true)]);
 
-    // Lying moves belief and can never make it safe, `[]` being factive.
-    let mut lied = run(src, &["robot_lies()"]);
-    expect(&mut lied, &[("B[nurse] given", true), ("[][nurse] given", false)]);
+    // Belief yields to testimony; knowledge does not. Ana's lie undoes the report --
+    // safe belief included, `[]` being factive -- but cannot touch what Ben has seen.
+    let mut talked_out = run(src, &["drone_reports()", "ana_reports_clear()"]);
+    expect(&mut talked_out, &[("B[ben] trapped", false), ("[][ben] trapped", false)]);
+    let mut unmoved = run(src, &["ben_enters()", "ana_reports_clear()"]);
+    expect(&mut unmoved, &[("K[ben] trapped", true), ("[][ben] trapped", true)]);
 }
 
 #[test]
-fn the_paged_doctor_ends_up_with_a_stale_belief_about_the_nurse() {
-    // `doctor aware if !busy` is the conditional-observability clause. Paging her away
-    // makes her oblivious to the correction, so her model of the nurse goes stale -- a
-    // false belief about a mind, arising from an observability condition rather than
-    // from anything declared. This is what the enumeration example in the paper finds.
-    let src = include_str!("../../../examples/handover.delhi");
+fn a_dead_radio_leaves_ana_with_a_false_belief_about_ben() {
+    // `ben observes if linked` is the conditional-observability clause. Killing the radio
+    // first makes Ben oblivious to the report, and Ana -- who did not see it die -- takes
+    // him to have heard it. A second-order false belief that nobody lied to produce: it
+    // arises from an observability condition rather than from anything declared. This is
+    // what the enumeration example in the paper finds.
+    let src = include_str!("../../../examples/search_rescue.delhi");
 
-    // In the room: she learns the nurse was corrected.
-    let mut heard = run(src, &["robot_tells()"]);
-    expect(&mut heard, &[("K[doctor] B[nurse] !given", true)]);
+    // Radio up: the call reaches Ben, and Ana is right about him.
+    let mut heard = run(src, &["drone_reports()"]);
+    expect(&mut heard, &[("B[ben] trapped", true), ("B[ana] B[ben] trapped", true)]);
 
-    // Paged away first: she does not, and still takes the nurse to be mistaken.
-    let mut missed = run(src, &["doctor_paged()", "robot_tells()"]);
+    // Radio down first: it does not, and Ana is wrong about him.
+    let mut missed = run(src, &["radio_fails()", "drone_reports()"]);
     expect(
         &mut missed,
         &[
-            ("K[doctor] B[nurse] !given", false),
-            ("B[doctor] B[nurse] given", true),
-            ("B[nurse] !given", true), // ...while the nurse has in fact been put right
+            ("B[ana] B[ben] trapped & !B[ben] trapped", true),
+            ("K[drone] (B[ana] B[ben] trapped & !B[ben] trapped)", true),
+            ("B[ana] trapped", true), // ...while Ana herself has been put right
+        ],
+    );
+}
+
+#[test]
+fn ana_is_aware_that_ben_looked_without_learning_what_he_found() {
+    // `ana aware` on a sensing action is the middle observer class: she registers that
+    // the action happened without seeing its outcome. The consequence is second-order
+    // and exact -- she knows he knows *whether*, while remaining unsure herself.
+    let mut p = run(include_str!("../../../examples/search_rescue.delhi"), &["ben_enters()"]);
+    expect(
+        &mut p,
+        &[
+            ("K[ana] Kw[ben] trapped", true), // she knows he now knows, either way
+            ("Kw[ana] trapped", false),       // without learning which way
+            ("Bw[ana] B[ben] trapped", true),
         ],
     );
 }

@@ -152,97 +152,121 @@ needs something it does not yet exercise. It is deliberately small---three agent
 propositions---because the reasoning rather than the size is the difficulty.
 
 \begin{quote}
-A hospital shift handover. A dose of medication was \textbf{not} given. The nurse believes it
-was: she was interrupted, and assumes the handover covered it. A robot assistant observed that
-it was not. A doctor is present, has no view either way, and may be paged away at any moment.
+An urban search-and-rescue team is working through a partly collapsed building. The members are
+physically separated, coordinate by radio, and each sees only their own sector. \textbf{There is
+a casualty in the east wing.} Ana swept that wing and found it empty---before the aftershock, so
+her report was true when she made it and is no longer. Ben is working elsewhere and has no view
+of that wing. A drone with a thermal camera sees the casualty.
 \end{quote}
 
-The scenario instantiates each of R1--R6 in turn. The nurse's belief is false (R1). The robot
-must represent that belief in order to act on it, and after any intervention the doctor's
-view of the nurse may be out of date (R2). Whatever the robot does, the nurse, the doctor and
-the robot itself are affected differently, and differently again depending on whether the
-doctor is still in the room (R3). Correcting the nurse must not incidentally settle her
-uncertainty about the doctor's whereabouts, and must leave her open to later correction (R4).
-Whether the nurse would notice the omission unaided determines whether intervening is
-necessary at all (R5). And the robot's operative question---\emph{what does the nurse believe
-that is not so?}---is a search (R6).
+The setting is chosen because the divergences in it are \emph{structural} rather than
+adversarial. Nobody in the scenario is careless and nobody need be dishonest; beliefs come apart
+because the team is distributed, radios fail, and information that was accurate becomes stale.
+That is the ordinary condition of a distributed team, and it is what makes a drone that can
+reason about its colleagues' beliefs useful rather than merely clever.
 
-\Cref{lst:handover} gives the scenario as a \delhi{} domain and \Cref{fig:handover} the
-structure derived from it. One line of the domain deserves attention now, because it is where
-R5 becomes concrete:
+The scenario instantiates each of R1--R6. Ana's belief that the wing is clear is false, and
+blamelessly so (R1). If Ben's radio fails and the drone then reports the casualty, Ana---who did
+not see the radio fail---will take Ben to have heard it, so she is wrong about \emph{his} state of
+mind (R2). One radio call reaches Ana, reaches Ben only if his radio is up, and tells the drone
+nothing it did not already know (R3). Correcting Ana must not incidentally settle her
+uncertainty about Ben's radio, and must leave her open to correction again (R4). Whether Ben
+would discover the casualty unaided is what determines whether the drone should intervene at all
+(R5). And the drone's operative question---\emph{which of my colleagues believes something that
+is not so?}---is a search rather than a formula (R6).
+
+Two distinctions the scenario draws are worth naming now, because they are easily conflated and
+the formalism separates them.
+
+\paragraph{Lying and deception are not the same act.}
+To \emph{lie} is to assert what one believes false; Ana does this if she reports the wing clear
+after being told otherwise. To \emph{deceive} is to bring about a false belief, and that can be
+done without any lie at all. When Ben's radio fails and the drone truthfully reports the
+casualty, Ben is left believing the wing clear---and no one has said anything false. The first is
+a property of an announcement's content, the second a property of who received it, and
+\Cref{sec:dynamics} shows that \delhi{} represents them by different mechanisms.
+
+\paragraph{Belief yields to testimony; knowledge does not.}
+If Ben is told the wing is clear he may come to believe it. If Ben has \emph{been in and looked},
+the same assertion leaves him unmoved. This is not a stipulation but a consequence of the
+semantics, and \Cref{sec:logic} makes it precise.
+
+\Cref{lst:sar} gives the scenario as a \delhi{} domain and \Cref{fig:sar} the structure derived
+from it. One line of the domain deserves attention now, because it is where R5 becomes concrete:
 
 \begin{center}
-\code{goal \{ [][nurse] !given \}}
+\code{goal \{ [][ben] trapped \}}
 \end{center}
 
-The goal is not that the nurse believes the truth, nor that she knows it, but that she
-believes it \emph{stably}: that no further true information would unsettle it. The operator
-is \emph{safe belief}, treated in \Cref{sec:safe}. We draw attention to it here for a
-methodological reason rather than a technical one---a goal of this form cannot be written down
-at all in a language whose attitudes are knowledge and belief, so the adequacy of a formalism
-for R5 can be settled by inspection, before any question of efficiency arises.
+The goal is not that Ben believes there is a casualty, nor that he knows it, but that he believes
+it \emph{stably}: that no further true information would unsettle it. The operator is \emph{safe
+belief}, treated in \Cref{sec:safe}. We draw attention to it here for a methodological reason
+rather than a technical one---a goal of this form cannot be written down at all in a language
+whose attitudes are knowledge and belief, so the adequacy of a formalism for R5 can be settled by
+inspection, before any question of efficiency arises.
 
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}[node distance=30mm]
-  \node[actual] (w0) {$\overline{g}$};
-  \node[world, right=of w0] (w1) {$g$};
-  \draw[plaus] (w0) -- node[elab] {\emph{nurse}} (w1);
-  \draw[equi] (w0) to[bend right=28] node[elab, below] {\emph{doctor}} (w1);
-  \node[wlab, below=1.5mm of w0] {$w_0$ (actual)};
-  \node[wlab, below=1.5mm of w1] {$w_1$};
+  \node[world] (w0) {$\overline{t}$};
+  \node[actual, right=of w0] (w1) {$t$};
+  \draw[plaus] (w1) -- node[elab] {\emph{ana}} (w0);
+  \draw[equi] (w0) to[bend right=28] node[elab, below] {\emph{ben}} (w1);
+  \node[wlab, below=1.5mm of w0] {$w_0$};
+  \node[wlab, below=1.5mm of w1] {$w_1$ (actual)};
 \end{tikzpicture}
-\caption{The handover, as \delhi{} builds it from the \code{initially} block of
-\Cref{lst:handover}. Write $g$ for \code{given}. The dose was not given, so $w_0$ is actual
-(double ring). The nurse's arrow points to $w_1$: she cannot rule out either world and finds
-the wrong one more plausible. The doctor relates the two worlds in both directions --- she has
-no leaning at all. The robot has no arrow, so it knows. Three agents, one proposition, three
+\caption{The search-and-rescue team, as \delhi{} builds it from the \code{initially} block
+of \Cref{lst:sar}. Write $t$ for \code{trapped}. There is a casualty, so $w_1$ is actual
+(double ring). Ana's arrow points to $w_0$: she cannot rule out either world and finds the wrong
+one more plausible. Ben relates the two worlds in both directions --- he has no leaning at all.
+The drone has no arrow, so it knows. Three agents, one proposition, three
 different epistemic positions, none of which a fact-only representation can hold.}
-\label{fig:handover}
+\label{fig:sar}
 \end{figure}
-
-\begin{lstlisting}[float=p,caption={\code{handover.delhi}. Sections are explained in
+\begin{lstlisting}[float=p,caption={\code{search\_rescue.delhi}. Sections are explained in
 \Cref{sec:surface}; for now note only that nothing here is a Kripke structure. The modeller
 states what is true, what is believed, and who observes what --- and \delhi{} derives
-\Cref{fig:handover} and the event models from that.},captionpos=b,label=lst:handover]
+\Cref{fig:sar} and the event models from that.},captionpos=b,label=lst:sar]
 types   { Actor - Object }
-objects { nurse, robot, doctor - Actor }
-agents  { nurse, robot, doctor }
-props   { given, busy }        // the dose was administered; the doctor is occupied
+objects { ana, ben, drone - Actor }
+agents  { ana, ben, drone }
+props   { trapped, linked }    // a casualty in the east wing; ben's radio is working
 
 initially {
-    !given                     // it was NOT given
-    !busy                      // the doctor is free, so she is in the room
-    B[nurse] given             // the nurse believes it was -- a false belief
-    ?[nurse] given             // she has not verified it
-    ?[doctor] given            // the doctor has no idea either way
+    trapped                    // there is someone there
+    linked                     // ben's radio is up, for now
+    B[ana] !trapped            // ana swept the wing pre-aftershock: honest, and stale
+    ?[ana] trapped             // she has not been back
+    ?[ben] trapped             // ben has no view of that wing
 }
 
-goal { [][nurse] !given }      // she believes the truth, and SAFELY
+goal { [][ben] trapped }       // he believes it, and SAFELY
 
 actions {
-    robot_tells() {            // speaking: she comes to BELIEVE
-        actor     robot
-        announces !given
-        nurse observes, robot observes
-        doctor aware if !busy  // overheard only if she is in the room
+    radio_fails() {            // ana does not see this happen
+        actor  ben
+        causes !linked
+        ben observes, drone observes
     }
-    robot_lies() {             // the same act with false content
-        actor     robot
-        announces given
-        nurse observes, robot observes
+    drone_reports() {          // truthful, and carried by radio
+        actor     drone
+        announces trapped
+        drone observes
+        ana observes
+        ben observes if linked
     }
-    robot_shows() {            // showing: she comes to KNOW
-        actor      nurse
-        determines given
-        nurse observes
-        robot observes
-        doctor aware if !busy
+    ana_reports_clear() {      // an honest error before she is told; a lie after
+        actor     ana
+        announces !trapped
+        ana observes, drone observes
+        ben observes if linked
     }
-    doctor_paged() {
-        actor  doctor
-        causes busy
-        nurse observes, robot observes, doctor observes
+    ben_enters() {             // sensing: he comes to KNOW
+        actor      ben
+        determines trapped
+        ben observes
+        drone observes
+        ana aware              // she hears him go in, without seeing what he finds
     }
 }
 \end{lstlisting}
@@ -354,26 +378,26 @@ so would scale, where the depth-bounded approach leads. The full row of ticks re
 \subsection{Classical planning over facts}
 
 A STRIPS-style representation has propositions and actions that change them. It can record
-\code{given = false}. It cannot record that the nurse thinks otherwise, because there is no
-place in the representation for a proposition to be false and simultaneously taken to be
-true. One could add an atom \code{nurse\_thinks\_given} and treat it as an ordinary fluent,
-but then nothing connects it to \code{given}: the two vary independently, no action is
+\code{trapped = true}. It cannot record that Ana takes the wing to be clear, because there
+is no place in the representation for a proposition to be true and simultaneously taken to be
+false. One could add an atom \code{ana\_thinks\_clear} and treat it as an ordinary fluent,
+but then nothing connects it to \code{trapped}: the two vary independently, no action is
 constrained by their relationship, and the modeller maintains the correspondence by hand for
 every action they write. \textbf{Stops at:} R1. The mistake is not representable, and R2--R6 all presuppose it.
 
 \subsection{Knowledge-only epistemic logic}
 
-Give each agent an $S5$ relation and the situation improves markedly. We can now say the
-nurse does not \emph{know} whether the dose was given, that the robot does know, and that the
-doctor does not --- three distinct positions, correctly. Public-announcement dynamics will
-even update all three when the robot speaks.
+Give each agent an $S5$ relation and the situation improves markedly. We can now say that Ana
+does not \emph{know} whether anyone is in the wing, that the drone does know, and that Ben does
+not --- three distinct positions, correctly. Public-announcement dynamics will even update all
+three when the drone transmits.
 
 What cannot be said is the one thing the scenario is about. Knowledge is \emph{factive}:
-$\Kop{i}\varphi \to \varphi$ is valid, so $\Kop{\mathit{nurse}}\,\mathit{given}$ is
-unsatisfiable when $\mathit{given}$ is false. The nurse's error is not merely hard to encode;
-it is ruled out by the logic. The best available paraphrase is that she is \emph{ignorant} of
-whether the dose was given --- which is true, and which loses the entire point, since an
-ignorant nurse would check and a mistaken one will not.
+$\Kop{i}\varphi \to \varphi$ is valid, so
+$\Kop{\mathit{ana}}\,\neg\mathit{trapped}$ is unsatisfiable when the wing is occupied. Ana's
+error is not merely hard to encode; it is ruled out by the logic. The best available paraphrase
+is that she is \emph{ignorant} of whether anyone is there --- which is true, and which loses the
+entire point, since an ignorant searcher would go back and a mistaken one will not.
 
 \textbf{Stops at:} R1, and hence R4 and R5. R3 is well supported---public-announcement dynamics handle differential observability---and R2 is available for knowledge about knowledge, which is why the table records it as qualified rather than absent. This is where $m\mathcal{A}^*$ \citep{baral} and the EFP
 planners \citep{le2018} sit, and it is a deliberate choice --- restricting to knowledge is
@@ -383,26 +407,26 @@ part of what buys them planning performance.
 
 The obvious repair is a second relation per agent: an $S5$ relation for knowledge and a
 serial, transitive, Euclidean one for belief, with axioms linking them. Now
-$\Bop{\mathit{nurse}}\,\mathit{given} \wedge \neg\mathit{given}$ is satisfiable, and the
-scenario's premise is finally expressible.
+$\Bop{\mathit{ana}}\,\neg\mathit{trapped} \wedge \mathit{trapped}$ is satisfiable, and
+the scenario's premise is finally expressible.
 
 Two problems remain, and they are R4 and R5.
 
-\textbf{Revision is destructive.} When the robot tells the nurse something contradicting her
-belief, the belief relation must be rebuilt. The rules available in this setting are blunt:
-in $m\mathcal{A}^*$'s treatment, contradicting information collapses \emph{all} of an agent's
-uncertainty, not just the part that conflicted. Our nurse also does not know whether the
-doctor has been paged; being corrected about the medication should not settle that question,
-and under a collapsing rule it does. Worse, the collapse is irreversible in the wrong way:
+\textbf{Revision is destructive.} When the drone's report contradicts Ana's belief, her belief
+relation must be rebuilt. The rules available in this setting are blunt: in
+$m\mathcal{A}^*$'s treatment, contradicting information collapses \emph{all} of an agent's
+uncertainty, not just the part that conflicted. Ana also does not know whether Ben's radio is
+still up; being corrected about the casualty should not settle that question, and under a
+collapsing rule it does. Worse, the collapse is irreversible in the wrong way:
 having been told, she cannot later be brought back by better evidence, because the worlds
 that would support the alternative are gone.
 
-\textbf{Stability is inexpressible.} The assistant needs to know whether the nurse
-\emph{would find out anyway}. With knowledge and belief alone there is no operator for
-``believes, and no true information would change that''. One can ask whether she believes,
-and whether she knows, and get \emph{yes} and \emph{no} --- and those two answers are the same
-for a nurse who is about to check the chart and a nurse who will never look again. The goal of
-\Cref{lst:handover} is not expressible here.
+\textbf{Stability is inexpressible.} The drone needs to know whether Ben \emph{would find out
+anyway}. With knowledge and belief alone there is no operator for ``believes, and no true
+information would change that''. One can ask whether he believes, and whether he knows, and get
+\emph{yes} and \emph{no} --- and those two answers are the same for a searcher who is about to
+walk through that wing and one who will never go near it. The goal of \Cref{lst:sar} is not
+expressible here.
 
 \subsection{Dynamic epistemic logic with hand-built event models}
 
@@ -412,16 +436,17 @@ deletes, and safe belief to state the goal. Nothing in the scenario is beyond it
 \delhi's semantics is a DEL semantics.
 
 The cost is where the modeller's effort goes. In DEL as such, the event model for each action
-is \emph{supplied}, not derived. To say ``the robot tells the nurse, and the doctor overhears
-only if she has not been paged'' the modeller must construct a multi-event structure with the
-right preconditions and the right per-agent edges, and get every edge right --- and then do it
-again for the sensing variant, and again for the lie. \Cref{sec:eventbackground} shows what
+is \emph{supplied}, not derived. To say ``the drone transmits, and Ben receives it only if his
+radio is up'' the modeller must construct a multi-event structure with the right preconditions
+and the right per-agent edges, and get every edge right --- and then do it again for the sensing
+variant, and again for the lie. \Cref{sec:eventbackground} shows what
 those structures look like; they are not hard, but they are fiddly, and an error in one edge
 produces a model that is well-formed and silently wrong.
 
-There is also no standard \emph{query} apparatus. Having built the model, the assistant's
-question --- \emph{what does the nurse believe that is false?} --- is not a formula, it is a
-search over formulas, and DEL as a logic has nothing to say about how to conduct it.
+There is also no standard \emph{query} apparatus. Having built the model, the drone's
+question --- \emph{which of my colleagues believes something that is not so?} --- is not a
+formula, it is a search over formulas, and DEL as a logic has nothing to say about how to
+conduct it.
 
 \textbf{Stops at:} R6, and R5 unless the plausibility extension is adopted. R1--R4 are fully
 supported, which is why \delhi's semantics is a plausibility-DEL semantics rather than an
@@ -447,8 +472,8 @@ section that delivers it.
 
 \begin{enumerate}
   \item \textbf{Belief that can be false, with revision that preserves everything else} (R1, R4).
-    Correcting the nurse about the medication must not settle her uncertainty about the
-    doctor, and must leave room for her to be corrected again. This is what plausibility
+    Correcting Ana about the casualty must not settle her uncertainty about Ben's
+    radio, and must leave room for her to be corrected again. This is what plausibility
     models buy: revision \emph{reorders} worlds instead of deleting them
     (\Cref{sec:prelim}).
 
@@ -457,16 +482,15 @@ section that delivers it.
     in a query (\Cref{sec:logic}). This is the extension we mark with the $+$.
 
   \item \textbf{Event models derived from declared observability} (R3). The modeller should write
-    \code{doctor aware if !busy} and get the right multi-event structure, including the
+    \code{ben observes if linked} and get the right multi-event structure, including the
     conditional case, rather than draw it (\Cref{sec:dynamics}).
 
-  \item \textbf{Three observer positions, not two} (R3 at second order, with R2). ``Overheard the correction'' and ``did
-    not notice it'' are different, and so is ``knew something was said without hearing what''
-    --- which is exactly the doctor's position when she is out of the room but sees the
-    conversation happen (\Cref{sec:observability}).
+  \item \textbf{Three observer positions, not two} (R3 at second order, with R2). ``Received the call'' and ``did not
+    receive it'' are different, and so is ``knew a colleague went in without learning what they
+    found'' --- which is exactly Ana's position when Ben enters the wing (\Cref{sec:observability}).
 
-  \item \textbf{Search over formulas, not just checking of them} (R6). \emph{What does the nurse
-    believe that is false?} must be answerable without the analyst guessing the formula
+  \item \textbf{Search over formulas, not just checking of them} (R6). \emph{Which of my colleagues believes
+    something that is not so?} must be answerable without the analyst guessing the formula
     first (\Cref{sec:query}).
 \end{enumerate}
 
@@ -1142,9 +1166,10 @@ is not obvious on first encounter, so we develop it from the idea rather than fr
 
 \paragraph{The idea.}
 An agent can be uncertain about \emph{how the world is}---that is what
-\Cref{fig:handover} draws. It can equally be uncertain about \emph{what just happened}. The
-robot speaks; did it report truthfully or not? The nurse reaches for the chart; did she read
-it, or merely tidy it? These are uncertainties of exactly the same shape, and
+\Cref{fig:sar} draws. It can equally be uncertain about \emph{what just happened}. The
+radio crackles; was that the drone reporting a casualty, or reporting none? Ben moves toward
+the east wing; did he go in and look, or turn back? These are uncertainties of the same shape,
+and
 the insight behind event models is to represent them with exactly the same apparatus.
 
 So an event is modelled the way a world is: as one possibility among several, with a relation
@@ -1421,62 +1446,61 @@ knowledge.
 \label{sec:worked}
 
 \Cref{fig:update} applies \Cref{def:update} to the running example: the initial model of
-\Cref{fig:handover} crossed with the announcement model of \Cref{fig:events} for $\psi =
-\neg g$, which is the robot telling the nurse the truth.
+\Cref{fig:sar} crossed with the announcement model of \Cref{fig:events} for $\psi = t$,
+which is the drone reporting the casualty.
 
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}
   % ---- before
   \begin{scope}
-    \node[actual] (w0) at (0,0) {$\overline{g}$};
-    \node[world]  (w1) at (2.1,0) {$g$};
-    \draw[plaus] (w0) -- node[elab] {\emph{n}} (w1);
+    \node[actual] (w0) at (0,0) {$\overline{t}$};
+    \node[world]  (w1) at (2.1,0) {$t$};
+    \draw[plaus] (w0) -- node[elab] {\emph{a}} (w1);
     \node[wlab, below=1.5mm of w0] {$w_0$};
-    \node[wlab, below=1.5mm of w1] {$w_1$};
+    \node[wlab, below=1.5mm of w1] {$w_1$ (actual)};
     \node[font=\small\bfseries] at (1.05,1.3) {before};
   \end{scope}
   \node at (3.4,0) {\large $\otimes$};
   % ---- event model (truthful announcement of not-g)
   \begin{scope}[xshift=42mm]
-    \node[event] (ep) at (0,0.7)  {$e^{\neg g}$};
-    \node[event] (en) at (0,-0.6) {$e^{g}$};
+    \node[event] (ep) at (0,0.7)  {$e^{\neg t}$};
+    \node[event] (en) at (0,-0.6) {$e^{t}$};
     \node[event] (et) at (0,-1.9) {$e^{\top}$};
     \draw[plaus] (en) to[bend right=45] (ep);
-    \node[font=\small\bfseries] at (0,1.9) {announce $\neg g$};
+    \node[font=\small\bfseries] at (0,1.9) {report $t$};
   \end{scope}
   \node at (6.0,0) {\large $=$};
   % ---- after: two clusters
   \begin{scope}[xshift=76mm]
     % the announcement cluster
-    \node[actual] (p0) at (0,0.75)  {$\overline{g}$};
-    \node[world]  (p2) at (2.1,0.75) {$g$};
-    \draw[plaus] (p2) -- node[elab] {\emph{n}} (p0);
-    \draw[equi] (p0) to[bend left=25] node[elab, above] {\emph{d}} (p2);
-    \node[wlab, right=1mm of p2] {$\langle w_0,e^{\neg g}\rangle,\ \langle w_1,e^{g}\rangle$};
+    \node[actual] (p0) at (0,0.75)  {$\overline{t}$};
+    \node[world]  (p2) at (2.1,0.75) {$t$};
+    \draw[plaus] (p2) -- node[elab] {\emph{a}} (p0);
+    \draw[equi] (p0) to[bend left=25] node[elab, above] {\emph{b}} (p2);
+    \node[wlab, right=1mm of p2] {$\langle w_1,e^{t}\rangle,\ \langle w_0,e^{\neg t}\rangle$};
     % the nothing-happened cluster
-    \node[world] (p1) at (0,-1.15)  {$\overline{g}$};
-    \node[world] (p3) at (2.1,-1.15) {$g$};
-    \draw[plaus] (p1) -- node[elab] {\emph{n}} (p3);
-    \draw[equi] (p1) to[bend right=25] node[elab, below] {\emph{d}} (p3);
-    \node[wlab, right=1mm of p3] {$\langle w_0,e^{\top}\rangle,\ \langle w_1,e^{\top}\rangle$};
+    \node[world] (p1) at (0,-1.15)  {$\overline{t}$};
+    \node[world] (p3) at (2.1,-1.15) {$t$};
+    \draw[plaus] (p1) -- node[elab] {\emph{a}} (p3);
+    \draw[equi] (p1) to[bend right=25] node[elab, below] {\emph{b}} (p3);
+    \node[wlab, right=1mm of p3] {$\langle w_1,e^{\top}\rangle,\ \langle w_0,e^{\top}\rangle$};
     \node[font=\small\bfseries] at (1.05,1.9) {after};
   \end{scope}
 \end{tikzpicture}
-\caption{The robot telling the nurse the truth, worked through; $g$ abbreviates
-\code{given} and \emph{n}, \emph{d} are the nurse and the doctor. Each original world pairs
-with the designated event whose precondition it satisfies, and with $e^{\top}$, giving four
-worlds in two clusters. \textbf{Upper cluster (the announcement happened).} The event order
-makes $e^{\neg g}$ strictly the more plausible, and by action priority that overrides the
-nurse's prior order: her arrow has \emph{reversed}, so $\Bop{n}\neg g$ now holds.
-\textbf{Lower cluster ($e^{\top}$, nothing observable happened).} Her original order survives
-untouched --- this is the copy that exists for an agent who might have missed the event, and it
-is why $e^{\top}$ is in the construction at all. The nurse is a full observer, so she has no
-edge between the clusters and is not in fact uncertain which obtains; the doctor, being merely
-\code{aware}, relates worlds within each cluster but not across, so she learns that something
-was said without learning what. The nurse's \emph{knowledge} is untouched throughout --- every
-world is still present --- which is what leaves room for \code{robot\_shows()} to upgrade her
-to knowledge later.}
+\caption{The drone reporting the casualty, worked through; $t$ abbreviates
+\code{trapped} and \emph{a}, \emph{b} are Ana and Ben. Each original world pairs with the
+designated event whose precondition it satisfies, and with $e^{\top}$, giving four worlds in
+two clusters. \textbf{Upper cluster (the call went out).} The event order makes $e^{t}$
+strictly the more plausible, and by action priority that overrides Ana's prior order: her
+arrow has \emph{reversed}, so $\Bop{a}t$ now holds. \textbf{Lower cluster ($e^{\top}$,
+nothing observable happened).} Her original order survives untouched --- this is the copy
+that exists for an agent who might have missed the transmission, and it is why $e^{\top}$ is
+in the construction at all. Ana is a full observer here, so she has no edge between the
+clusters; Ben, whose radio is up in this run, likewise receives it. Had his radio failed he
+would have been oblivious, and the lower cluster would have been where he in fact was ---
+which is the divergence of \Cref{sec:running}. Ana's \emph{knowledge} is untouched throughout,
+which is what leaves room for a later sighting to upgrade her to knowledge.}
 \label{fig:update}
 \end{figure}
 
@@ -1495,9 +1519,9 @@ Let $\mathrm{R}_{\mathrm{alt}}$ be the rule
 Then $\mathrm{R}_{\mathrm{alt}}$ and \Cref{def:update} agree on three of the four
 event-comparability configurations and differ exactly when $f \to^{iuv} e$ holds and $e
 \to^{iuv} f$ does not. That configuration is realised by \emph{any} announcement to a full
-observer holding a contrary prior belief---in particular by \code{robot\_tells()} in
-\Cref{lst:handover}---and the two rules then give contradictory answers to whether the
-correction lands.
+observer holding a contrary prior belief---in particular by \code{drone\_reports()} in
+\Cref{lst:sar}---and the two rules then give contradictory answers to whether the
+report lands.
 \end{proposition}
 
 \begin{proof}
@@ -1514,22 +1538,22 @@ neither & $\bot$ & $\bot$ & yes \\
 \bottomrule
 \end{tabular}
 \end{center}
-For reachability, take $i = \mathit{nurse}$, $u = w_1$, $v = w_0$, $e = e^{\neg g}$, $f =
-e^{g}$ in \Cref{fig:update}. The nurse is a full observer, so $\PN(\mathit{nurse}) = \neg\top
-= \bot$ and $Q(e^{\neg g}, e^{g})(\mathit{nurse}) = \bot$, giving $\neg(e \to f)$; while
-$Q(e^{g}, e^{\neg g})(\mathit{nurse}) = \FPN = \top$, giving $f \to e$. Also $w_1 \comp{i}
+For reachability, take $i = \mathit{ana}$, $u = w_0$, $v = w_1$, $e = e^{t}$, $f =
+e^{\neg t}$ in \Cref{fig:update}. Ana is a full observer, so $\PN(\mathit{ana}) = \neg\top = \bot$
+and $Q(e^{t}, e^{\neg t})(\mathit{ana}) = \bot$, giving $\neg(e \to f)$; while
+$Q(e^{\neg t}, e^{t})(\mathit{ana}) = \FPN = \top$, giving $f \to e$. Also $w_1 \comp{i}
 w_0$ holds, $w_1 \plaus{i} w_0$ fails, and $w_0 \plaus{i} w_1$ holds. Under \Cref{def:update}
-no edge is created, the nurse retains a strict preference for the announced world, and
-$\Bop{\mathit{nurse}}\neg g$ holds. Under $\mathrm{R}_{\mathrm{alt}}$ the first disjunct
+no edge is created, Ana retains a strict preference for the reported world, and
+$\Bop{\mathit{ana}}t$ holds. Under $\mathrm{R}_{\mathrm{alt}}$ the first disjunct
 fires, an edge appears in both directions, the two worlds become equiplausible, and
-$\Bop{\mathit{nurse}}\neg g$ fails.
+$\Bop{\mathit{ana}}t$ fails.
 \end{proof}
 
 \begin{remark}[Why this settles the choice]
 \label{rem:divergence}
 The divergence is not a corner case requiring construction. Under $\mathrm{R}_{\mathrm{alt}}$
-the robot's correction does not land: the nurse ends up with no belief either way rather than
-with the true one, so the goal of \Cref{lst:handover} is unreachable and task R5 cannot be
+the drone's report does not land: Ana ends up with no belief either way rather than with
+the true one, so the goal of \Cref{lst:sar} is unreachable and task R5 cannot be
 discharged at all.
 
 The same configuration arises in the \emph{Coin Lie} scenario of
@@ -1658,31 +1682,41 @@ finds instances the analyst had no reason to anticipate.
 
 \begin{example}[Enumeration on the running example]
 \label{ex:ask}
-This is task R6 of \Cref{sec:kinds}, on the scenario that raised it. The
-assistant's question is \emph{what does the nurse believe that is false?}, and it is answered
-by search:
+This is task R6 of \Cref{sec:kinds}, on the scenario that raised it. Ask first what Ana
+believes that is not so:
 \begin{lstlisting}[style=shell]
-$ delhi ask handover.delhi -d 1 -q "B[nurse] _ & !_"
-  B[nurse] (given) & !(given)
-  B[nurse] (K[robot] given) & !(K[robot] given)
-  B[nurse] (B[robot] given) & !(B[robot] given)
+$ delhi ask search_rescue.delhi -d 1 -q "B[ana] _ & !_"
+  B[ana] (!trapped) & !(!trapped)
+  B[ana] (K[drone] !trapped) & !(K[drone] !trapped)
+  B[ana] (B[drone] !trapped) & !(B[drone] !trapped)
 3 of 28 candidates at depth 1
 \end{lstlisting}
-The first is the mistake we put there. The second and third were not designed in and are
-consequences of it: believing the dose was given, she also believes the robot knows it was.
-An analyst checking a guessed formula would have found the first and missed the others.
+The first is the stale sweep we put there. The other two were not designed in and are
+consequences of it: taking the wing to be clear, she also takes the drone to have found it
+clear. An analyst checking a guessed formula would have found the first and missed the others.
 
-The same operation locates the \emph{second-order} error. Page the doctor away, then correct
-the nurse in her absence, and ask what the doctor now believes that is false:
+The more useful question is the drone's own. It is not \emph{what is false} --- the drone cannot
+see that from inside a colleague's head --- but \emph{where does a colleague's belief contradict
+what I know}. That is a pattern with two holes and two different operators:
 \begin{lstlisting}[style=shell]
-$ delhi ask handover.delhi -a "doctor_paged()" "robot_tells()" -d 1 -q "B[doctor] _ & !_"
-  B[doctor] (B[nurse] given) & !(B[nurse] given)
-1 of 28 candidates at depth 1
+$ delhi ask search_rescue.delhi -a "radio_fails()" "drone_reports()" \
+        -d 1 -q "B[ana] _ & K[drone] !_"
+  B[ana] (linked) & K[drone] !(linked)
+  B[ana] (K[ben] linked) & K[drone] !(K[ben] linked)
+  B[ana] (B[ben] linked) & K[drone] !(B[ben] linked)
+  B[ana] (K[drone] linked) & K[drone] !(K[drone] linked)
+  B[ana] (B[drone] linked) & K[drone] !(B[drone] linked)
+  B[ana] (B[ben] trapped) & K[drone] !(B[ben] trapped)
+6 of 28 candidates at depth 1
 \end{lstlisting}
-Exactly one: the doctor still believes the nurse is mistaken, when the nurse has since been
-put right. That is a false belief about \emph{a mind} rather than about the world, it arose
-from an observability condition rather than from anything declared, and no one had to guess
-its shape to find it.
+Six divergences, of which the drone had been told about none. Five concern the radio: Ana did
+not see it fail, so she is wrong about that and about what Ben and the drone make of it. The
+sixth is the one that matters operationally---%
+$\Bop{\mathit{ana}}\Bop{\mathit{ben}}\,\mathit{trapped}$ while
+$\Bop{\mathit{ben}}\,\mathit{trapped}$ is false. Ana is about to act on the assumption that Ben
+heard the call. This is a false belief about \emph{a mind} rather than about the world; it arose
+from one observability condition rather than from anything declared; and no one had to guess its
+shape to find it.
 \end{example}
 
 % ===========================================================================
