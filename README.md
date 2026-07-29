@@ -883,6 +883,13 @@ shapes rather than the absolute microseconds. And none of this makes the underly
 easy — epistemic plan existence is undecidable in general, and no implementation detail
 changes that.
 
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the workflow — issue, branch, PR, the local
+gate CI will run anyway, and the conventions that are not obvious from reading the code.
+[RELEASING.md](RELEASING.md) is the maintainer runbook: one command once the changelog is
+written, plus the traps that cost real time the first time round.
+
 ## Layout
 
 | Crate | Holds |

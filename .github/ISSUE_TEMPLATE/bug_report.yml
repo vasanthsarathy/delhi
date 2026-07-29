@@ -1,0 +1,67 @@
+name: Bug report
+description: Something behaves differently from what the docs say, or from the semantics
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The single most useful thing you can give us is **a `.delhi` file small enough to
+        paste**. Most epistemic-logic bugs are impossible to guess at without the domain.
+
+        Unsure whether it is a bug or a misunderstanding of the semantics? File it anyway.
+        Several "bugs" here turned out to be the documentation failing to explain something,
+        which is still a defect worth fixing.
+
+  - type: textarea
+    id: domain
+    attributes:
+      label: The domain
+      description: A `.delhi` file that shows it. Trim it as far as it still reproduces.
+      render: text
+      placeholder: |
+        types   { Actor - Object }
+        objects { a, b - Actor }
+        agents  { a, b }
+        props   { p }
+        initially { p, ?[a] p }
+        actions { tell() { actor b, announces p, a observes, b observes } }
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: The command
+      description: Exactly what you ran, including any `-a` trace.
+      render: shell
+      placeholder: delhi eval bug.delhi -a "tell()" -f "K[a] p"
+    validations:
+      required: true
+
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: What happened, and what you expected
+      description: >
+        Both, please. For a wrong answer, say which formula you believe should hold and why
+        — that reasoning is often where the disagreement actually is.
+      placeholder: |
+        Got:      false
+        Expected: true — `a` observes the announcement, so she should come to believe p.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`delhi --version`, and how you installed it."
+      placeholder: "delhi 0.1.4, cargo install"
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: "macOS 14 arm64 / Ubuntu 24.04 / Windows 11"

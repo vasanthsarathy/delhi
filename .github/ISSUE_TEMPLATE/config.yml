@@ -1,0 +1,10 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation and guide
+    url: https://vsarathy.com/delhi/
+    about: >
+      An introduction to epistemic logic, a tutorial, and reference. Worth a look before
+      filing — the answer to "should this hold?" is often here.
+  - name: Questions and discussion
+    url: https://github.com/vasanthsarathy/delhi/discussions
+    about: For anything more conversation than task.

@@ -1,0 +1,39 @@
+name: Feature request
+description: Something delhi should be able to do and cannot
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to model or find out?
+      description: >
+        The scenario, not the feature. Knowing what you are trying to express often surfaces
+        a way to do it today — or makes the right shape of the feature obvious.
+    validations:
+      required: true
+
+  - type: textarea
+    id: blocked
+    attributes:
+      label: Where does it stop?
+      description: What you tried, and what the language or tool would not let you say.
+    validations:
+      required: true
+
+  - type: textarea
+    id: shape
+    attributes:
+      label: What might it look like?
+      description: Optional. Syntax sketch, a command, an API — however rough.
+      render: text
+
+  - type: checkboxes
+    id: area
+    attributes:
+      label: Roughly where does this land?
+      options:
+        - label: The language (a `.delhi` file could not express it)
+        - label: The semantics (an attitude or update rule is missing)
+        - label: Queries (`eval` / `ask` could not answer it)
+        - label: Tooling (CLI, browser UI, Python, output formats)
+        - label: Documentation
