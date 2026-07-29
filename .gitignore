@@ -28,3 +28,12 @@ scratch/
 
 # Built docs site
 /site/
+
+# LaTeX build artefacts (the PDF itself is committed)
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.toc
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz

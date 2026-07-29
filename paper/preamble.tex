@@ -1,0 +1,141 @@
+% ---------------------------------------------------------------------------
+% Shared preamble: packages, theorem environments, notation macros, and the
+% listings style for delhi source.
+% ---------------------------------------------------------------------------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[round,authoryear]{natbib}
+\usepackage[hidelinks]{hyperref}
+\usepackage{cleveref}
+
+% --- theorem environments --------------------------------------------------
+% All theorem-like environments share one numbering sequence, so a reader meets
+% Definition 2.1, Proposition 2.2, Theorem 2.3 rather than three interleaved series.
+%
+% The obvious way to do that -- \newtheorem{proposition}[definition]{Proposition} -- makes
+% every environment literally use the counter named `definition`, and cleveref names a
+% reference after its counter. The result is that \Cref of a proposition renders
+% "Definition 2.5". `aliascnt` gives each environment a distinct counter name that is an
+% alias for the same underlying counter, which keeps the shared sequence and lets cleveref
+% tell them apart.
+% All theorem-like environments share the `definition` counter, so a reader meets
+% Definition 2.1, Proposition 2.2, Theorem 2.3 in one sequence.
+%
+% A consequence: cleveref names a reference after its *counter*, so \Cref of a
+% proposition would render "Definition 2.5". The `aliascnt` package is the usual remedy,
+% but it sends this document into an unterminating loop during AMS symbol-font setup.
+% Cross-references to non-definition environments are therefore written explicitly --
+% "Proposition~\ref{...}" rather than "\Cref{...}" -- and \cref is reserved for
+% definitions, sections, tables and equations, where it names them correctly.
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}[definition]{Example}
+\newtheorem{remark}[definition]{Remark}
+
+\theoremstyle{plain}
+\newtheorem{proposition}[definition]{Proposition}
+\newtheorem{theorem}[definition]{Theorem}
+\newtheorem{lemma}[definition]{Lemma}
+\newtheorem{corollary}[definition]{Corollary}
+
+% --- notation --------------------------------------------------------------
+% Modalities are written with an explicit agent subscript throughout.
+\newcommand{\Ag}{\mathcal{G}}                  % set of agents
+\newcommand{\Props}{\mathcal{P}}               % set of propositions
+\newcommand{\Worlds}{W}
+\newcommand{\Kop}[1]{K_{#1}}                   % knowledge
+\newcommand{\Bop}[1]{B_{#1}}                   % belief
+\newcommand{\Sop}[1]{\Box_{#1}}                % safe belief
+\newcommand{\Cop}[1]{C_{#1}}                   % common knowledge
+\newcommand{\CBop}[2]{B^{#2}_{#1}}             % conditional belief
+\newcommand{\Kw}[1]{\mathit{Kw}_{#1}}
+\newcommand{\Bw}[1]{\mathit{Bw}_{#1}}
+\newcommand{\Ig}[1]{\mathord{?}_{#1}}          % ignorance
+\newcommand{\Susp}[1]{\mathord{\text{\textquestiondown}}_{#1}}
+
+\newcommand{\plaus}[1]{R_{#1}}                 % plausibility preorder
+\newcommand{\comp}[1]{\sim_{#1}}               % comparability
+\newcommand{\best}[1]{\rightarrow_{#1}}        % maxima operator
+\newcommand{\Lang}{\mathcal{L}}
+\newcommand{\Lgb}{\Lang^{\Props}_{\Ag}}        % full modal language
+\newcommand{\Lprop}{\Lang^{\Props}}            % propositional fragment
+% Semantic brackets, defined here rather than via stmaryrd so the paper builds on a
+% minimal TeX installation.
+\providecommand{\llbracket}{[\![}
+\providecommand{\rrbracket}{]\!]}
+\newcommand{\denote}[1]{\llbracket #1 \rrbracket}
+\newcommand{\bisimR}{\mathbin{\underline{\leftrightarrow}_{R}}}
+\newcommand{\bisimD}{\mathbin{\underline{\leftrightarrow}_{D}}}
+\newcommand{\ML}{\mathit{ML}}
+\newcommand{\pre}{\mathit{pre}}
+\newcommand{\add}{\mathit{add}}
+\newcommand{\del}{\mathit{del}}
+\newcommand{\FPN}{\mathit{FPN}}
+\newcommand{\PN}{\mathit{PN}}
+\newcommand{\Nlab}{\mathit{N}}
+\newcommand{\hole}{\underline{\phantom{x}}}
+
+% --- listings style for delhi source ---------------------------------------
+\definecolor{kwcolor}{HTML}{6A3D9A}
+\definecolor{clcolor}{HTML}{B15928}
+\definecolor{cmcolor}{HTML}{6B7280}
+\definecolor{opcolor}{HTML}{1F78B4}
+\definecolor{bgcolor}{HTML}{F7F7F9}
+
+\lstdefinelanguage{delhi}{
+  morekeywords={types,objects,agents,props,constants,define,rules,initially,
+                state,goal,invariants,actions},
+  morekeywords=[2]{actor,pre,causes,determines,announces,observes,aware,if},
+  morekeywords=[3]{K,B,C,Kw,Bw},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]",
+}
+
+\lstset{
+  language=delhi,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{kwcolor}\bfseries,
+  keywordstyle=[2]\color{clcolor},
+  keywordstyle=[3]\color{opcolor},
+  commentstyle=\color{cmcolor}\itshape,
+  backgroundcolor=\color{bgcolor},
+  frame=single,
+  rulecolor=\color{gray!40},
+  framesep=5pt,
+  xleftmargin=10pt,
+  xrightmargin=4pt,
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  captionpos=b,
+  aboveskip=1.1em,
+  belowskip=0.9em,
+}
+
+% A narrower style for shell transcripts.
+\lstdefinestyle{shell}{
+  language={},
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle={},
+  commentstyle=\color{cmcolor}\itshape,
+  morecomment=[l]{\#},
+}
+
+% --- misc ------------------------------------------------------------------
+\newcommand{\delhi}{\textsf{delhi}}
+\newcommand{\mB}{\textsf{mB}}
+\newcommand{\mBplus}{\textsf{mB${}^{+}$}}
+\newcommand{\code}[1]{\texttt{\small #1}}

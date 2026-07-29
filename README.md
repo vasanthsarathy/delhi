@@ -883,6 +883,13 @@ shapes rather than the absolute microseconds. And none of this makes the underly
 easy — epistemic plan existence is undecidable in general, and no implementation detail
 changes that.
 
+## The paper
+
+[`paper/delhi.pdf`](paper/delhi.pdf) is a journal-style write-up of the semantics: the
+formula language and its satisfaction relation, the frame properties and their proofs, the
+action layer and product update, the query language and its enumeration procedure, and the
+measurements from `delhi bench`. Sources and build instructions in [`paper/`](paper/).
+
 ## Contributing
 
 [CONTRIBUTING.md](CONTRIBUTING.md) covers the workflow — issue, branch, PR, the local
