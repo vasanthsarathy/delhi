@@ -796,6 +796,7 @@ Anything not mentioned is known by every agent, so the block above yields a two-
 which \emph{carol} is uncertain and the others are not. The alternative form, \code{state},
 writes the model out directly and is what the tool prints when asked to display one:
 
+\begin{keepit}
 \begin{lstlisting}
 state {
   *w1 <- { h }          // `*` marks the designated world
@@ -803,8 +804,11 @@ state {
   carol: w0 < w1        // w1 is the more plausible
 }
 \end{lstlisting}
+\end{keepit}
 
-Here \code{<} and \code{<=} point toward the more plausible world and \code{~} relates two
+% \code{~} would typeset a non-breaking space, not a tilde.
+Here \code{<} and \code{<=} point toward the more plausible world and
+\code{\textasciitilde} relates two
 worlds in both directions. Agents with no line distinguish every world, which is to say they
 know everything---the degenerate case of \Cref{def:model} in which $\plaus{i}$ is the identity.
 
@@ -868,7 +872,93 @@ after every action.
 An action changes a state by product update with an event model. The distinguishing feature of
 the action-language approach, inherited from \mB{} and $m\mathcal{A}^*$, is that the modeller
 does not construct event models: they declare \emph{what changes} and \emph{who observes},
-and the event model is derived.
+and the event model is derived. This section explains what is being derived before showing
+how.
+
+\subsection{Background: event models and product update}
+\label{sec:eventbackground}
+
+The machinery is due to \citet{baltag1998} and is standard in dynamic epistemic logic, but it
+is not obvious on first encounter, so we develop it from the idea rather than from the tuple.
+
+\paragraph{The idea.}
+An agent can be uncertain about \emph{how the world is}---that is what
+\Cref{fig:initial} draws. It can equally be uncertain about \emph{what just happened}. Alice
+speaks; did she tell the truth or lie? Carol reaches under the cover; did she see heads or
+tails, or was she merely fidgeting? These are uncertainties of exactly the same shape, and
+the insight behind event models is to represent them with exactly the same apparatus.
+
+So an event is modelled the way a world is: as one possibility among several, with a relation
+per agent saying which of them that agent cannot tell apart. The correspondence is complete,
+term for term:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}p{0.44\textwidth}p{0.44\textwidth}@{}}
+\toprule
+\textbf{State model} $\langle \Worlds, R, V\rangle$ & \textbf{Event model} $\langle E, Q,
+\pre, \add, \del, \Gamma\rangle$ \\
+\midrule
+\emph{worlds} $\Worlds$ --- ways things could be &
+\emph{events} $E$ --- things that could have happened \\[0.3em]
+\emph{valuation} $V$ --- what is true in a world &
+\emph{precondition} $\pre$ --- when an event can occur; \emph{$\add$, $\del$} --- what it
+changes \\[0.3em]
+$\plaus{i}$ --- worlds $i$ cannot separate, ordered by plausibility &
+$Q(\cdot,\cdot)(i)$ --- events $i$ cannot separate, ordered the same way \\[0.3em]
+one \emph{designated} world --- how things actually are &
+\emph{designated} events $\Gamma$ --- what actually happens \\
+\bottomrule
+\end{tabular}
+\caption{An event model is a state model with the parts renamed. This is the whole
+conceptual content of the construction; everything after it is bookkeeping.}
+\label{tab:analogy}
+\end{table}
+
+\paragraph{Why preconditions and not just effects.}
+An event needs to say \emph{when} it can occur, for two reasons. First, actions have
+genuine requirements---one cannot open a box that is already open. Second, and less
+obviously, an event's precondition is what carries \emph{information}: the event ``Carol
+announces $\varphi$'' has precondition $\varphi$, so learning that this event occurred is
+precisely learning $\varphi$. Sensing and announcing change no atom at all; their entire
+effect is achieved through preconditions and the edges between events.
+
+\paragraph{Why there is an event in which nothing happens.}
+Every construction in \Cref{tab:constructions} includes an event $e^{\top}$ with precondition
+$\top$, no effects, and no designation. It exists for the \emph{oblivious} agent. If Alice
+does not notice that Carol peeked, then after the peek Alice must still consider possible a
+world in which nothing occurred---and there must be an event for that world to be paired
+with. Remove $e^{\top}$ and obliviousness becomes inexpressible: every agent would at least
+learn that \emph{something} took place.
+
+\paragraph{Product update.}
+The two models are then combined. A world of the new state is a pair $\langle u, e\rangle$,
+read ``the world was $u$ and event $e$ occurred''. Two constraints shape the result:
+
+\begin{itemize}
+  \item \textbf{Only consistent pairs survive.} $\langle u,e\rangle$ exists only if
+    $\pre(e)$ holds at $u$. This is where announcements do their work---an announcement of
+    $\varphi$ has a $\varphi$-event and a $\neg\varphi$-event, and each survives only at
+    worlds where its precondition holds, so the pairing sorts worlds by what was said.
+  \item \textbf{Uncertainty multiplies.} Agent $i$ confuses $\langle u,e\rangle$ with
+    $\langle v,f\rangle$ only if it confused $u$ with $v$ \emph{and} $e$ with $f$. An agent
+    that can tell the events apart therefore ends up with less uncertainty than it began
+    with, which is what learning amounts to here.
+\end{itemize}
+
+The size consequence is immediate and matters for \Cref{sec:eval}: the product has up to
+$|\Worlds| \times |E|$ worlds, so iterating actions multiplies model size, and something must
+be done about it. That something is \Cref{sec:bisim}.
+
+\paragraph{One refinement, which is where plausibility enters.}
+The account above is the classical one, in which relations are equivalences and the second
+constraint is the whole story. On plausibility models the events are also \emph{ordered}, and
+the order of the events takes precedence over the order of the worlds: if the event model
+ranks $e$ strictly above $f$, that ranking survives into the product regardless of how the
+agent previously ranked the underlying worlds. This is \emph{action priority}
+\citep{baltag2008}, and it is what makes an announcement capable of overturning a prior
+belief. \Cref{def:update} states it precisely and \Cref{fig:update} shows it operating; the
+reader who has followed this far can read both directly.
 
 \subsection{Action theories}
 
@@ -921,14 +1011,17 @@ its absence. A second \code{pre} clause is a diagnostic rather than a silent com
 
 Each agent occupies exactly one of three positions with respect to an action. The three are
 distinguished by two edge labels, defined from the observability conditions of forms 5 and 6:
+Write $O_i \coloneqq \{\varphi \mid (i \textbf{ observes } a \textbf{ if } \varphi) \in T\}$
+for the conditions under which $i$ fully observes, and $A_i \coloneqq \{\varphi \mid (i
+\textbf{ aware\_of } a \textbf{ if } \varphi) \in T\}$ for those under which it is merely
+aware. Then
 \begin{align}
   \FPN(i) &\coloneqq \top \\
-  \PN(i)  &\coloneqq \neg \textstyle\bigvee_{\text{\code{observes} } \varphi} \varphi \\
-  \Nlab(i) &\coloneqq \neg\left(
-      \textstyle\bigvee_{\text{\code{observes} } \varphi} \varphi
-      \ \vee\
-      \textstyle\bigvee_{\text{\code{aware\_of} } \varphi} \varphi \right)
+  \PN(i)  &\coloneqq \neg \bigvee O_i \\
+  \Nlab(i) &\coloneqq \neg \bigvee \left( O_i \cup A_i \right)
 \end{align}
+with the empty disjunction being $\bot$, so an agent named in no clause has $\PN(i) =
+\Nlab(i) = \top$.
 
 \begin{table}[t]
 \centering
