@@ -2,6 +2,27 @@
 
 Notable changes per release. Dates are the tag date.
 
+## 0.1.3 — 2026-07-29
+
+### Added
+
+- `--json` on `check`, `state`, `eval` and `ask`. Each emits exactly one JSON object on
+  stdout, **errors included**, so a caller never has to decide whether what it read was an
+  answer or a diagnostic. Exit codes are unchanged, so both signals remain available.
+- `python/delhi.py` — a `Domain` class wrapping the CLI. Standard library only, nothing to
+  install, and shipped inside the release archives. A malformed formula raises rather than
+  returning `False`, since a typo must not read as a refuted hypothesis.
+- A README section on calling delhi from Python, including the limit that matters: one
+  process per call is ≈3–5 ms on Linux and ≈20–25 ms on Windows — fine for batch work,
+  wrong inside a training loop.
+
+### Internal
+
+- The JSON emitter is hand-rolled rather than `serde_json`, so `--json` works in the
+  `--no-default-features` build whose whole point is an empty dependency graph.
+- `python/test_delhi.py` drives the real binary and runs in CI on all three platforms, so
+  the wrapper and the JSON schema cannot drift apart unnoticed.
+
 ## 0.1.2 — 2026-07-28
 
 Browser UI only. The CLI is unchanged from 0.1.1.

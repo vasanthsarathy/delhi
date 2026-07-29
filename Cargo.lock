@@ -49,7 +49,7 @@ checksum = "6e4de3bc4ea267985becf712dc6d9eed8b04c953b3fcfb339ebc87acd9804901"
 
 [[package]]
 name = "delhi-cli"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "delhi-gui",
  "delhi-lang",
@@ -59,11 +59,11 @@ dependencies = [
 
 [[package]]
 name = "delhi-core"
-version = "0.1.2"
+version = "0.1.3"
 
 [[package]]
 name = "delhi-gui"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "delhi-lang",
  "delhi-mb",
@@ -75,7 +75,7 @@ dependencies = [
 
 [[package]]
 name = "delhi-lang"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "delhi-mb",
  "delhi-syntax",
@@ -83,7 +83,7 @@ dependencies = [
 
 [[package]]
 name = "delhi-mb"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "delhi-core",
  "delhi-syntax",
@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "delhi-syntax"
-version = "0.1.2"
+version = "0.1.3"
 
 [[package]]
 name = "errno"

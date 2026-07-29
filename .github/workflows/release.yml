@@ -67,6 +67,10 @@ jobs:
           cp "$BIN" "dist/$NAME/"
           cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "dist/$NAME/"
           cp -r examples "dist/$NAME/"
+          # The Python wrapper ships too: someone who downloads a binary to drive it from
+          # a script should not have to clone the repository to find the driver.
+          mkdir -p "dist/$NAME/python"
+          cp python/delhi.py "dist/$NAME/python/"
           cd dist
           # The archive is what a stranger downloads, so it carries the examples and the
           # licences alongside the binary — a bare executable leaves them with nothing to
