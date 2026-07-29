@@ -31,17 +31,36 @@
   "required_revisions": {
     "note": "Linnaeus and Socrates findings are required regardless of the gate result.",
     "linnaeus": [
-      {"item": "Baral et al. citation year was unverified", "status": "FIXED 2026-07-29 - was invented as 2015 with an Artificial Intelligence venue; the journal version is vol 302, art 103601, 2022, and 2015 is the arXiv preprint. Both now recorded."},
-      {"item": "Several bibliography entries lack volume and page numbers", "status": "open"}
+      {
+        "item": "Baral et al. citation year was unverified",
+        "status": "FIXED 2026-07-29 - was invented as 2015 with an Artificial Intelligence venue; the journal version is vol 302, art 103601, 2022, and 2015 is the arXiv preprint. Both now recorded."
+      },
+      {
+        "item": "Several bibliography entries lack volume and page numbers",
+        "status": "open"
+      },
+      {
+        "item": "Safe belief was used without background on Baltag & Smets: the paper did not say the term and the operator are theirs, nor that they present it as non-negatively-introspective KNOWLEDGE rather than as strong belief.",
+        "status": "FIXED 2026-07-29 - new section 3.5.1 gives the background, Proposition 3.x proves [] is S4 not S5 with a counterexample to axiom 5, and a paragraph separates their contribution from ours."
+      }
     ],
     "socrates": [
-      {"item": "The Grapevine measurement stops at delhi bench's 6000-world cap. The claim survives (the trajectory 8/36/92/188/588/2460/7276 is monotone with no plateau) but the cap is a measurement artefact and is not disclosed in the paper.", "status": "open"}
+      {
+        "item": "The Grapevine measurement stops at delhi bench's 6000-world cap. The claim survives (the trajectory 8/36/92/188/588/2460/7276 is monotone with no plateau) but the cap is a measurement artefact and is not disclosed in the paper.",
+        "status": "open"
+      }
     ],
     "archimedes": [
-      {"item": "No complexity analysis anywhere: zero occurrences of complexity, worst-case or O() in 24 pages. Raised in both review rounds and still unaddressed. Cost of entailment, of ask, and of contraction are unstated.", "status": "open"}
+      {
+        "item": "No complexity analysis anywhere: zero occurrences of complexity, worst-case or O() in 24 pages. Raised in both review rounds and still unaddressed. Cost of entailment, of ask, and of contraction are unstated.",
+        "status": "open"
+      }
     ],
     "edison": [
-      {"item": "The bisimulation gap table reports 448,935 models without describing the enumeration procedure, so the count is not reproducible from the paper alone.", "status": "open"}
+      {
+        "item": "The bisimulation gap table reports 448,935 models without describing the enumeration procedure, so the count is not reproducible from the paper alone.",
+        "status": "open"
+      }
     ]
   }
 }

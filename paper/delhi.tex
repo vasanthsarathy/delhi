@@ -470,7 +470,8 @@ On every plausibility model:
   \item $\Kop{i}$ satisfies $T$, $4$ and $5$, hence is an $S5$ modality;
   \item $\Bop{i}$ satisfies $D$, $4$ and $5$, hence is a $KD45$ modality, and does
     \emph{not} satisfy $T$;
-  \item $\Sop{i}$ is factive: $\Sop{i}\varphi \to \varphi$;
+  \item $\Sop{i}$ is factive: $\Sop{i}\varphi \to \varphi$. It satisfies $4$ but \emph{not}
+    $5$, and is therefore $S4$ rather than $S5$---see Proposition~\ref{prop:s4};
   \item $\Kop{i}\varphi \to \Bop{i}\varphi$, $\Bop{i}\varphi \to \Kop{i}\Bop{i}\varphi$, and
     $\Kop{i}\varphi \to \Sop{i}\varphi$.
 \end{enumerate}
@@ -533,6 +534,67 @@ structure is what lets the enumeration procedure reach them.
 
 Safe belief occupies the gap in Theorem~\ref{thm:hierarchy}, and because it is measured from the
 actual world its behaviour is asymmetric in a way worth developing.
+
+\subsubsection{Background: safe belief in Baltag and Smets}
+\label{sec:bsbackground}
+
+The operator is not ours and neither is the name. \citet{baltag2006,baltag2008} introduce
+\emph{safe belief} on plausibility models as part of a programme separating knowledge, belief
+and plausibility and giving each its own dynamics. Three features of their treatment matter
+for how we use it, and the third is the one most easily missed.
+
+\textbf{It is offered as a notion of knowledge, not as a strong belief.} Baltag and Smets
+present safe belief as a \emph{weak, non-negatively-introspective} kind of knowledge---an
+alternative to the $S5$ reading rather than a way-station between $S5$ and $KD45$. The
+motivation is the defeasibility tradition of \citet{lehrer1969} and \citet{stalnaker2006}:
+knowledge as true belief that no further truth would overturn, which is exactly
+Proposition~\ref{prop:defeasible}.
+
+\textbf{Its logic is axiomatised alongside conditional belief.} Their work gives complete
+axiomatisations for knowledge, conditional belief and safe belief over plausibility models,
+and develops the dynamics---how each attitude moves under action-priority update---together
+with quantitative refinements such as degrees of safety.
+
+\textbf{It is $S4$, not $S5$.} This is the technical content of ``non-negatively
+introspective'', and it separates safe belief sharply from both of its neighbours.
+
+\begin{proposition}[Safe belief is $S4$]
+\label{prop:s4}
+$\Sop{i}$ is a normal modality satisfying $T$ and $4$ but not $5$: $\Sop{i}\varphi \to
+\varphi$ and $\Sop{i}\varphi \to \Sop{i}\Sop{i}\varphi$ are valid, while
+$\neg\Sop{i}\varphi \to \Sop{i}\neg\Sop{i}\varphi$ is not.
+\end{proposition}
+
+\begin{proof}
+Normality is immediate, $\Sop{i}$ being a box over $\plaus{i}$; $T$ follows from reflexivity
+and $4$ from transitivity (both appear in Theorem~\ref{thm:introspect}). For the failure of
+$5$, take $\Worlds = \{w_0, w_1\}$ with $\denote{p} = \{w_1\}$, $w_0 \plaus{i} w_1$, and
+$w_0$ actual---an agent whose most plausible world satisfies $p$ while the actual world does
+not. At $w_0$ the up-set is $\{w_0,w_1\}$ and $p$ fails at $w_0$, so $\neg\Sop{i}p$ holds.
+But $w_1$ is maximal, so its up-set is $\{w_1\}$, where $p$ holds; hence $\Sop{i}p$ holds at
+$w_1$, $\neg\Sop{i}p$ fails there, and $\Sop{i}\neg\Sop{i}p$ fails at $w_0$.
+\end{proof}
+
+\begin{remark}[Where the three attitudes part company]
+\label{rem:axioms}
+In the model of Proposition~\ref{prop:s4}, $\Kop{i}$ and $\Bop{i}$ both satisfy $5$ and
+$\Sop{i}$ does not, so the failure is a property of safe belief and not of the model. This is
+the precise sense in which safe belief is a \emph{weaker} knowledge: it keeps factivity,
+which belief lacks, and gives up negative introspection, which knowledge has. An agent with
+$\Sop{i}$ need not be aware of the boundaries of its own safe beliefs---and
+\Cref{sec:introspect} establishes the stronger fact that it cannot determine them at all.
+\end{remark}
+
+\paragraph{What \mBplus{} adds.}
+The operator, its characterisation and its axiomatisation are Baltag and Smets's. What we
+contribute is its \emph{availability inside an action formalism}. In \mB{} and its relatives
+the plausibility models already interpret $\Sop{i}$ and $\CBop{i}{\psi}$, but the object
+language of the action description does not mention them, so they cannot appear in a goal, an
+invariant, or a query. Lifting them makes safe belief a property one can \emph{check of a
+planning state}, which in turn makes two questions askable that were not before: which actions
+confer it (\Cref{sec:acquisition}), and whether an agent can establish it of itself
+(\Cref{sec:introspect}). The answer to the second is the negative result of
+Theorem~\ref{thm:introspect}, and it is not in the source literature.
 
 \begin{example}[Three positions on one question]
 \label{ex:safe}
