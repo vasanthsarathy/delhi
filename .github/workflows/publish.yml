@@ -1,0 +1,68 @@
+name: publish
+
+# Publishes the workspace to crates.io on demand, skipping anything already there.
+#
+# `cargo publish --workspace` is not resumable: if it fails partway — a rate limit, a
+# network blip — a re-run aborts with "already exists on crates.io index" for every crate
+# that did land, and there is no flag to make it continue. That happened on the first
+# publish of 0.1.4, which stopped with one crate of six left to upload and no way to
+# finish it from the release workflow.
+#
+# This runs the same publish crate by crate and treats "already exists" as success, so it
+# can be run repeatedly until everything is up. Use it to finish or repair a publish; the
+# release workflow still does the normal case automatically on a tag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Verify without uploading"
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: crates-io
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -uo pipefail
+          if [ -z "${CARGO_REGISTRY_TOKEN:-}" ] && [ "$DRY_RUN" != "true" ]; then
+            echo "::error::CARGO_REGISTRY_TOKEN is not set"
+            exit 1
+          fi
+
+          # Dependency order, bottom up. Hard-coded rather than derived: it is five lines,
+          # it changes about never, and a wrong order fails loudly on the first upload.
+          CRATES="delhi-syntax delhi-core delhi-mb delhi-lang delhi-gui delhi"
+          FLAGS="--locked"
+          [ "$DRY_RUN" = "true" ] && FLAGS="$FLAGS --dry-run"
+
+          failed=0
+          for c in $CRATES; do
+            echo "::group::$c"
+            if out=$(cargo publish -p "$c" $FLAGS 2>&1); then
+              echo "$out" | tail -3
+              echo "published $c"
+            elif echo "$out" | grep -q "already exists on crates.io index"; then
+              echo "$c is already published at this version — skipping"
+            else
+              echo "$out" | tail -25
+              echo "::error::failed to publish $c"
+              failed=1
+              echo "::endgroup::"
+              break
+            fi
+            echo "::endgroup::"
+          done
+          exit $failed
