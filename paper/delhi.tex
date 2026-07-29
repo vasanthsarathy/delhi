@@ -55,70 +55,132 @@ the source literature and which are new.
 \section{Introduction}
 \label{sec:intro}
 
-Most formalisms for reasoning about action track \emph{facts}: the coin is heads, the marble
-is in the basket, the robot is in the hall. A smaller family tracks \emph{attitudes toward}
-facts---what each agent knows, what it believes, what it believes about what another agent
-believes---and it is in that second family that the phenomena of deception, coordination,
-teaching, and pretence live. All of them require an agent's model of another agent to be
-capable of going stale, or of being wrong.
+Formal accounts of action have, for the most part, been accounts of fact. A state is an
+assignment of truth values to propositions; an action transforms one assignment into another;
+a plan is a sequence of actions leading to an assignment that satisfies a goal. This picture
+underlies classical planning, most model checking of reactive systems, and the greater part of
+knowledge representation.
 
-The canonical illustration is a task from developmental psychology. Sally puts her marble in
-a basket and leaves the room; Anne moves it to a box; Sally returns. Where will Sally look?
-The answer is the basket, and producing it requires holding two incompatible pictures at
-once: where the marble is, and where Sally takes it to be. Children below roughly four years
-answer ``the box'' \citep{wimmer1983,baroncohen1985}, and a representation that records only
-facts is in the same position---it has no machinery for a belief that is false. The
-second-order variant, in which an agent is wrong about \emph{another agent's} belief rather
-than about the world, is due to \citet{sullivan1994} and is the shape of the running example
-introduced in \Cref{sec:running}.
+A substantial class of problems does not fit it. In these problems what matters is not only
+how the world is, but what the agents situated in it take the world to be---and, where several
+agents are involved, what each takes the others to take it to be. A tutoring system must
+distinguish a student who is wrong from one who is uncertain, because the remedies differ. A
+robot working alongside people must know which of its observations its collaborators share. A
+protocol is secure not when a secret is true but when the adversary does not know it. A
+negotiator reasons about what the other party believes about their own position. In each case
+the object of reasoning is an \emph{attitude}---knowledge, belief, uncertainty---held by
+someone toward a proposition, and the attitude can come apart from the proposition.
 
-\delhi{} is a tool for building and interrogating such representations. A domain is written
-as a declarative file naming agents, propositions, what holds initially, what each agent
-believes initially, and a set of actions annotated with who observes them. From that file
-\delhi{} constructs a plausibility model, derives event models for each action, and answers
-arbitrary queries in the modal language---including queries nested several levels deep.
+Reasoning of this kind is the subject of \emph{epistemic logic}, which supplies modal
+operators for knowledge and belief and interprets them over structures of alternative
+possibilities \citep{fagin1995}, and of \emph{dynamic epistemic logic}, which adds an account
+of how attitudes change when events occur \citep{baltag1998,vanditmarsch2007}. The theory is
+mature. What remains difficult is the step from theory to practice: given a scenario, to
+construct the corresponding structure, compute the effect of an event upon it, and answer
+questions about the result---mechanically, and at a scale beyond what can be drawn by hand.
 
-\subsection{The capability this paper is about}
+This paper concerns that step. Our claim is not that new logical machinery is required, but
+that a specific and identifiable group of reasoning tasks is poorly served by existing
+implementations, that the tasks are not exotic, and that supporting them determines a
+particular set of design choices. We name the tasks first, since they organise everything
+that follows.
+
+\subsection{Five kinds of epistemic reasoning}
+\label{sec:kinds}
+
+The following are not five topics but five distinct inferential capacities, in a rough order
+of increasing demand on the representation. Each is stated in general terms, then illustrated,
+then paired with the reason it resists naive treatment.
+
+\paragraph{(R1) Attributing an attitude that may be false.}
+To hold that an agent believes $\varphi$ while $\varphi$ is false. This is the minimal
+departure from fact-based reasoning and the one on which the rest depend. It cannot be
+obtained by adding a proposition \code{a\_believes\_p} to a fact-based representation, because
+nothing then relates that proposition to $p$: the two vary independently, and every action
+must maintain the correspondence by hand. Nor can it be obtained from knowledge alone, since
+knowledge is factive---$\Kop{a}\varphi \to \varphi$ is valid on any standard account, so a
+false belief is not merely awkward to express but excluded.
+
+\paragraph{(R2) Attributing attitudes about attitudes.}
+To hold that $a$ believes that $b$ believes $\varphi$, at arbitrary depth. Deception requires
+it: to mislead is to bring about a state in which the other party believes something one
+knows to be false. So do coordination, teaching, and pretence. Developmental psychology treats
+the capacity as a milestone and tests it with the false-belief tasks of \citet{wimmer1983} and
+\citet{baroncohen1985}, whose second-order variants \citep{sullivan1994} require an agent to
+be wrong about \emph{another agent's} mind rather than about the world.
+
+\paragraph{(R3) Deriving differential consequences of a single event.}
+One event, several agents, different epistemic consequences for each. If one agent watches
+another look inside a container, the observer learns the contents, the watcher learns that the
+observer learned them, and a third party who was absent learns nothing---and must continue to
+regard the pre-event situation as possible. Reasoning of this kind is what makes partial
+observability epistemic rather than merely probabilistic, and it does not reduce to updating a
+shared state, because there is no single posterior to update to.
+
+\paragraph{(R4) Revising a belief that is contradicted.}
+To take an agent that believes $\varphi$, present it with $\neg\varphi$, and obtain a coherent
+successor state. Two properties are wanted and are easily lost. Revision should be
+\emph{local}: correcting an agent about one matter should not resolve its unrelated
+uncertainties. And it should be \emph{reversible}: an agent misled once must remain able to
+recover the truth later, which requires that the discarded alternatives still exist in some
+form. Update rules that eliminate possibilities satisfy neither.
+
+\paragraph{(R5) Assessing the robustness of an attitude.}
+To ask not only whether an agent holds an attitude but whether it would survive further
+information. A belief that any true statement would overturn and a belief that no true
+statement would overturn are different objects, and the difference is decisive for anyone
+deciding whether to intervene: an agent who will discover its error unaided needs no
+correction, whereas one who will not may need it urgently. Neither knowledge nor belief
+expresses this, and asking for both returns the same pair of answers in the two cases.
+
+\medskip
+
+To these five we add a sixth concerning the interface rather than the semantics.
+
+\paragraph{(R6) Searching over attitudes rather than checking them.}
+A question such as \emph{what does this agent believe that is false?} is not a formula to be
+evaluated but a family of formulas to be searched. Checking answers a question already
+formulated; diagnosis requires the question to be found. The distinction matters in practice
+because the interesting attitudes in a model of any size are the ones the analyst did not
+anticipate.
+
+\subsection{A scenario requiring all six}
 \label{sec:running}
 
-Rather than motivate the formalism abstractly, we fix one capability and one scenario, and
-keep both for the rest of the paper. \Cref{sec:motivating} works through what existing
-approaches can and cannot say about it; every later section returns to it.
+We fix one scenario now and retain it throughout the paper, extending it where a later section
+needs something it does not yet exercise. It is deliberately small---three agents, two
+propositions---because the reasoning rather than the size is the difficulty.
 
 \begin{quote}
-\textbf{The capability.} An assistant notices that a person holds a \emph{false belief}
-bearing on their work. It must decide whether to intervene, and how.
+A hospital shift handover. A dose of medication was \textbf{not} given. The nurse believes it
+was: she was interrupted, and assumes the handover covered it. A robot assistant observed that
+it was not. A doctor is present, has no view either way, and may be paged away at any moment.
 \end{quote}
 
-That decision is harder than it sounds, because doing it well requires four things at once.
-The assistant must represent the person's belief \emph{separately from the fact}, or there is
-no mistake to notice. It must judge whether the person \emph{would find out anyway}, since
-intervening is pointless if so and urgent if not. It must know what \emph{telling} someone
-achieves as against \emph{showing} them, because a report can be doubted and a demonstration
-cannot. And it must know \emph{who else is in the room}, since correcting someone privately
-and correcting them in front of a colleague are different acts.
+The scenario instantiates each of R1--R6 in turn. The nurse's belief is false (R1). The robot
+must represent that belief in order to act on it, and after any intervention the doctor's
+view of the nurse may be out of date (R2). Whatever the robot does, the nurse, the doctor and
+the robot itself are affected differently, and differently again depending on whether the
+doctor is still in the room (R3). Correcting the nurse must not incidentally settle her
+uncertainty about the doctor's whereabouts, and must leave her open to later correction (R4).
+Whether the nurse would notice the omission unaided determines whether intervening is
+necessary at all (R5). And the robot's operative question---\emph{what does the nurse believe
+that is not so?}---is a search (R6).
 
-\begin{quote}
-\textbf{The scenario.} A shift handover. A dose of medication was \textbf{not} given. The
-nurse believes it was --- she was interrupted and assumes the handover covered it. A robot
-assistant observed that it was not. A doctor is present but has no idea either way, and may
-be paged away at any moment.
-\end{quote}
-
-\Cref{lst:handover} is the whole domain. Notice its goal, which is the crux of the whole
-paper:
+\Cref{lst:handover} gives the scenario as a \delhi{} domain and \Cref{fig:handover} the
+structure derived from it. One line of the domain deserves attention now, because it is where
+R5 becomes concrete:
 
 \begin{center}
 \code{goal \{ [][nurse] !given \}}
 \end{center}
 
-Not \emph{the nurse believes the truth} and not \emph{the nurse knows the truth}, but
-\emph{the nurse believes the truth in a way that will survive}: no further true information
-will unsettle it. That is \emph{safe belief} (\Cref{sec:safe}), and it is the right success
-criterion for the capability, because a merely-held belief can be undone by the next thing
-the nurse overhears. It is also a goal that cannot be \emph{written down} in a formalism
-whose only attitudes are knowledge and belief --- which is where \Cref{sec:motivating}
-begins.
+The goal is not that the nurse believes the truth, nor that she knows it, but that she
+believes it \emph{stably}: that no further true information would unsettle it. The operator
+is \emph{safe belief}, treated in \Cref{sec:safe}. We draw attention to it here for a
+methodological reason rather than a technical one---a goal of this form cannot be written down
+at all in a language whose attitudes are knowledge and belief, so the adequacy of a formalism
+for R5 can be settled by inspection, before any question of efficiency arises.
 
 \begin{figure}[t]
 \centering
@@ -247,13 +309,47 @@ a few thousand worlds---and not domains requiring symbolic or factored represent
 
 % ===========================================================================
 
-\section{What existing approaches can say about it}
+\section{How existing formalisms support these tasks}
 \label{sec:motivating}
 
-We now walk the scenario past the main families of formalism. The aim is not to score points
---- each family made a deliberate trade and got something in return --- but to locate
-precisely where each one stops being able to express the problem, because those stopping
-points are what determined \delhi's design.
+We now consider the principal families of formalism against R1--R6, using the scenario of
+\Cref{sec:running} to make each judgement concrete. The aim is not comparative scoring. Each
+family made a deliberate trade and obtained something for it, and several are more capable than
+\delhi{} in respects this paper does not address---notably plan search. The purpose is to locate
+where each family ceases to be able to \emph{express} a task, because a formalism that cannot
+express a task cannot be assessed on how well it performs it, and those expressive boundaries
+are what determined the design choices set out in \Cref{sec:demands}.
+
+\Cref{tab:coverage} summarises; the subsections give the reasoning.
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+& \textbf{R1} & \textbf{R2} & \textbf{R3} & \textbf{R4} & \textbf{R5} & \textbf{R6} \\
+& false & higher & differ- & revi- & robust- & search \\
+& belief & order & ential & sion & ness & \\
+\midrule
+Classical planning                & ---  & ---  & ---   & ---   & --- & --- \\
+Knowledge-only ($S5$; $m\mathcal{A}^*$, EFP) & --- & $\circ$ & \checkmark & --- & --- & --- \\
+Knowledge $+$ belief, two relations & \checkmark & \checkmark & \checkmark & $\circ$ & --- & --- \\
+Depth-bounded (PDKB)              & \checkmark & $\circ$ & \checkmark & $\circ$ & --- & $\circ$ \\
+DEL, event models supplied        & \checkmark & \checkmark & \checkmark & \checkmark & $\circ$ & --- \\
+Plausibility DEL (Baltag--Smets)  & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & --- \\
+\textbf{\mBplus{} / \delhi}       & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+\bottomrule
+\end{tabular}
+\caption{Expressive coverage of the tasks of \Cref{sec:kinds}. \checkmark{} = expressible;
+$\circ$ = expressible with a qualification given in the text; --- = not expressible. The table
+concerns expressiveness only, and a dash is not a criticism: restricting to knowledge is part
+of what buys $m\mathcal{A}^*$ and EFP their planning performance. Note also what the table does
+\emph{not} have a column for. Plan search would be one, and \delhi{} would take a dash in it;
+so would scale, where the depth-bounded approach leads. The full row of ticks records only that
+\mBplus{} can state all six tasks, not that it is the best tool for any purpose.}
+\label{tab:coverage}
+\end{table}
 
 \subsection{Classical planning over facts}
 
@@ -263,7 +359,7 @@ place in the representation for a proposition to be false and simultaneously tak
 true. One could add an atom \code{nurse\_thinks\_given} and treat it as an ordinary fluent,
 but then nothing connects it to \code{given}: the two vary independently, no action is
 constrained by their relationship, and the modeller maintains the correspondence by hand for
-every action they write. \textbf{Stops at:} step one. The mistake is not representable.
+every action they write. \textbf{Stops at:} R1. The mistake is not representable, and R2--R6 all presuppose it.
 
 \subsection{Knowledge-only epistemic logic}
 
@@ -279,7 +375,7 @@ it is ruled out by the logic. The best available paraphrase is that she is \emph
 whether the dose was given --- which is true, and which loses the entire point, since an
 ignorant nurse would check and a mistaken one will not.
 
-\textbf{Stops at:} false belief. This is where $m\mathcal{A}^*$ \citep{baral} and the EFP
+\textbf{Stops at:} R1, and hence R4 and R5. R3 is well supported---public-announcement dynamics handle differential observability---and R2 is available for knowledge about knowledge, which is why the table records it as qualified rather than absent. This is where $m\mathcal{A}^*$ \citep{baral} and the EFP
 planners \citep{le2018} sit, and it is a deliberate choice --- restricting to knowledge is
 part of what buys them planning performance.
 
@@ -290,7 +386,7 @@ serial, transitive, Euclidean one for belief, with axioms linking them. Now
 $\Bop{\mathit{nurse}}\,\mathit{given} \wedge \neg\mathit{given}$ is satisfiable, and the
 scenario's premise is finally expressible.
 
-Two problems remain, and both bear directly on the capability.
+Two problems remain, and they are R4 and R5.
 
 \textbf{Revision is destructive.} When the robot tells the nurse something contradicting her
 belief, the belief relation must be rebuilt. The rules available in this setting are blunt:
@@ -327,8 +423,10 @@ There is also no standard \emph{query} apparatus. Having built the model, the as
 question --- \emph{what does the nurse believe that is false?} --- is not a formula, it is a
 search over formulas, and DEL as a logic has nothing to say about how to conduct it.
 
-\textbf{Stops at:} nothing, in principle. In practice: the event models are hand-built, and
-plan existence is undecidable in the general setting \citep{bolander2011}.
+\textbf{Stops at:} R6, and R5 unless the plausibility extension is adopted. R1--R4 are fully
+supported, which is why \delhi's semantics is a plausibility-DEL semantics rather than an
+alternative to one. The practical costs are that event models are supplied by the modeller and
+that plan existence is undecidable in the general setting \citep{bolander2011}.
 
 \subsection{Depth-bounded epistemic states}
 
@@ -338,42 +436,44 @@ modal-literal representation is a genuinely good idea --- we borrow it in
 \Cref{sec:enumeration}. But the bound is on the representation, revision is limited, and safe
 belief is not present, so once again the goal cannot be stated.
 
-\textbf{Stops at:} the depth bound, and the absence of an operator for stability.
+\textbf{Stops at:} R5. R2 holds to the depth bound and R4 in a limited form, and the enumeration of R6 is supported in the sense that the modal-literal representation is exactly a search domain---though it is used there to represent states rather than to search over them.
 
-\subsection{What the scenario demands}
+\subsection{What the tasks require of a design}
 \label{sec:demands}
 
-Reading the failures back gives a specification, and it is the specification \delhi{} was
-built against.
+Reading \Cref{tab:coverage} back along its rows gives a specification, and it is the
+specification \delhi{} was built against. Each item names the task that motivates it and the
+section that delivers it.
 
 \begin{enumerate}
-  \item \textbf{Belief that can be false, with revision that preserves everything else.}
+  \item \textbf{Belief that can be false, with revision that preserves everything else} (R1, R4).
     Correcting the nurse about the medication must not settle her uncertainty about the
     doctor, and must leave room for her to be corrected again. This is what plausibility
     models buy: revision \emph{reorders} worlds instead of deleting them
     (\Cref{sec:prelim}).
 
-  \item \textbf{Safe belief in the object language.} The success criterion is stability, not
+  \item \textbf{Safe belief in the object language} (R5). The success criterion is stability, not
     mere belief, so the language must be able to state it --- in a goal, in an invariant, and
     in a query (\Cref{sec:logic}). This is the extension we mark with the $+$.
 
-  \item \textbf{Event models derived from declared observability.} The modeller should write
+  \item \textbf{Event models derived from declared observability} (R3). The modeller should write
     \code{doctor aware if !busy} and get the right multi-event structure, including the
     conditional case, rather than draw it (\Cref{sec:dynamics}).
 
-  \item \textbf{Three observer positions, not two.} ``Overheard the correction'' and ``did
+  \item \textbf{Three observer positions, not two} (R3 at second order, with R2). ``Overheard the correction'' and ``did
     not notice it'' are different, and so is ``knew something was said without hearing what''
     --- which is exactly the doctor's position when she is out of the room but sees the
     conversation happen (\Cref{sec:observability}).
 
-  \item \textbf{Search over formulas, not just checking of them.} \emph{What does the nurse
+  \item \textbf{Search over formulas, not just checking of them} (R6). \emph{What does the nurse
     believe that is false?} must be answerable without the analyst guessing the formula
     first (\Cref{sec:query}).
 \end{enumerate}
 
-Those five are the paper's design choices, and each is now motivated by something the
-scenario needs and an existing approach cannot supply. The remaining sections deliver them in
-that order.
+These five are the paper's design choices. Each answers a task of \Cref{sec:kinds} that at
+least one established family cannot express, and the remaining sections deliver them in that
+order. Nothing in the list is a new logical idea; the contribution is the combination, and the
+claim is that the combination is what the six tasks jointly require.
 
 \section{Preliminaries}
 \label{sec:prelim}
@@ -1427,8 +1527,8 @@ $\Bop{\mathit{nurse}}\neg g$ fails.
 \label{rem:divergence}
 The divergence is not a corner case requiring construction. Under $\mathrm{R}_{\mathrm{alt}}$
 the robot's correction does not land: the nurse ends up with no belief either way rather than
-with the true one, so the goal of \Cref{lst:handover} is unreachable and the capability of
-\Cref{sec:running} cannot be discharged at all.
+with the true one, so the goal of \Cref{lst:handover} is unreachable and task R5 cannot be
+discharged at all.
 
 The same configuration arises in the \emph{Coin Lie} scenario of
 \citet{buckingham2021thesis}, which the source literature uses precisely to
@@ -1556,7 +1656,7 @@ finds instances the analyst had no reason to anticipate.
 
 \begin{example}[Enumeration on the running example]
 \label{ex:ask}
-This is the fifth demand of \Cref{sec:demands}, discharged on the scenario that raised it. The
+This is task R6 of \Cref{sec:kinds}, on the scenario that raised it. The
 assistant's question is \emph{what does the nurse believe that is false?}, and it is answered
 by search:
 \begin{lstlisting}[style=shell]
