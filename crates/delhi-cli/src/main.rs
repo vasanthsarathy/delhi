@@ -2,6 +2,7 @@
 #![deny(missing_docs)]
 
 mod cmd;
+mod json;
 mod style;
 
 const USAGE: &str = "delhi — an epistemic model checker
@@ -11,6 +12,9 @@ USAGE:
     delhi state <FILE> [-a ACTION]...  facts, and each agent's attitudes
     delhi show  <FILE>              the model itself, in the explicit form
     delhi eval  <FILE> [-a ACTION]... -f <FORMULA>
+
+    --json    on check, state, eval and ask: one JSON object on stdout, errors
+              included, for calling delhi from another program
     delhi ask   <FILE> [-d DEPTH] [-a ACTION]... -q <PATTERN>
     delhi step  <FILE> -a <ACTION>...
     delhi dot   <FILE>
@@ -98,7 +102,11 @@ fn main() {
     if style::detect() {
         style::enable();
     }
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    // `--json` is accepted anywhere and stripped before the subcommand parsers run, so
+    // none of them has to make room for a flag that means the same thing everywhere.
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let fmt = if args.iter().any(|a| a == "--json") { cmd::Fmt::Json } else { cmd::Fmt::Text };
+    args.retain(|a| a != "--json");
     let code = match args.first().map(String::as_str) {
         Some("--version") | Some("-V") => {
             println!("delhi {}", env!("CARGO_PKG_VERSION"));
@@ -114,7 +122,7 @@ fn main() {
             Ok(src) => {
                 let mut out = String::new();
                 let c = if args[0] == "check" {
-                    cmd::cmd_check(&src, &mut out)
+                    cmd::cmd_check(&src, fmt, &mut out)
                 } else {
                     cmd::cmd_show(&src, &mut out)
                 };
@@ -136,7 +144,7 @@ fn main() {
                     Err(c) => c,
                     Ok(src) => {
                         let mut out = String::new();
-                        let c = cmd::cmd_state(&src, &acts, &mut out);
+                        let c = cmd::cmd_state(&src, &acts, fmt, &mut out);
                         print!("{out}");
                         c
                     }
@@ -180,7 +188,7 @@ fn main() {
                     Err(c) => c,
                     Ok(src) => {
                         let mut out = String::new();
-                        let c = cmd::cmd_eval(&src, &acts, &formula, &mut out);
+                        let c = cmd::cmd_eval(&src, &acts, &formula, fmt, &mut out);
                         print!("{out}");
                         c
                     }
@@ -254,7 +262,7 @@ fn main() {
                     Err(c) => c,
                     Ok(src) => {
                         let mut out = String::new();
-                        let c = cmd::cmd_ask(&src, &acts, &pattern, depth, &mut out);
+                        let c = cmd::cmd_ask(&src, &acts, &pattern, depth, fmt, &mut out);
                         print!("{out}");
                         c
                     }

@@ -1,6 +1,7 @@
 //! The subcommands. Each returns an exit code and writes to the provided sink, so the
 //! tests can drive them without spawning a process.
 
+use crate::json;
 use crate::style;
 use delhi_lang::{print_state, Problem};
 use delhi_mb::State;
@@ -33,13 +34,50 @@ fn report_violations(p: &Problem, state: &State, when: &str, out: &mut String) -
     false
 }
 
+/// How a command should shape its answer.
+///
+/// `Json` exists for callers that are programs — `python/delhi.py` above all. In that mode
+/// everything written to stdout is one JSON object, **errors included**, so a caller never
+/// has to work out whether what it just read was an answer or a diagnostic. Exit codes are
+/// identical either way.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Fmt {
+    /// Aligned, coloured output for a person.
+    Text,
+    /// One JSON object per invocation, for a program.
+    Json,
+}
+
+/// Reports a failure in whichever shape was asked for, and returns `code`.
+///
+/// The trailing newline is trimmed out of the JSON message: rendered diagnostics end in
+/// one, and a `\n` dangling off the end of every error string is noise in a parsed field.
+fn fail(fmt: Fmt, msg: &str, code: i32, out: &mut String) -> i32 {
+    match fmt {
+        Fmt::Text => {
+            let text = if msg.ends_with('\n') { msg.to_string() } else { format!("{msg}\n") };
+            let _ = write!(out, "{}", style::bad(&text));
+        }
+        Fmt::Json => {
+            let o = json::obj(&[("ok", json::bool_(false)), ("error", json::str_(msg.trim_end()))]);
+            let _ = writeln!(out, "{o}");
+        }
+    }
+    code
+}
+
 /// `delhi check` — parse, ground, and validate. `0` if the file is accepted.
-pub fn cmd_check(src: &str, out: &mut String) -> i32 {
-    match open(src, out) {
-        None => 1,
-        Some(p) => {
-            // A domain whose own constraint fails at the start is inconsistent with
-            // itself, and saying "ok" would be wrong.
+pub fn cmd_check(src: &str, fmt: Fmt, out: &mut String) -> i32 {
+    let p = match Problem::parse(src) {
+        Ok(p) => p,
+        Err(e) => return fail(fmt, &e, 1, out),
+    };
+    // A domain whose own constraint fails at the start is inconsistent with itself, and
+    // saying "ok" would be wrong.
+    let violated: Vec<String> = p.violated(&p.state).into_iter().map(String::from).collect();
+
+    match fmt {
+        Fmt::Text => {
             if !report_violations(&p, &p.state, "in the initial state", out) {
                 return 1;
             }
@@ -52,9 +90,20 @@ pub fn cmd_check(src: &str, out: &mut String) -> i32 {
                 p.actions.len(),
                 p.state.model.n_worlds
             );
-            0
+        }
+        Fmt::Json => {
+            let o = json::obj(&[
+                ("ok", json::bool_(violated.is_empty())),
+                ("atoms", json::num(p.sig.n_atoms())),
+                ("agents", json::num(p.sig.n_agents())),
+                ("worlds", json::num(p.state.model.n_worlds)),
+                ("actions", json::strs(&p.actions.iter().map(|a| &a.name).collect::<Vec<_>>())),
+                ("violated", json::strs(&violated)),
+            ]);
+            let _ = writeln!(out, "{o}");
         }
     }
+    i32::from(!violated.is_empty())
 }
 
 /// Renders [`delhi_lang::state_view`] as aligned text.
@@ -132,31 +181,50 @@ pub fn cmd_ask(
     actions: &[String],
     pattern: &str,
     depth: usize,
+    fmt: Fmt,
     out: &mut String,
 ) -> i32 {
-    let Some(mut p) = open(src, out) else {
-        return 1;
+    let mut p = match Problem::parse(src) {
+        Ok(p) => p,
+        Err(e) => return fail(fmt, &e, 1, out),
     };
-    let state = match apply_trace(&mut p, actions, out) {
+    let state = match apply_trace(&mut p, actions) {
         Ok(s) => s,
-        Err(code) => return code,
+        Err((code, msg)) => return fail(fmt, &msg, code, out),
     };
-    render_ask(&mut p, &state, pattern, depth, out)
+    if fmt == Fmt::Text {
+        return render_ask(&mut p, &state, pattern, depth, out);
+    }
+    match delhi_lang::ask(&mut p, &state, pattern, depth) {
+        Err(e) => fail(fmt, &e, 2, out),
+        Ok(a) => {
+            let o = json::obj(&[
+                ("ok", json::bool_(true)),
+                ("matches", json::strs(&a.matches)),
+                ("considered", json::num(a.considered)),
+                ("depth", json::num(depth)),
+                ("truncated", json::bool_(a.truncated)),
+            ]);
+            let _ = writeln!(out, "{o}");
+            i32::from(a.matches.is_empty())
+        }
+    }
 }
 
 /// Applies a trace to the initial state, contracting after each step.
 ///
-/// Shared by `ask` and `eval`, whose need is identical: reach the state a trace
-/// describes, or say why it cannot be reached. The error carries the exit code the
-/// caller should return — `2` for a name that is not an action of this domain, which is
-/// a usage error, and `1` for one that is but does not apply here, which is an answer.
-fn apply_trace(p: &mut Problem, actions: &[String], out: &mut String) -> Result<State, i32> {
+/// Shared by `ask`, `eval` and `state`, whose need is identical: reach the state a trace
+/// describes, or say why it cannot be reached. The error is returned rather than written,
+/// because in JSON mode it has to end up *inside* the object rather than beside it. It
+/// carries the exit code the caller should use — `2` for a name that is not an action of
+/// this domain, which is a usage error, and `1` for one that is but does not apply here,
+/// which is an answer.
+fn apply_trace(p: &mut Problem, actions: &[String]) -> Result<State, (i32, String)> {
     let n_agents = p.sig.n_agents();
     let mut state = p.state.clone();
     for name in actions {
         let Some(g) = p.actions.iter().find(|a| &a.name == name) else {
-            let _ = writeln!(out, "no action `{name}`");
-            return Err(2);
+            return Err((2, format!("no action `{name}`")));
         };
         let def = g.def.clone();
         let model = delhi_mb::build(&def, &mut p.store, n_agents);
@@ -164,10 +232,7 @@ fn apply_trace(p: &mut Problem, actions: &[String], out: &mut String) -> Result<
             // Contracted after every step, without which a long trace grows the model
             // exponentially — see the benchmark section of the README.
             Some(next) => state = contracted(&next),
-            None => {
-                let _ = writeln!(out, "`{name}` is not applicable in the current state");
-                return Err(1);
-            }
+            None => return Err((1, format!("`{name}` is not applicable in the current state"))),
         }
     }
     Ok(state)
@@ -176,19 +241,49 @@ fn apply_trace(p: &mut Problem, actions: &[String], out: &mut String) -> Result<
 /// `delhi state` — the actual world's facts and every agent's attitude to every
 /// proposition, optionally after a trace. The readable counterpart to `show`, which
 /// prints the model itself.
-pub fn cmd_state(src: &str, actions: &[String], out: &mut String) -> i32 {
-    let Some(mut p) = open(src, out) else {
-        return 1;
+pub fn cmd_state(src: &str, actions: &[String], fmt: Fmt, out: &mut String) -> i32 {
+    let mut p = match Problem::parse(src) {
+        Ok(p) => p,
+        Err(e) => return fail(fmt, &e, 1, out),
     };
-    let state = match apply_trace(&mut p, actions, out) {
+    let state = match apply_trace(&mut p, actions) {
         Ok(s) => s,
-        Err(code) => return code,
+        Err((code, msg)) => return fail(fmt, &msg, code, out),
     };
-    // Reported here but not in `eval` or `ask`: this command's whole output is a
-    // description of the state, so a constraint the state breaks belongs in it.
-    report_violations(&p, &state, "in this state", out);
-    let text = attitudes(&mut p, &state);
-    let _ = write!(out, "{text}");
+    match fmt {
+        Fmt::Text => {
+            // Reported here but not in `eval` or `ask`: this command's whole output is a
+            // description of the state, so a constraint the state breaks belongs in it.
+            report_violations(&p, &state, "in this state", out);
+            let text = attitudes(&mut p, &state);
+            let _ = write!(out, "{text}");
+        }
+        Fmt::Json => {
+            let violated: Vec<String> = p.violated(&state).into_iter().map(String::from).collect();
+            let n_worlds = state.model.n_worlds;
+            let view = delhi_lang::state_view(&mut p, &state);
+            let agents: Vec<String> = view
+                .agents
+                .iter()
+                .map(|a| {
+                    json::obj(&[
+                        ("agent", json::str_(&a.agent)),
+                        ("knows", json::strs(&a.knows)),
+                        ("believes", json::strs(&a.believes)),
+                        ("undecided", json::strs(&a.undecided)),
+                    ])
+                })
+                .collect();
+            let o = json::obj(&[
+                ("ok", json::bool_(true)),
+                ("facts", json::strs(&view.facts)),
+                ("agents", json::arr(&agents)),
+                ("worlds", json::num(n_worlds)),
+                ("violated", json::strs(&violated)),
+            ]);
+            let _ = writeln!(out, "{o}");
+        }
+    }
     0
 }
 
@@ -207,27 +302,33 @@ pub fn cmd_show(src: &str, out: &mut String) -> i32 {
 ///
 /// Exit code is `0` when the formula holds, `1` when it does not, and `2` when the
 /// formula itself is malformed — so shell scripts can branch on the answer.
-pub fn cmd_eval(src: &str, actions: &[String], formula: &str, out: &mut String) -> i32 {
-    let Some(mut p) = open(src, out) else {
-        return 1;
+pub fn cmd_eval(src: &str, actions: &[String], formula: &str, fmt: Fmt, out: &mut String) -> i32 {
+    let mut p = match Problem::parse(src) {
+        Ok(p) => p,
+        Err(e) => return fail(fmt, &e, 1, out),
     };
     // The reached state replaces the initial one, so the query below is answered against
     // it — and `Problem::entails` keeps checking that the formula came from this store.
-    p.state = match apply_trace(&mut p, actions, out) {
+    p.state = match apply_trace(&mut p, actions) {
         Ok(s) => s,
-        Err(code) => return code,
+        Err((code, msg)) => return fail(fmt, &msg, code, out),
     };
     match parse_query(&mut p, formula) {
-        Err(e) => {
-            let _ = write!(out, "{}", style::bad(&e));
-            2
-        }
+        Err(e) => fail(fmt, &e, 2, out),
         Ok(f) => {
             // Through `Problem::entails`, not `state.entails` directly: that is where
             // the "formula must come from this problem's store" precondition is stated
             // and checked, and `parse_query` lowers into exactly that store.
             let holds = p.entails(f);
-            let _ = writeln!(out, "{}", verdict(holds));
+            match fmt {
+                Fmt::Text => {
+                    let _ = writeln!(out, "{}", verdict(holds));
+                }
+                Fmt::Json => {
+                    let o = json::obj(&[("ok", json::bool_(true)), ("value", json::bool_(holds))]);
+                    let _ = writeln!(out, "{o}");
+                }
+            }
             i32::from(!holds)
         }
     }
@@ -751,14 +852,14 @@ mod tests {
 
     #[test]
     fn check_accepts_a_valid_file() {
-        let (code, out) = run(|o| cmd_check(GOOD, o));
+        let (code, out) = run(|o| cmd_check(GOOD, Fmt::Text, o));
         assert_eq!(code, 0);
         assert!(out.to_lowercase().contains("ok"), "expected a success line, got: {out}");
     }
 
     #[test]
     fn check_rejects_and_explains() {
-        let (code, out) = run(|o| cmd_check(BAD, o));
+        let (code, out) = run(|o| cmd_check(BAD, Fmt::Text, o));
         assert_eq!(code, 1);
         assert!(out.contains("ghost"), "the diagnostic must name the problem");
     }
@@ -773,11 +874,11 @@ mod tests {
 
     #[test]
     fn eval_reports_true_and_false_with_different_codes() {
-        let (code, out) = run(|o| cmd_eval(GOOD, &[], "K[a] h", o));
+        let (code, out) = run(|o| cmd_eval(GOOD, &[], "K[a] h", Fmt::Text, o));
         assert_eq!(code, 1, "a is uncertain, so K[a]h is false");
         assert!(out.contains("false"));
 
-        let (code, out) = run(|o| cmd_eval(GOOD, &[], "B[a] h", o));
+        let (code, out) = run(|o| cmd_eval(GOOD, &[], "B[a] h", Fmt::Text, o));
         assert_eq!(code, 0, "a believes h");
         assert!(out.contains("true"));
     }
@@ -795,9 +896,9 @@ mod tests {
             // Order matters: the lie lands, then she looks and recovers the truth.
             (vec!["tell()".to_string(), "look()".to_string()], "B[a] h", true, true),
         ] {
-            let (code, out) = run(|o| cmd_eval(COIN, &[], formula, o));
+            let (code, out) = run(|o| cmd_eval(COIN, &[], formula, Fmt::Text, o));
             assert_eq!(code, i32::from(!before), "`{formula}` initially: {out}");
-            let (code, out) = run(|o| cmd_eval(COIN, &trace, formula, o));
+            let (code, out) = run(|o| cmd_eval(COIN, &trace, formula, Fmt::Text, o));
             assert_eq!(code, i32::from(!after), "`{formula}` after {trace:?}: {out}");
         }
     }
@@ -808,14 +909,14 @@ mod tests {
         // answer — it is, but not here. Collapsing them would make a typo look like a
         // false formula, which is the one thing a script branching on the code cannot
         // recover from.
-        let (code, out) = run(|o| cmd_eval(COIN, &["nope()".to_string()], "h", o));
+        let (code, out) = run(|o| cmd_eval(COIN, &["nope()".to_string()], "h", Fmt::Text, o));
         assert_eq!(code, 2, "got: {out}");
         assert!(out.contains("no action `nope()`"), "got: {out}");
     }
 
     #[test]
     fn eval_reports_a_malformed_formula_rather_than_panicking() {
-        let (code, out) = run(|o| cmd_eval(GOOD, &[], "K[nobody] h", o));
+        let (code, out) = run(|o| cmd_eval(GOOD, &[], "K[nobody] h", Fmt::Text, o));
         assert_eq!(code, 2);
         assert!(out.contains("nobody"));
     }
@@ -972,7 +1073,7 @@ mod tests {
         // In COIN, `b` knows h outright while `a` only believes it — the whole point of
         // the view is that those read differently. A version that reported both as
         // "knows" would still look plausible, so assert the distinction directly.
-        let (code, out) = run(|o| cmd_state(COIN, &[], o));
+        let (code, out) = run(|o| cmd_state(COIN, &[], Fmt::Text, o));
         assert_eq!(code, 0, "got: {out}");
         assert!(out.contains("actual world"), "got: {out}");
 
@@ -990,10 +1091,10 @@ mod tests {
         let a_line = |out: &str| {
             out.lines().find(|l| l.trim_start().starts_with("a ")).unwrap_or("").to_string()
         };
-        let (_, before) = run(|o| cmd_state(COIN, &[], o));
+        let (_, before) = run(|o| cmd_state(COIN, &[], Fmt::Text, o));
         assert!(a_line(&before).contains("believes h"), "got: {before}");
 
-        let (code, after) = run(|o| cmd_state(COIN, &["tell()".to_string()], o));
+        let (code, after) = run(|o| cmd_state(COIN, &["tell()".to_string()], Fmt::Text, o));
         assert_eq!(code, 0, "got: {after}");
         assert!(a_line(&after).contains("believes !h"), "the lie landed: {after}");
         assert!(!a_line(&after).contains("believes h,"), "and the old belief is gone: {after}");
@@ -1009,7 +1110,7 @@ mod tests {
             initially { h, ?[a] h }
             actions {}
         "#;
-        let (code, out) = run(|o| cmd_state(src, &[], o));
+        let (code, out) = run(|o| cmd_state(src, &[], Fmt::Text, o));
         assert_eq!(code, 0, "got: {out}");
         assert!(out.contains("undecided h"), "got: {out}");
         assert!(!out.contains("believes"), "a flat order is not a belief: {out}");
@@ -1030,11 +1131,12 @@ mod tests {
     fn ask_enumerates_after_the_trace_and_exits_on_whether_anything_matched() {
         // `a` believes h only after being told, so this pins that `ask` replays the
         // trace rather than answering about the initial state.
-        let (code, out) = run(|o| cmd_ask(COIN, &[], "B[a] _", 0, o));
+        let (code, out) = run(|o| cmd_ask(COIN, &[], "B[a] _", 0, Fmt::Text, o));
         assert_eq!(code, 0, "a believes h from the start here: {out}");
         assert!(out.contains("B[a] (h)"), "got: {out}");
 
-        let (code, out) = run(|o| cmd_ask(COIN, &["tell()".to_string()], "B[a] _", 0, o));
+        let (code, out) =
+            run(|o| cmd_ask(COIN, &["tell()".to_string()], "B[a] _", 0, Fmt::Text, o));
         assert_eq!(code, 0);
         assert!(out.contains("B[a] (!h)"), "the lie landed: {out}");
         assert!(!out.contains("B[a] (h)\n"), "and displaced the old belief: {out}");
@@ -1043,7 +1145,7 @@ mod tests {
     #[test]
     fn ask_exits_nonzero_when_nothing_matches_so_a_script_can_branch() {
         // `b` knows h outright, so there is nothing he is ignorant of.
-        let (code, out) = run(|o| cmd_ask(COIN, &[], "?[b] _", 0, o));
+        let (code, out) = run(|o| cmd_ask(COIN, &[], "?[b] _", 0, Fmt::Text, o));
         assert_eq!(code, 1, "no matches must be distinguishable from matches: {out}");
         assert!(out.contains("0 of"), "got: {out}");
     }
@@ -1078,11 +1180,11 @@ mod tests {
 
     #[test]
     fn ask_reports_a_bad_pattern_as_a_usage_error() {
-        let (code, out) = run(|o| cmd_ask(COIN, &[], "B[a] h", 0, o));
+        let (code, out) = run(|o| cmd_ask(COIN, &[], "B[a] h", 0, Fmt::Text, o));
         assert_eq!(code, 2, "a pattern with no hole is a usage error, not an empty result");
         assert!(out.contains('_'), "got: {out}");
 
-        let (code, out) = run(|o| cmd_ask(COIN, &[], "B[nobody] _", 0, o));
+        let (code, out) = run(|o| cmd_ask(COIN, &[], "B[nobody] _", 0, Fmt::Text, o));
         assert_eq!(code, 2);
         assert!(out.contains("nobody"), "got: {out}");
     }
@@ -1108,7 +1210,7 @@ mod tests {
     fn check_accepts_a_file_whose_invariants_hold_at_the_start() {
         // The invariant is breakable but unbroken initially, so `check` must pass —
         // otherwise every domain with a violable constraint would be unusable.
-        let (code, out) = run(|o| cmd_check(INV, o));
+        let (code, out) = run(|o| cmd_check(INV, Fmt::Text, o));
         assert_eq!(code, 0, "got: {out}");
         assert!(out.contains("ok:"), "got: {out}");
     }
@@ -1121,7 +1223,7 @@ mod tests {
             invariants { !p }
             actions {}
         "#;
-        let (code, out) = run(|o| cmd_check(src, o));
+        let (code, out) = run(|o| cmd_check(src, Fmt::Text, o));
         assert_eq!(code, 1, "saying `ok` here would be wrong: {out}");
         assert!(out.contains("in the initial state"), "got: {out}");
     }
@@ -1138,7 +1240,7 @@ mod tests {
 
     #[test]
     fn state_rejects_a_bad_file() {
-        let (code, out) = run(|o| cmd_state(BAD, &[], o));
+        let (code, out) = run(|o| cmd_state(BAD, &[], Fmt::Text, o));
         assert_eq!(code, 1);
         assert!(out.contains("ghost"), "got: {out}");
     }

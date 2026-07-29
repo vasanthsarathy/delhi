@@ -68,6 +68,18 @@ jobs:
           "$BIN" eval coin_lie.delhi -f "B[carol] h"
           "$BIN" step coin_lie.delhi -a "announce_not_heads()" "distract_a()" "peek_c()"
 
+      # The Python wrapper drives the real binary, so this is both its test suite and a
+      # check that `--json` still emits what the wrapper parses. Without it the two
+      # drift apart the first time a field is renamed, and nothing in Rust would notice.
+      - name: python wrapper
+        shell: bash
+        env:
+          DELHI_BIN: ${{ github.workspace }}/target/release/delhi
+        run: |
+          BIN="$DELHI_BIN"
+          if [ -f "$BIN.exe" ]; then export DELHI_BIN="$BIN.exe"; fi
+          python python/test_delhi.py
+
   msrv:
     name: msrv
     runs-on: ubuntu-latest
