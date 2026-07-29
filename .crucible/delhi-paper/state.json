@@ -1,9 +1,10 @@
 {
   "project_id": "delhi-paper",
   "title": "delhi: A Declarative Language and Model Checker for Epistemic Reasoning over Plausibility Models",
-  "stage": "drafting",
+  "stage": "DEVELOP",
   "created": "2026-07-29",
-  "note": "File mode. The crucible MCP server is not connected in this session. Sections are the sections of paper/delhi.tex rather than files under sections/; the paper is authored as a single LaTeX document.",
+  "updated_at": "2026-07-29T15:35:00Z",
+  "note": "File mode; the crucible MCP server is not connected in this session. The project was created mid-stream rather than via crucible:start, so an earlier state file recorded a non-standard stage of 'drafting'. Mapped to DEVELOP: the formal development is complete with proofs for all nine theorem-like statements, and experimental results exist. Sections are the sections of paper/delhi.tex rather than files under sections/.",
   "source": "paper/delhi.tex",
   "sections": [
     "1 Introduction",
@@ -16,5 +17,31 @@
     "8 Evaluation",
     "9 Related work",
     "10 Conclusion"
-  ]
+  ],
+  "advance_attempt": {
+    "date": "2026-07-29",
+    "target_stage": "PAPER",
+    "reviewer_gate": "PASS",
+    "soundness_verdict": "REVISE",
+    "significance_verdict": "MEETS BAR",
+    "understanding_probe": "INCOMPLETE - paused by researcher at question 1 of 2",
+    "outcome": "NOT ADVANCED",
+    "resume_with": "crucible:advance - the reviewer gate result stands; resume at the DEVELOP probe, question 1"
+  },
+  "required_revisions": {
+    "note": "Linnaeus and Socrates findings are required regardless of the gate result.",
+    "linnaeus": [
+      {"item": "Baral et al. citation year was unverified", "status": "FIXED 2026-07-29 - was invented as 2015 with an Artificial Intelligence venue; the journal version is vol 302, art 103601, 2022, and 2015 is the arXiv preprint. Both now recorded."},
+      {"item": "Several bibliography entries lack volume and page numbers", "status": "open"}
+    ],
+    "socrates": [
+      {"item": "The Grapevine measurement stops at delhi bench's 6000-world cap. The claim survives (the trajectory 8/36/92/188/588/2460/7276 is monotone with no plateau) but the cap is a measurement artefact and is not disclosed in the paper.", "status": "open"}
+    ],
+    "archimedes": [
+      {"item": "No complexity analysis anywhere: zero occurrences of complexity, worst-case or O() in 24 pages. Raised in both review rounds and still unaddressed. Cost of entailment, of ask, and of contraction are unstated.", "status": "open"}
+    ],
+    "edison": [
+      {"item": "The bisimulation gap table reports 448,935 models without describing the enumeration procedure, so the count is not reproducible from the paper alone.", "status": "open"}
+    ]
+  }
 }
