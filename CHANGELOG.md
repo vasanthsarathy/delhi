@@ -2,6 +2,12 @@
 
 Notable changes per release. Dates are the tag date.
 
+**0.1.4 is the first release on crates.io.** Everything before it exists as a GitHub
+release and a git tag, but not as a published crate — the binary package was still named
+`delhi-cli` then, and `delhi-gui` could not be packaged at all (see 0.1.4, Fixed). So
+`cargo install delhi` resolves 0.1.4 and later; earlier versions are downloadable from
+[Releases](https://github.com/vasanthsarathy/delhi/releases) as prebuilt binaries.
+
 ## 0.1.4 — 2026-07-29
 
 **First release on crates.io.** `cargo install delhi`, and `cargo install delhi --force`

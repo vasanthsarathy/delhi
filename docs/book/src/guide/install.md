@@ -67,3 +67,14 @@ All the library crates have zero external dependencies. See
 
 **1.78**, checked in CI. That is a promise about *using* delhi — building its own test
 suite wants something newer, because a test-only dependency does.
+
+## A note on version numbers
+
+**crates.io history starts at 0.1.4.** Versions before that exist as GitHub releases and
+git tags, but were never published: the binary package was named `delhi-cli` until 0.1.4,
+and `delhi-gui` could not be packaged at all — it reached outside its own directory for the
+bundled examples, which cargo will not carry into a tarball.
+
+So `cargo install delhi@0.1.2` finds nothing, while the prebuilt archives on
+[Releases](https://github.com/vasanthsarathy/delhi/releases) go back to 0.1.0. From 0.1.4
+onward the git tag and the published crate are the same thing.

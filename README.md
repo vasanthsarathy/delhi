@@ -88,6 +88,11 @@ any. CI builds that configuration on every push, so it stays real.
 Minimum supported Rust is **1.78**, checked in CI. It is a promise about *using* delhi:
 running the test suite wants a newer compiler, because a test-only dependency does.
 
+**crates.io history starts at 0.1.4.** Earlier versions are GitHub releases and git tags
+only — the binary package was named `delhi-cli` before that, and `delhi-gui` could not be
+packaged at all. `cargo install delhi@0.1.2` will not find anything; the prebuilt archives
+on [Releases](https://github.com/vasanthsarathy/delhi/releases) go back further.
+
 ## Quick start
 
 ```bash
