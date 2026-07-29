@@ -1,0 +1,20 @@
+{
+  "project_id": "delhi-paper",
+  "title": "delhi: A Declarative Language and Model Checker for Epistemic Reasoning over Plausibility Models",
+  "stage": "drafting",
+  "created": "2026-07-29",
+  "note": "File mode. The crucible MCP server is not connected in this session. Sections are the sections of paper/delhi.tex rather than files under sections/; the paper is authored as a single LaTeX document.",
+  "source": "paper/delhi.tex",
+  "sections": [
+    "1 Introduction",
+    "2 Preliminaries",
+    "3 The logic mB+",
+    "4 The surface language",
+    "5 Dynamics",
+    "6 The query language",
+    "7 Implementation",
+    "8 Evaluation",
+    "9 Related work",
+    "10 Conclusion"
+  ]
+}

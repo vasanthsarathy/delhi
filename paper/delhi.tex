@@ -31,11 +31,19 @@ domains are written, and the action layer, in which the modeller declares \emph{
 what} and the event models are derived rather than hand-built. We formalise a query language
 that is exactly the formula language extended with a hole, and an enumeration procedure over
 modal literals that answers questions of the form ``what does this agent believe that is
-false?''\ rather than requiring the analyst to guess the formula. We report the frame
-properties the implementation verifies ($S5$ for knowledge, $KD45$ for belief, factivity for
-safe belief), the bisimulation contraction that makes iterated update tractable, and
-measurements showing that contraction converts exponential growth into a fixed point on some
-domains but demonstrably not on all. We close by positioning \mBplus{} against DEL,
+false?''\ rather than requiring the analyst to guess the formula.
+
+Three results are not present in the source literature. First, safe belief \emph{collapses
+under introspection}: $\Kop{i}\Sop{i}\varphi \equiv \Kop{i}\varphi$ and
+$\Bop{i}\Sop{i}\varphi \equiv \Bop{i}\varphi$, so an agent can never certify a safe belief
+short of knowledge and unconditionally believes its beliefs to be safe---which makes safe
+belief an analyst's operator rather than an agent's. Second, the two product-update rules in
+the literature diverge on exactly one of four event configurations, and that configuration is
+realised by the standard demonstration scenario, where one rule prevents the scenario's own
+conclusion from arising. Third, bisimulation contraction converts exponential growth into a
+fixed point on some domains and demonstrably not on others, which constrains any planner
+built over this semantics; we also measure the incompleteness of the standard contraction by
+exhaustive enumeration and diagnose its cause. We close by positioning \mBplus{} against DEL,
 $m\mathcal{A}^*$, EFP and PDKB, and by stating plainly which components are transcribed from
 the source literature and which are new.
 \end{abstract}
@@ -58,14 +66,99 @@ The canonical illustration is a task from developmental psychology. Sally puts h
 a basket and leaves the room; Anne moves it to a box; Sally returns. Where will Sally look?
 The answer is the basket, and producing it requires holding two incompatible pictures at
 once: where the marble is, and where Sally takes it to be. Children below roughly four years
-answer ``the box'' \citep{wimmer1983}, and a representation that records only facts is in
-the same position---it has no machinery for a belief that is false.
+answer ``the box'' \citep{wimmer1983,baroncohen1985}, and a representation that records only
+facts is in the same position---it has no machinery for a belief that is false. The
+second-order variant, in which an agent is wrong about \emph{another agent's} belief rather
+than about the world, is due to \citet{sullivan1994} and is the shape of the running example
+introduced in \Cref{sec:running}.
 
 \delhi{} is a tool for building and interrogating such representations. A domain is written
 as a declarative file naming agents, propositions, what holds initially, what each agent
 believes initially, and a set of actions annotated with who observes them. From that file
 \delhi{} constructs a plausibility model, derives event models for each action, and answers
 arbitrary queries in the modal language---including queries nested several levels deep.
+
+\subsection{A running example}
+\label{sec:running}
+
+One scenario carries this paper from here to the evaluation. We call it \emph{Coin Lie}; it
+is the worked example of \citet{buckingham2021thesis} and \citet{buckingham2021kr}, and it is
+small enough to draw in full while exercising every mechanism the paper describes. Readers
+wanting the static background---possible worlds, $S5$, common knowledge---will find it in
+\citet{fagin1995}.
+
+\begin{quote}
+A coin has been flipped and covered. It landed \emph{heads}. Alice and Bob can see it;
+Carol cannot, though she correctly suspects heads. Then three things happen. \textbf{Alice
+announces that it is tails}---a lie, and everyone hears it. \textbf{Bob distracts Alice.}
+\textbf{Carol peeks} under the cover: she sees the coin, Bob hears her do it, and Alice,
+being distracted, notices nothing.
+\end{quote}
+
+At the end, Carol \emph{knows} the coin is heads, and Alice \emph{believes} that Carol
+believes it is tails. Alice is not wrong about the coin. She is wrong about Carol.
+
+\begin{lstlisting}[float=p,caption={\code{coin\_lie.delhi} in full. The sections are explained
+in \Cref{sec:surface}; the point for now is that nothing here is a Kripke structure---the
+modeller states facts, attitudes, and who observes what.},captionpos=b,label=lst:coinlie]
+types   { Actor - Object }
+objects { alice, bob, carol - Actor }
+agents  { alice, bob, carol }
+props   { h, d }                   // heads; distracted
+
+initially {
+    h                              // the coin really is heads
+    ?[carol] h                     // carol cannot tell
+    B[carol] h                     // but she correctly leans that way
+}
+
+goal { B[alice] B[carol] !h & K[carol] h }
+
+actions {
+    announce_not_heads() {
+        actor     alice
+        announces !h               // a lie; truth is not required
+        alice observes, bob observes, carol observes
+    }
+    distract_a() {
+        actor  bob
+        causes d
+        alice observes, bob observes, carol observes
+    }
+    peek_c() {
+        actor      carol
+        determines h
+        carol observes             // sees the coin: comes to KNOW
+        bob   aware                // hears it: knows carol learned something
+        alice aware if !d          // only notices if she is not distracted
+    }
+}
+\end{lstlisting}
+
+\Cref{fig:initial} shows the model \delhi{} builds from the \code{initially} block. Two
+worlds suffice: Carol cannot separate them, and she ranks the heads-world higher.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[node distance=26mm]
+  \node[world] (w0) {$\overline{h}$};
+  \node[actual, right=of w0] (w1) {$h$};
+  \draw[plaus] (w0) -- node[elab] {\emph{carol}} (w1);
+  \node[wlab, below=1.5mm of w0] {$w_0$};
+  \node[wlab, below=1.5mm of w1] {$w_1$ (actual)};
+\end{tikzpicture}
+\caption{The initial Coin Lie model. The double ring marks the actual world. The arrow is
+Carol's plausibility relation and points toward the \emph{more} plausible world, so she
+believes $h$ without knowing it. Alice and Bob have no arrow between the worlds, which is
+what it means for them to know the coin: each of their relations is the identity.}
+\label{fig:initial}
+\end{figure}
+
+Read off \Cref{fig:initial}: $\Kop{\mathit{alice}} h$ holds, because every world Alice
+cannot rule out---just $w_1$---has $h$. $\Kop{\mathit{carol}} h$ fails, because Carol
+cannot rule out $w_0$. $\Bop{\mathit{carol}} h$ holds, because $w_1$ is the more plausible
+of the two. That one picture already separates knowledge from belief, and
+\Cref{sec:logic} makes the separation precise.
 
 \subsection{Contributions}
 
@@ -107,6 +200,22 @@ dynamic-epistemic setting is undecidable \citep{bolander2011}, and the restricti
 recover decidability are orthogonal to the semantic questions treated here. Validity across
 all models is likewise out of scope: every judgement reported is a judgement about a
 particular pointed model.
+
+Two assumptions run through the whole development and are worth stating before they are used
+rather than after.
+
+\textbf{The analyst knows which world is actual.} A pointed model designates one world, and
+the modeller supplies it. Every judgement involving $\Sop{i}$ depends on that designation,
+since safe belief is measured from the actual world outward---so $\Sop{i}$ is available to
+someone reasoning \emph{about} the scenario and, as \Cref{thm:introspect} makes precise, not
+to an agent reasoning inside it. Where the actual world is itself uncertain, the framework as
+presented does not apply.
+
+\textbf{Domains are small enough for explicit-state checking.} Models are represented
+extensionally, as sets of worlds with bitset valuations and relations. This is what makes the
+measurements of \Cref{sec:eval} meaningful and also what bounds them: the approach suits
+scenarios of the size found in the theory-of-mind and epistemic-planning literature---tens to
+a few thousand worlds---and not domains requiring symbolic or factored representation.
 
 % ===========================================================================
 \section{Preliminaries}
@@ -309,6 +418,51 @@ $u$ included. A larger quantification domain yields a stronger claim, giving bot
 implications. Failure of the converses is witnessed in Example~\ref{ex:safe}.
 \end{proof}
 
+\Cref{fig:nested} is the same statement as a picture, and it is worth keeping in mind for
+the rest of the paper: the three attitudes differ only in how much of the agent's
+comparability class they are required to survive.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  % outermost: the comparability class
+  \draw[rounded corners=6pt, fill=blue!4, draw=blue!45]
+    (-0.2,-0.2) rectangle (9.6,2.5);
+  \node[anchor=north west, font=\small\itshape, blue!55] at (-0.1,2.45)
+    {$\comp{i}^{u}$ \ --- everything $i$ cannot rule out \ \ ($\Kop{i}$)};
+
+  % middle: the up-set from u
+  \draw[rounded corners=5pt, fill=orange!7, draw=orange!60]
+    (2.5,0.1) rectangle (9.3,1.85);
+  \node[anchor=north west, font=\small\itshape, orange!75!black] at (2.6,1.8)
+    {$\{v : u \plaus{i} v\}$ \ --- at least as plausible as \emph{here} \ \ ($\Sop{i}$)};
+
+  % inner: the maxima
+  \draw[rounded corners=4pt, fill=green!9, draw=green!55!black]
+    (6.4,0.25) rectangle (9.05,1.25);
+  \node[anchor=north west, font=\small\itshape, green!45!black] at (6.5,1.2)
+    {$\best{i}^{u}$ \ ($\Bop{i}$)};
+
+  % worlds, least plausible on the left
+  \node[world, fill=white] (a) at (1.1,0.85) {};
+  \node[actual, fill=white] (b) at (3.6,0.85) {$u$};
+  \node[world, fill=white] (c) at (5.4,0.85) {};
+  \node[world, fill=white] (d) at (7.3,0.72) {};
+  \node[world, fill=white] (e) at (8.5,0.72) {};
+  \draw[plaus] (a) -- (b);
+  \draw[plaus] (b) -- (c);
+  \draw[plaus] (c) -- (d);
+  \draw[equi] (d) -- (e);
+  \node[font=\scriptsize, anchor=north] at (4.9,-0.1) {less plausible $\longrightarrow$ more plausible};
+\end{tikzpicture}
+\caption{The three attitudes as three nested quantification domains, drawn for one agent
+$i$ at the actual world $u$. $\Kop{i}$ reads the whole class, $\Bop{i}$ only the maxima, and
+$\Sop{i}$ the worlds from $u$ upward. Because the middle region is pinned to $u$, it shrinks
+as the agent's belief becomes more accurate---which is the asymmetry developed in
+\Cref{sec:safe}.}
+\label{fig:nested}
+\end{figure}
+
 \begin{theorem}[Frame properties]
 \label{thm:frames}
 On every plausibility model:
@@ -400,15 +554,38 @@ worlds are maximal for \emph{cleo} and so both lie above the actual one.
 
 \begin{proposition}[Defeasibility characterisation]
 \label{prop:defeasible}
-$\Sop{i}\varphi$ holds at $\langle M,u\rangle$ iff $\varphi$ is believed and remains believed
-after learning any $\psi$ true at $u$; equivalently, iff $\CBop{i}{\psi}\varphi$ holds for
-every $\psi$ with $\langle M,u\rangle \models \psi$.
+$\Sop{i}\varphi$ holds at $\langle M,u\rangle$ if and only if $\CBop{i}{\psi}\varphi$ holds
+at $\langle M,u\rangle$ for every $\psi$ with $\langle M,u\rangle \models \psi$.
 \end{proposition}
 
-This is the characterisation of \citet{baltag2008}, and it is what makes $\Sop{i}$ more than a
-technical interpolant: a safe belief is one that \emph{no true information can overturn}. The
-qualification matters---a safe belief may still be overturned by a falsehood, and
-\Cref{sec:acquisition} exhibits a case.
+\begin{proof}
+$(\Rightarrow)$ Assume $\Sop{i}\varphi$ at $u$, so $\varphi$ holds throughout $U \coloneqq
+\{v : u \plaus{i} v\}$. Let $\psi$ be true at $u$ and let $v \in
+\best{i}(\comp{i}^{u} \cap \denote{\psi})$. Since $u \in \comp{i}^{u} \cap \denote{\psi}$,
+that set is non-empty, and by maximality of $v$ within it we have $u \plaus{i} v$. Hence $v
+\in U$ and $\varphi$ holds at $v$. As $v$ was arbitrary, $\CBop{i}{\psi}\varphi$ holds.
+
+$(\Leftarrow)$ Contrapositive. Suppose $\Sop{i}\varphi$ fails, so there is $w$ with $u
+\plaus{i} w$ and $\varphi$ false at $w$. Take $\psi$ to be true exactly at $w$ and at the
+worlds of $\comp{i}^{u}$ ranked no higher than $w$ --- concretely, $\denote{\psi} \cap
+\comp{i}^{u} = \{v \in \comp{i}^{u} : v \plaus{i} w\}$, which is expressible whenever the
+model is finite and worlds are distinguished by atoms, and which contains $u$ because $u
+\plaus{i} w$. Then $\psi$ is true at $u$, and $w$ is $\plaus{i}$-maximal in $\comp{i}^{u}
+\cap \denote{\psi}$ by construction, so $w \in \best{i}(\comp{i}^{u} \cap \denote{\psi})$.
+Since $\varphi$ fails at $w$, $\CBop{i}{\psi}\varphi$ fails.
+\end{proof}
+
+\begin{remark}[Reading the characterisation]
+This is the property that makes $\Sop{i}$ more than a technical interpolant: \emph{a safe
+belief is one that no true information can overturn}, since conditioning on a true $\psi$ is
+exactly what a truthful announcement of $\psi$ does to the ordering. The restriction to
+\emph{true} $\psi$ is not decoration --- a safe belief may still be overturned by a
+falsehood, and \Cref{sec:acquisition} exhibits a case. The $(\Leftarrow)$ direction requires
+that the separating $\psi$ be expressible, which holds in the finite, atom-distinguished
+models \delhi{} constructs; over models where worlds are not separated by any formula the
+implication may fail, and $\Sop{i}$ is then strictly stronger than the conditional-belief
+conjunction.
+\end{remark}
 
 \subsubsection{Introspection}
 \label{sec:introspect}
@@ -450,6 +627,15 @@ Every agent believes each of its beliefs to be safe: $\Bop{i}\varphi \to
 \Bop{i}\Sop{i}\varphi$ is valid, including when $\Sop{i}\varphi$ is false.
 \end{corollary}
 
+\begin{proof}
+Immediate from the second equivalence of Theorem~\ref{thm:introspect}, which gives
+$\Bop{i}\Sop{i}\varphi \equiv \Bop{i}\varphi$ and hence the implication in both directions.
+That the consequent may hold while $\Sop{i}\varphi$ is false is witnessed in
+Example~\ref{ex:safe}: $\Bop{\mathit{ben}}\Sop{\mathit{ben}}\neg\mathit{up}$ holds because
+$\Bop{\mathit{ben}}\neg\mathit{up}$ does, while $\Sop{\mathit{ben}}\neg\mathit{up}$ fails by
+factivity, $\neg\mathit{up}$ being false at the actual world.
+\end{proof}
+
 Corollary~\ref{cor:overconfident} is not a defect of the semantics but a consequence of belief being
 evaluated at the maxima: from the top of one's own ordering, every belief looks unshakeable.
 In Example~\ref{ex:safe}, $\Bop{\mathit{ben}}\Sop{\mathit{ben}}\neg\mathit{up}$ holds while
@@ -460,6 +646,18 @@ The practical consequence for modelling is that $\Sop{i}$ is an \emph{external} 
 measures the fit between an agent's ordering and the actual world; the agent has no access to
 the second argument, and its self-report is uninformative because it is unconditionally
 affirmative. An analyst may ask $\Sop{i}\varphi$ of a state; an agent may not ask it of itself.
+
+\begin{remark}[Why the operator is worth having at all]
+\label{rem:defeasibility}
+$\Kop{i}$ here is $S5$: infallible certainty, true in every world the agent cannot rule out.
+A long tradition in epistemology holds that this is too strong for the ordinary word
+\emph{knows}, and proposes instead that knowledge is true belief that no further truth would
+overturn---the \emph{defeasibility analysis} of \citet{lehrer1969}, developed by
+\citet{stalnaker2006}. By Proposition~\ref{prop:defeasible} that analysis is exactly
+$\Sop{i}$. Safe belief is therefore not a technical interpolant wedged between two real
+operators; it is a serious candidate for what knowing \emph{is}, and \mBplus{} carries both
+readings in one model so that a modeller may ask for either and compare them.
+\end{remark}
 
 \subsubsection{How safe belief is acquired}
 \label{sec:acquisition}
@@ -737,11 +935,46 @@ negative literals of the \code{causes} list.}
 \end{table}
 
 The single-cell difference between announcement and sensing in \Cref{tab:constructions}
-carries the whole distinction between being told and finding out. With $\FPN = \top$ on the
-backward edge, even a full observer of an announcement retains an edge from
-$e^{\neg\varphi}$ to $e^{\varphi}$, and so cannot rule out that what was said was false; the
-result is belief. With $\PN$ there, a full observer distinguishes the two events and comes to
-\emph{know} whether $\varphi$.
+carries the whole distinction between being told and finding out, and \Cref{fig:events}
+draws it. With $\FPN = \top$ on the backward edge, even a full observer of an announcement
+retains an edge from $e^{\neg\varphi}$ to $e^{\varphi}$, and so cannot rule out that what was
+said was false; the result is belief. With $\PN$ there, a full observer distinguishes the two
+events and comes to \emph{know} whether $\varphi$.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[node distance=17mm]
+  \begin{scope}
+    \node[event] (ap) {$e^{\varphi}$};
+    \node[event, right=22mm of ap] (an) {$e^{\neg\varphi}$};
+    \node[event, below=11mm of $(ap)!0.5!(an)$] (at) {$e^{\top}$};
+    \draw[plaus] (ap) to[bend left=18] node[elab, above] {$\PN$} (an);
+    \draw[plaus] (an) to[bend left=18] node[elab, below] {$\FPN$} (ap);
+    \draw[plaus] (ap) -- node[elab, left=1pt] {$\Nlab$} (at);
+    \draw[plaus] (an) -- node[elab, right=1pt] {$\Nlab$} (at);
+    \node[font=\small\bfseries, above=6mm of $(ap)!0.5!(an)$] {Announcement};
+  \end{scope}
+  \begin{scope}[xshift=68mm]
+    \node[event] (sp) {$e^{\varphi}$};
+    \node[event, right=22mm of sp] (sn) {$e^{\neg\varphi}$};
+    \node[event, below=11mm of $(sp)!0.5!(sn)$] (st) {$e^{\top}$};
+    \draw[plaus] (sp) to[bend left=18] node[elab, above] {$\PN$} (sn);
+    % Coloured, not \mathbf: \PN expands to \mathit{PN}, and \mathbf{\mathit{PN}} has no
+    % glyph in the maths font -- it renders as a black box.
+    \draw[plaus] (sn) to[bend left=18]
+      node[elab, below, text=red!65!black] {$\PN$} (sp);
+    \draw[plaus] (sp) -- node[elab, left=1pt] {$\Nlab$} (st);
+    \draw[plaus] (sn) -- node[elab, right=1pt] {$\Nlab$} (st);
+    \node[font=\small\bfseries, above=6mm of $(sp)!0.5!(sn)$] {Sensing};
+  \end{scope}
+\end{tikzpicture}
+\caption{The announcement and sensing event models differ in one edge label, shown in red.
+For a full observer $\PN = \bot$ and $\Nlab = \bot$, so under sensing that observer keeps no
+edge at all between $e^{\varphi}$ and $e^{\neg\varphi}$ and comes to know which occurred;
+under announcement the $\FPN = \top$ edge survives, leaving the possibility that the speaker
+lied. Reflexive $\FPN$ edges are present at every event and omitted from the drawing.}
+\label{fig:events}
+\end{figure}
 
 \subsection{Product update}
 
@@ -770,23 +1003,107 @@ This is Baltag--Smets action-priority update: event plausibility overrides state
 so incoming information takes precedence over prior belief except where it contradicts prior
 knowledge.
 
-\begin{remark}[A divergence, and why it is decisive]
-\label{rem:divergence}
-An alternative rule appears in the earlier literature, differing only when $f
-\longrightarrow^{iuv} e$ holds and $e \longrightarrow^{iuv} f$ does not---that is, when $e$ is
-strictly preferred. \Cref{def:update} creates no edge, preserving a strict preference; the
-alternative creates one conditioned on $u \plaus{i} v$, which can render the two worlds
-equiplausible.
+\subsubsection{The update worked through}
+\label{sec:worked}
 
-This is not a corner case requiring construction. In the standard \emph{Coin Lie} scenario,
-at the lied-to agent, from $\langle w_1, e^{\psi}\rangle$ to $\langle w_0,
-e^{\neg\psi}\rangle$: the forward label is $\PN$, which for a full observer is $\neg\top =
-\bot$, and the backward label is $\FPN = \top$. Under \Cref{def:update} no edge is created,
-the agent retains a strict preference for the announced world, and the lie lands. Under the
-alternative the worlds become equiplausible and the lie fails to land at all. Since the
-scenario is the one the source uses to \emph{demonstrate} second-order false belief, the
-alternative rule breaks the example it was introduced to explain. \delhi{} implements
-\Cref{def:update}; both are implemented behind a flag and the divergence is pinned by a
+\Cref{fig:update} applies \Cref{def:update} to the running example: the initial model of
+\Cref{fig:initial} crossed with the announcement model of \Cref{fig:events} for $\psi =
+\neg h$.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+  % ---- before
+  \begin{scope}
+    \node[world] (w0) at (0,0) {$\overline{h}$};
+    \node[actual] (w1) at (2.4,0) {$h$};
+    \draw[plaus] (w0) -- node[elab] {\emph{c}} (w1);
+    \node[wlab, below=1.5mm of w0] {$w_0$};
+    \node[wlab, below=1.5mm of w1] {$w_1$};
+    \node[font=\small\bfseries] at (1.2,1.2) {before};
+  \end{scope}
+  % ---- arrow
+  \node at (4.0,0) {\large $\otimes$};
+  % ---- event model (announcement of not-h)
+  \begin{scope}[xshift=48mm]
+    \node[event] (ep) at (0,0.55) {$e^{\neg h}$};
+    \node[event] (en) at (0,-0.75) {$e^{h}$};
+    % No edge label here: Figure 3 gives the labels, and at this size any label on the
+    % arrow collides with it. The caption carries the one fact needed.
+    \draw[plaus] (en) to[bend right=45] (ep);
+    \node[font=\small\bfseries] at (0,1.75) {announce $\neg h$};
+  \end{scope}
+  \node at (7.0,0) {\large $=$};
+  % ---- after
+  \begin{scope}[xshift=92mm]
+    \node[world] (p0) at (0,0) {$\overline{h}$};
+    \node[actual] (p1) at (2.4,0) {$h$};
+    \draw[plaus] (p1) -- node[elab] {\emph{c}} (p0);
+    \node[wlab, below=1.5mm of p0] {$\langle w_0, e^{\neg h}\rangle$};
+    \node[wlab, below=1.5mm of p1] {$\langle w_1, e^{h}\rangle$};
+    \node[font=\small\bfseries] at (1.2,1.2) {after};
+  \end{scope}
+\end{tikzpicture}
+\caption{Alice's lie, worked through. Only the two designated events survive at each world,
+since $\pre(e^{\neg h}) = \neg h$ holds only at $w_0$ and $\pre(e^{h}) = h$ only at $w_1$. The
+event arrow is the $\FPN$ edge of \Cref{fig:events}, which for Carol makes $e^{\neg h}$
+strictly the more plausible event. Carol's world arrow has consequently \emph{reversed}: she
+now finds the $\neg h$ world the more plausible, so $\Bop{\mathit{carol}}\neg h$ holds. Her
+\emph{knowledge} is untouched---both worlds are still present and still comparable---which is
+why \code{peek\_c()} can later restore the truth.}
+\label{fig:update}
+\end{figure}
+
+The reversal in \Cref{fig:update} is action priority doing its work. The event order says
+$e^{\neg h}$ is at least as plausible as $e^{h}$ and not conversely, so the first disjunct of
+\Cref{def:update} fires and the event order \emph{overrides} the prior world order.
+
+\begin{proposition}[The two update rules diverge, and the divergence is reachable]
+\label{prop:divergence}
+Let $\mathrm{R}_{\mathrm{alt}}$ be the rule
+\[
+  \mathrm{R}_{\mathrm{alt}}(\langle u,e\rangle,\langle v,f\rangle)(i) \ =\
+  \big(u \plaus{i} v \wedge (e \to^{iuv} f \vee f \to^{iuv} e)\big) \ \vee\
+  \big(v \plaus{i} u \wedge e \to^{iuv} f \wedge \neg (f \to^{iuv} e)\big).
+\]
+Then $\mathrm{R}_{\mathrm{alt}}$ and \Cref{def:update} agree on three of the four
+event-comparability configurations and differ exactly when $f \to^{iuv} e$ holds and $e
+\to^{iuv} f$ does not. That configuration is realised in the Coin Lie announcement, and the
+two rules give contradictory answers to the goal of \Cref{lst:coinlie}.
+\end{proposition}
+
+\begin{proof}
+Case analysis on the two edge predicates:
+\begin{center}
+\begin{tabular}{@{}llll@{}}
+\toprule
+Configuration & \Cref{def:update} & $\mathrm{R}_{\mathrm{alt}}$ & Agree? \\
+\midrule
+$e \to f$ and $f \to e$ & $u \plaus{i} v$ & $u \plaus{i} v$ & yes \\
+$e \to f$, not $f \to e$ & $u \comp{i} v$ & $u \plaus{i} v \vee v \plaus{i} u = u \comp{i} v$ & yes \\
+neither & $\bot$ & $\bot$ & yes \\
+\textbf{$f \to e$, not $e \to f$} & $\bot$ & $u \plaus{i} v$ & \textbf{no} \\
+\bottomrule
+\end{tabular}
+\end{center}
+For reachability, take $i = \mathit{carol}$, $u = w_1$, $v = w_0$, $e = e^{\neg h}$, $f =
+e^{h}$ in \Cref{fig:update}. Carol is a full observer, so $\PN(\mathit{carol}) = \neg\top =
+\bot$ and $Q(e^{\neg h}, e^{h})(\mathit{carol}) = \bot$, giving $\neg(e \to f)$; while
+$Q(e^{h}, e^{\neg h})(\mathit{carol}) = \FPN = \top$, giving $f \to e$. Also $w_1 \comp{i}
+w_0$ and $w_1 \plaus{i} w_0$ fails while $w_0 \plaus{i} w_1$ holds. Under \Cref{def:update}
+no edge is created and Carol retains a strict preference for the announced world, so
+$\Bop{\mathit{carol}}\neg h$ holds. Under $\mathrm{R}_{\mathrm{alt}}$ the first disjunct
+fires, an edge appears in both directions, the worlds become equiplausible, and
+$\Bop{\mathit{carol}}\neg h$ fails.
+\end{proof}
+
+\begin{remark}[Why this settles the choice]
+\label{rem:divergence}
+The divergence is not a corner case requiring construction: it is exercised by the very
+scenario the source literature uses to \emph{demonstrate} second-order false belief. Under
+$\mathrm{R}_{\mathrm{alt}}$ the lie does not land, so the goal of \Cref{lst:coinlie} is
+unreachable and the example loses its point. \delhi{} implements \Cref{def:update}; both
+rules are implemented behind a feature flag and the configuration above is pinned by a
 regression test.
 \end{remark}
 
@@ -900,10 +1217,29 @@ occurrence receives the same filler.}
 \label{tab:recipes}
 \end{table}
 
-\Cref{tab:recipes} illustrates why uniform filling of repeated holes is the design's load-bearing
-choice. The false-belief pattern $\Bop{a}\hole \wedge \neg\hole$ asks for exactly the
-conjunction that \Cref{sec:intro} identified as the object of the Sally--Anne task, and it
+\Cref{tab:recipes} illustrates why uniform filling of repeated holes is the design's
+load-bearing choice. The false-belief pattern $\Bop{a}\hole \wedge \neg\hole$ asks for exactly
+the conjunction that \Cref{sec:intro} identified as the object of the Sally--Anne task, and it
 finds instances the analyst had no reason to anticipate.
+
+\begin{example}[Enumeration on the running example]
+\label{ex:ask}
+Run Coin Lie to completion and ask what Alice believes about Carol:
+\begin{lstlisting}[style=shell]
+$ delhi ask coin_lie.delhi -a "announce_not_heads()" "distract_a()" "peek_c()" \
+        -q "B[alice] B[carol] _"
+  B[alice] B[carol] (d)
+  B[alice] B[carol] (!h)
+2 of 4 candidates at depth 0
+\end{lstlisting}
+The second match is the goal formula of \Cref{lst:coinlie}, recovered without being asked
+for. Widening the pattern to $\Bop{\mathit{alice}}\hole \wedge \neg\hole$ at depth $1$
+returns exactly one formula---$\Bop{\mathit{alice}}(\Bop{\mathit{carol}}\neg h) \wedge
+\neg(\Bop{\mathit{carol}}\neg h)$---from $28$ candidates: Alice's single false belief,
+located by search rather than by the analyst's guess. This is the operation
+\Cref{sec:intro} claims for the system, exhibited on the scenario the paper has carried
+throughout.
+\end{example}
 
 % ===========================================================================
 \section{Implementation}
@@ -946,27 +1282,102 @@ and $\plaus{i}$ that the satisfaction clauses of \Cref{def:sat} actually use.
 \end{definition}
 
 \begin{proposition}
+\label{prop:bisim}
 $\bisimR$ is sound---bisimilar states satisfy the same formulas of $\Lgb$---and is a
 congruence for product update. It is not complete: it may distinguish states that no formula
 separates.
 \end{proposition}
 
+\begin{proof}[Proof sketch]
+\emph{Soundness} is the standard induction on formula structure. The atomic case is the
+valuation clause of the bisimulation. Each modal case needs its quantification domain to be
+preserved, and each is built from $\plaus{i}$: $\comp{i}$ is its symmetric closure,
+$\best{i}$ is definable from it by maximality, and $\Cop{g}$ is the closure of a union of
+$\comp{i}$. A relation respecting $\plaus{i}$ in both directions therefore respects all
+four, and the back-and-forth conditions transfer the induction hypothesis across each.
+
+\emph{Congruence.} Let $Z$ be a $\bisimR$-bisimulation between $M$ and $M'$ and let $A$ be
+an action model. The relation $Z' = \{(\langle u,e\rangle, \langle u',e\rangle) : (u,u') \in
+Z\}$---pairing product worlds built from the \emph{same} event---is a bisimulation between
+the updates. Preconditions are preserved because they are formulas of $\Lgb$ and soundness
+applies; valuations are preserved because $\add$ and $\del$ depend only on $e$; and the edge
+predicate $e \longrightarrow^{iuv} f$ is preserved because $Q(e,f)(i) \in \Lprop$ and
+bisimilar worlds agree on propositional formulas. Each disjunct of \Cref{def:update} is then
+a Boolean combination of preserved conditions.
+
+\emph{Incompleteness} is exhibited rather than argued: \Cref{sec:bisim} identifies the
+cause, and the gap is measured in \Cref{sec:eval}.
+\end{proof}
+
 The incompleteness has an identifiable cause. $\bisimR$ refines against $\plaus{i}^{-1}$,
 whereas no operator of \Cref{def:sat} quantifies over the inverse relation; the extra
 refinement is therefore invisible to the language. $\bisimD$ removes it and coincides exactly
 with modal equivalence, but its status as a congruence for update is open, so \delhi{} uses
-$\bisimR$ wherever a contracted state is fed back into an update and offers $\bisimD$ for
-measurement. In practice the gap is small: on random models we measure a $5$--$10\%$
-difference in resulting world counts, and on every domain in our example corpus the two
-produce \emph{identical} counts.
+$\bisimR$ wherever a contracted state is fed back into an update, and offers $\bisimD$ for
+measurement.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{@{}rrrrr@{}}
+\toprule
+$|\Worlds|$ & agents & models & incomplete & rate \\
+\midrule
+2 & 1 & 8       & 0      & $0\%$ \\
+2 & 2 & 32      & 0      & $0\%$ \\
+3 & 1 & 115     & 6      & $5.22\%$ \\
+3 & 2 & 2{,}645 & 144    & $5.44\%$ \\
+4 & 1 & 2{,}595 & 264    & $10.17\%$ \\
+4 & 2 & 448{,}935 & 42{,}120 & $9.38\%$ \\
+\bottomrule
+\end{tabular}
+\caption{Incompleteness of $\bisimR$, measured by \emph{exhaustive} enumeration of all
+locally well-preordered models of the given size---not by sampling. ``Incomplete'' counts
+models in which $\bisimR$ separates at least one pair that modal equivalence identifies.}
+\label{tab:gap}
+\end{table}
+
+\Cref{tab:gap} quantifies the gap the source literature leaves as a remark. Two observations
+follow from it.
+
+\textbf{The rate is bounded and small}, reaching $10.17\%$ at four worlds. Against this,
+$\bisimR$ and $\bisimD$ produce \emph{identical} world counts on every domain in our example
+corpus and at every cycle of every table in \Cref{sec:eval}---so the measured gap, though
+real, does not appear on structured domains.
+
+\textbf{The incompleteness is not a multi-agent phenomenon}, contrary to how it is usually
+described. The single-agent rates ($5.22\%$, $10.17\%$) are as high as the multi-agent ones
+($5.44\%$, $9.38\%$). Since the technique the incompleteness is normally attributed to is
+complete in the single-agent case, an implementation exhibiting single-agent incompleteness
+is not running that technique at all, but plain partition refinement over the two directions
+of $\plaus{i}$. That is a diagnosis of the cause, and it is what identifies
+$\plaus{i}^{-1}$ as the culprit.
+
+Soundness was probed separately: across $451{,}730$ exhaustively enumerated models plus
+$24$ million randomly generated ones ($5 \le |\Worlds| \le 8$, two to three agents), no pair
+merged by $\bisimR$ was separated by $\bisimD$, consistent with
+Proposition~\ref{prop:bisim}.
 
 % ===========================================================================
 \section{Evaluation}
 \label{sec:eval}
 
 We report model growth and elapsed time under iterated update, with and without contraction.
-Measurements are single-threaded on a commodity laptop; the interest is in the growth curves
-rather than the constants.
+
+\paragraph{Protocol and its limits.}
+All figures come from \delhi's own \code{bench} subcommand, which applies a named action list
+repeatedly and records world count and cumulative elapsed time after each cycle. Runs are
+single-threaded, release-profile builds (\code{lto = "fat"}, one codegen unit), on one x86-64
+laptop. \textbf{Each figure is a single run, and we report no variance.} That is adequate for
+the claims made here, all of which concern growth of the \emph{world count}---an exact,
+deterministic integer, not a timing---and none of which turns on a timing difference smaller
+than an order of magnitude. It is not adequate for comparing \delhi{} against another system,
+and we do not attempt such a comparison: \Cref{tab:expressive,tab:machinery} position
+\mBplus{} against EFP~2.0 \citep{le2018} and PDKB \citep{muise2015} on expressiveness and
+machinery, not on speed. Those systems solve a different problem---plan search---and a
+model checker's per-update cost is not comparable to a planner's time-to-plan.
+
+The world counts below are reproducible exactly; the timings should be read only as orders of
+magnitude.
 
 \subsection{Growth without contraction}
 
@@ -995,26 +1406,58 @@ relation is $|\Ag| \cdot |\Worlds|^{2}$ bits and almost every operation traverse
 \Cref{tab:coinlie} shows the uncontracted trajectory reaching $8192$ worlds and $9.47$ seconds
 by the fourth cycle---already unusable---while both contracted trajectories settle at $16$
 worlds and roughly $0.6$\,ms per cycle, making total cost linear in the number of actions
-rather than exponential. \emph{Muddy Children} behaves the same way, settling at $32$ worlds
-where the uncontracted run reaches $8192$ and $8.8$ seconds.
+rather than exponential.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{@{}rrrrrrr@{}}
+\toprule
+& \multicolumn{2}{c}{\textbf{No contraction}} & \multicolumn{2}{c}{\textbf{$\bisimR$}}
+& \multicolumn{2}{c}{\textbf{$\bisimD$}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+\textbf{Cycle} & worlds & cumulative & worlds & cumulative & worlds & cumulative \\
+\midrule
+0 & 8    & ---      & 8  & ---      & 8  & --- \\
+1 & 32   & 205.8\,\textmu s & 24 & 351.4\,\textmu s & 24 & 372.1\,\textmu s \\
+2 & 128  & 2.5\,ms  & 32 & 1.2\,ms  & 32 & 1.3\,ms \\
+3 & 512  & 31.5\,ms & 32 & 2.4\,ms  & 32 & 2.6\,ms \\
+4 & 2048 & 490.3\,ms& 32 & 3.5\,ms  & 32 & 3.9\,ms \\
+5 & 8192 & 8.01\,s  & 32 & 4.7\,ms  & 32 & 5.2\,ms \\
+\bottomrule
+\end{tabular}
+\caption{\emph{Muddy Children}, three agents; one cycle is
+\code{father\_speaks()} then \code{nobody\_knows()}. A second domain reaching a fixed point,
+at a different size ($32$ rather than $16$), which is what makes the Coin Lie result look
+like a property of contraction rather than a coincidence of one scenario.
+\Cref{tab:grapevine} is the counterexample to that reading. Note that both quotients agree
+at every cycle, including the transient $24$ at cycle~1.}
+\label{tab:muddy}
+\end{table}
+
+\Cref{tab:muddy} records \emph{Muddy Children} behaving the same way and settling at a
+different size, which is the reason to report it: one domain reaching a fixed point is an
+anecdote, two at different sizes suggest a pattern. \Cref{sec:nofixed} then breaks it.
 
 \subsection{A fixed point is not the general case}
+\label{sec:nofixed}
 
 It is tempting to conclude that contraction bounds model size. It does not.
 
 \begin{table}[t]
 \centering
-\begin{tabular}{@{}rrr@{}}
+\begin{tabular}{@{}rrrrr@{}}
 \toprule
-\textbf{Cycle} & \textbf{Worlds ($\bisimR$)} & \textbf{Cumulative} \\
+& \multicolumn{2}{c}{\textbf{No contraction}} & \multicolumn{2}{c}{\textbf{$\bisimR$}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+\textbf{Cycle} & worlds & cumulative & worlds & cumulative \\
 \midrule
-0 & 8    & --- \\
-1 & 36   & 528.1\,\textmu s \\
-2 & 92   & --- \\
-3 & 188  & --- \\
-4 & 588  & --- \\
-5 & 2460 & --- \\
-6 & 7276 & --- \\
+0 & 8    & ---       & 8    & --- \\
+1 & 36   & 524.9\,\textmu s & 36   & 522.6\,\textmu s \\
+2 & 160  & 5.4\,ms   & 92   & 3.9\,ms \\
+3 & 756  & 95.5\,ms  & 188  & 23.8\,ms \\
+4 & 3740 & 2.36\,s   & 588  & 119.8\,ms \\
+5 & 6052 & 5.96\,s   & 2460 & 1.29\,s \\
+6 & \multicolumn{2}{c}{(cap reached)} & 7276 & 9.12\,s \\
 \bottomrule
 \end{tabular}
 \caption{\emph{Grapevine} under $\bisimR$ contraction. The cycle---an agent leaves, a secret
@@ -1046,8 +1489,10 @@ Epistemic planning has two traditions in tension. One begins from \emph{expressi
 dynamic epistemic logic \citep{baltag1998,vanditmarsch2007} will represent essentially
 anything, at the cost of requiring the modeller to hand-build event models and of undecidable
 plan existence \citep{bolander2011}. The other begins from \emph{tractability}, restricting
-the representation until established planning machinery applies. Action languages occupy the
-middle: they retain a semantics grounded in DEL while deriving event models from declared
+the representation until established planning machinery applies---the $m\mathcal{A}^*$ family
+of \citet{baral}, the forward-search planners of \citet{le2018}, and the depth-bounded
+compilation to classical planning of \citet{muise2015}. Action languages occupy the middle:
+they retain a semantics grounded in DEL while deriving event models from declared
 observability. \mBplus{} is in this third group, and specifically in the branch that replaced
 knowledge with belief.
 
@@ -1160,11 +1605,16 @@ bear on it: whether $\bisimD$ is a congruence for product update, which would al
 tighter quotient to be used inside search; and how to bound or abstract domains of the
 \emph{Grapevine} kind, where sound contraction cannot prevent growth. On the language side, the
 natural extension is to admit formula-valued postconditions in the style of
-Andersen--Bolander--Jensen, which subsume conditional effects, together with a determination
+\citet{andersen2012}, which subsume conditional effects, together with a determination
 of what observers should learn from them.
 
 % ===========================================================================
 \begin{thebibliography}{99}
+
+\bibitem[Andersen et al.(2012)]{andersen2012}
+M.~B. Andersen, T.~Bolander, and M.~H. Jensen.
+\newblock Conditional epistemic planning.
+\newblock In \emph{Logics in Artificial Intelligence (JELIA)}, 2012.
 
 \bibitem[Baltag et al.(1998)]{baltag1998}
 A.~Baltag, L.~S. Moss, and S.~Solecki.
