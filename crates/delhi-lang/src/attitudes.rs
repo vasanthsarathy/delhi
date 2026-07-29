@@ -172,7 +172,24 @@ mod tests {
         // The three lists partition the propositions. If a case were dropped or
         // double-counted the totals would not add up, and no single-scenario assertion
         // above would necessarily notice.
-        for src in [COIN, include_str!("../../../examples/muddy_children.delhi")] {
+        // A second domain, inline rather than read from `examples/` up the tree: that
+        // path is outside the crate, so `cargo package` cannot carry it and the published
+        // crate would fail its own `cargo test`. Three muddy children, each able to see
+        // the others and not themselves — enough to exercise all three lists at once.
+        const MUDDY: &str = r#"
+            types   { Actor - Object }
+            objects { a, b, c - Actor }
+            agents  { a, b, c }
+            props   { m_a, m_b, m_c }
+            initially {
+                m_a  m_b  m_c
+                ?[a] m_a   K[b] m_a   K[c] m_a
+                K[a] m_b   ?[b] m_b   K[c] m_b
+                K[a] m_c   K[b] m_c   ?[c] m_c
+            }
+            actions {}
+        "#;
+        for src in [COIN, MUDDY] {
             let mut p = Problem::parse(src).unwrap_or_else(|e| panic!("{e}"));
             let n = p.sig.n_atoms();
             let state = p.state.clone();

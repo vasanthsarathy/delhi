@@ -48,14 +48,14 @@ jobs:
       # than a promise. Without this, a stray `use serde::…` in delhi-lang would break it
       # and nothing would notice until someone tried the build.
       - name: build without default features
-        run: cargo build -p delhi-cli --no-default-features
+        run: cargo build -p delhi --no-default-features
 
       # A downloaded binary must work outside the repository — the bug this whole
       # packaging effort started from. Run it from a directory that is not the checkout.
       - name: smoke test the installed binary
         shell: bash
         run: |
-          cargo build --release -p delhi-cli
+          cargo build --release -p delhi
           BIN="$PWD/target/release/delhi"
           # `if`, not `[ … ] && …`: GitHub runs bash with -e, where a false test as the
           # last command of a step fails the step.

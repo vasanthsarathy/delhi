@@ -1,5 +1,5 @@
 [package]
-name = "delhi-cli"
+name = "delhi"
 description = "Command-line tool for the delhi epistemic model checker"
 edition.workspace = true
 version.workspace = true

@@ -1,0 +1,20 @@
+[book]
+title = "The delhi Book"
+description = "Epistemic logic, and a tool for reasoning with it: what agents know and believe, and how they end up wrong about each other."
+authors = ["Vasanth Sarathy"]
+language = "en"
+src = "src"
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/vasanthsarathy/delhi"
+edit-url-template = "https://github.com/vasanthsarathy/delhi/edit/master/docs/book/{path}"
+site-url = "/delhi/book/"
+# Every code block in this book is a `.delhi` domain or a shell session, neither of which
+# rustdoc should try to run. Turning the play button off stops it offering to.
+playground.runnable = false
+
+[output.html.fold]
+enable = true
+level = 1

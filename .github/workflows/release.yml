@@ -50,7 +50,7 @@ jobs:
       # `--locked` so the artefact is built from the committed Cargo.lock. A release that
       # silently picked up a newer dependency would not be the thing that was tested.
       - name: build
-        run: cargo build --release --locked -p delhi-cli --target ${{ matrix.target }}
+        run: cargo build --release --locked -p delhi --target ${{ matrix.target }}
 
       - name: package
         shell: bash
@@ -139,8 +139,8 @@ jobs:
 
           What changed is in [CHANGELOG.md](https://github.com/vasanthsarathy/delhi/blob/master/CHANGELOG.md).
 
-          Verify a download against `SHA256SUMS`. Building from source instead:
-          `cargo install --git https://github.com/vasanthsarathy/delhi delhi-cli`
+          Verify a download against `SHA256SUMS`. Or install from crates.io instead:
+          `cargo install delhi` — and `cargo install delhi --force` to update later.
           NOTES
 
       - name: publish
@@ -150,3 +150,30 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "delhi $GITHUB_REF_NAME" \
             --notes-file notes.md
+
+  # Publishing to crates.io is what makes `cargo install delhi --force` pick up a new
+  # version, so it belongs on the tag alongside the binaries. It runs only after the
+  # binaries are built and released: a crates.io version cannot be deleted, only yanked,
+  # so it is the last thing to happen and the first thing that would be permanent.
+  crates-io:
+    name: crates.io
+    needs: release
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    environment: crates-io
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      # `--workspace` publishes all six in dependency order and waits for each to appear
+      # in the index, which hand-rolled loops used to get wrong. Skipped entirely if no
+      # token is configured, so a tag from a fork or before setup does not fail the run.
+      - name: publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "${CARGO_REGISTRY_TOKEN:-}" ]; then
+            echo "::warning::CARGO_REGISTRY_TOKEN is not set — skipping crates.io publish"
+            exit 0
+          fi
+          cargo publish --workspace --locked

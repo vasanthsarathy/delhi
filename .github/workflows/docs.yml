@@ -1,0 +1,72 @@
+name: docs
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+# One deployment at a time, and never cancel one midway: a half-published site is worse
+# than a stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install mdbook
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSL "https://github.com/rust-lang/mdBook/releases/download/v0.4.40/mdbook-v0.4.40-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # The landing page sits at the site root and the book under /book/, which is what
+      # the relative links in docs/site/index.html expect.
+      - name: build the site
+        run: |
+          mkdir -p site
+          cp docs/site/index.html site/
+          mdbook build docs/book -d "$PWD/site/book"
+
+      # Every internal link in the book, checked against the files actually produced. A
+      # renamed chapter otherwise ships as a 404 that nobody notices until a reader
+      # reports it.
+      - name: check internal links
+        run: |
+          cd site
+          broken=0
+          for f in $(find . -name '*.html' ! -name 'print.html'); do
+            d=$(dirname "$f")
+            for l in $(grep -o 'href="[^"#:]*\.html[^"]*"' "$f" | sed 's/href="//;s/"$//;s/#.*//'); do
+              [ -z "$l" ] && continue
+              if [ ! -f "$d/$l" ]; then
+                echo "broken link in ${f#./}: $l"
+                broken=1
+              fi
+            done
+          done
+          exit $broken
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

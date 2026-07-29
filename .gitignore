@@ -25,3 +25,6 @@ wheels/
 
 # Files authored in the browser UI
 scratch/
+
+# Built docs site
+site/

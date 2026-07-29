@@ -6,6 +6,10 @@ version.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# Integration tests read fixtures from the repository `examples/` directory, which is
+# outside the package and so cannot be carried in the tarball. They stay in git and run
+# in CI; shipping files that cannot compile standalone would only mislead.
+exclude = ["tests/"]
 
 [dependencies]
 delhi-syntax.workspace = true

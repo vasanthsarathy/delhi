@@ -5,7 +5,7 @@ members = [
     "crates/delhi-core",
     "crates/delhi-mb",
     "crates/delhi-lang",
-    "crates/delhi-cli",
+    "crates/delhi",
     "crates/delhi-gui",
 ]
 

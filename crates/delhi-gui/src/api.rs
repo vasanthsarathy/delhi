@@ -2,7 +2,7 @@
 //!
 //! Every one takes the source text plus whatever the request carried and returns a JSON
 //! string. Nothing here touches a socket, so the whole surface is unit-testable without
-//! standing a server up — the same split that makes `delhi-cli`'s subcommands testable.
+//! standing a server up — the same split that makes `delhi`'s subcommands testable.
 //!
 //! The protocol is deliberately **stateless**: the browser holds the source and the list
 //! of applied actions, and sends both with every request. Replaying a short trace costs
@@ -354,7 +354,18 @@ pub fn ask(src: &str, trace: &[String], pattern: &str, depth: usize) -> String {
 mod tests {
     use super::*;
 
-    const COIN: &str = include_str!("../../../examples/coin_lie.delhi");
+    /// Coin Lie, taken from the bundle rather than from `examples/` up the tree.
+    ///
+    /// A path out of the crate root is a file `cargo package` cannot carry, so a crate
+    /// that published cleanly would fail `cargo test` for whoever downloaded it. The
+    /// bundle is inside the crate and is asserted against `examples/` elsewhere.
+    fn coin() -> &'static str {
+        crate::BUILTIN
+            .iter()
+            .find(|(n, _)| *n == "coin_lie.delhi")
+            .map(|(_, s)| *s)
+            .expect("coin_lie.delhi is bundled")
+    }
 
     fn json(s: &str) -> serde_json::Value {
         serde_json::from_str(s).expect("valid json")
@@ -362,7 +373,7 @@ mod tests {
 
     #[test]
     fn state_reports_attitudes_and_a_drawable_graph() {
-        let v = json(&state(COIN, &[]));
+        let v = json(&state(coin(), &[]));
         assert_eq!(v["ok"], true);
         assert_eq!(v["n_worlds"], 2);
         // Carol leans towards h without knowing it — the distinction the panel exists
@@ -400,7 +411,7 @@ mod tests {
             .iter()
             .map(|s| s.to_string())
             .collect();
-        let v = json(&state(COIN, &trace));
+        let v = json(&state(coin(), &trace));
         assert_eq!(v["ok"], true);
         assert_eq!(v["applied"].as_array().unwrap().len(), 3);
         assert_eq!(v["goal"], true, "the Coin Lie trace reaches its goal");
@@ -413,7 +424,7 @@ mod tests {
         // to produce. The quotient keeps it at 16.
         let cycle = ["announce_not_heads()", "distract_a()", "peek_c()"];
         let trace: Vec<String> = cycle.iter().cycle().take(12).map(|s| s.to_string()).collect();
-        let v = json(&state(COIN, &trace));
+        let v = json(&state(coin(), &trace));
         assert_eq!(v["ok"], true);
         let n = v["n_worlds"].as_u64().unwrap();
         assert!(n <= 32, "expected a contracted model, got {n} worlds");
@@ -429,7 +440,7 @@ mod tests {
 
     #[test]
     fn an_unknown_or_inapplicable_action_is_reported_without_losing_the_state() {
-        let v = json(&state(COIN, &["nosuch()".to_string()]));
+        let v = json(&state(coin(), &["nosuch()".to_string()]));
         assert_eq!(v["ok"], true, "the file is fine; only the trace is not");
         assert!(v["trace_error"].as_str().unwrap().contains("nosuch()"));
         assert_eq!(v["applied"].as_array().unwrap().len(), 0);
@@ -441,13 +452,13 @@ mod tests {
         // The bug this guards is evaluating against `p.state`: `B[alice] B[carol] !h` is
         // false initially and true after the trace, so a stale evaluation is visible.
         let f = "B[alice] B[carol] !h";
-        assert_eq!(json(&eval(COIN, &[], f))["value"], false);
+        assert_eq!(json(&eval(coin(), &[], f))["value"], false);
 
         let trace: Vec<String> = ["announce_not_heads()", "distract_a()", "peek_c()"]
             .iter()
             .map(|s| s.to_string())
             .collect();
-        assert_eq!(json(&eval(COIN, &trace, f))["value"], true);
+        assert_eq!(json(&eval(coin(), &trace, f))["value"], true);
     }
 
     #[test]
@@ -459,14 +470,14 @@ mod tests {
             .iter()
             .map(|s| s.to_string())
             .collect();
-        let v = json(&ask(COIN, &trace, "B[alice] B[carol] _", 0));
+        let v = json(&ask(coin(), &trace, "B[alice] B[carol] _", 0));
         assert_eq!(v["ok"], true);
         let ms: Vec<&str> =
             v["matches"].as_array().unwrap().iter().map(|m| m.as_str().unwrap()).collect();
         assert!(ms.iter().any(|m| m.contains("(!h)")), "got {ms:?}");
         assert!(!ms.contains(&"B[alice] B[carol] (h)"), "got {ms:?}");
 
-        let before = json(&ask(COIN, &[], "B[alice] B[carol] _", 0));
+        let before = json(&ask(coin(), &[], "B[alice] B[carol] _", 0));
         let bs: Vec<&str> =
             before["matches"].as_array().unwrap().iter().map(|m| m.as_str().unwrap()).collect();
         assert!(!bs.iter().any(|m| m.contains("(!h)")), "not yet true initially: {bs:?}");
@@ -474,14 +485,14 @@ mod tests {
 
     #[test]
     fn ask_reports_a_pattern_without_a_hole_rather_than_returning_nothing() {
-        let v = json(&ask(COIN, &[], "B[alice] h", 0));
+        let v = json(&ask(coin(), &[], "B[alice] h", 0));
         assert_eq!(v["ok"], false);
         assert!(v["error"].as_str().unwrap().contains('_'));
     }
 
     #[test]
     fn eval_reports_a_malformed_formula_with_its_span() {
-        let v = json(&eval(COIN, &[], "K[nobody] h"));
+        let v = json(&eval(coin(), &[], "K[nobody] h"));
         assert_eq!(v["ok"], false);
         assert!(v["error"].as_str().unwrap().contains("nobody"));
         assert!(v["value"].is_null());

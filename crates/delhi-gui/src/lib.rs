@@ -302,20 +302,45 @@ mod tests {
     }
 
     #[test]
-    fn every_example_in_the_repository_is_bundled() {
-        // Guards the one way this list rots: an example added to `examples/` that nobody
-        // remembers to embed is missing from every downloaded binary, and the omission is
-        // invisible from inside the repository, where the directory is right there.
+    fn bundled_examples_match_the_repository_byte_for_byte() {
+        // `builtin.rs` inlines the example sources rather than `include_str!`ing them,
+        // because `cargo package` cannot carry files from outside the crate — the path
+        // form published cleanly and then failed to compile for anyone who installed it.
+        // Inlining moves the risk from "will not build" to "may go stale", and this is
+        // what closes that: names *and* contents, so an edit to an example that nobody
+        // regenerates is a red test rather than a binary quietly serving old text.
+        //
+        // Run `sh tools/bundle-examples.sh` when this fails.
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
-        let mut on_disk: Vec<String> = std::fs::read_dir(dir)
+        let mut on_disk: Vec<(String, String)> = std::fs::read_dir(dir)
             .expect("examples/")
             .flatten()
-            .filter_map(|e| e.file_name().into_string().ok())
-            .filter(|n| n.ends_with(".delhi"))
+            .filter_map(|e| {
+                let name = e.file_name().into_string().ok()?;
+                if !name.ends_with(".delhi") {
+                    return None;
+                }
+                Some((name, std::fs::read_to_string(e.path()).ok()?))
+            })
             .collect();
         on_disk.sort();
-        let mut bundled: Vec<String> = BUILTIN.iter().map(|(n, _)| n.to_string()).collect();
-        bundled.sort();
-        assert_eq!(bundled, on_disk, "BUILTIN in builtin.rs is out of step with examples/");
+
+        let bundled: Vec<(String, String)> =
+            BUILTIN.iter().map(|(n, s)| (n.to_string(), s.to_string())).collect();
+
+        let disk_names: Vec<&String> = on_disk.iter().map(|(n, _)| n).collect();
+        let bundled_names: Vec<&String> = bundled.iter().map(|(n, _)| n).collect();
+        assert_eq!(bundled_names, disk_names, "builtin.rs lists different files to examples/");
+
+        for ((bn, bs), (_, ds)) in bundled.iter().zip(on_disk.iter()) {
+            // Compared with line endings normalised: git checks these out as CRLF on
+            // Windows, and a test that failed on one platform for that reason alone would
+            // say nothing about whether the content had actually drifted.
+            assert_eq!(
+                bs.replace("\r\n", "\n"),
+                ds.replace("\r\n", "\n"),
+                "{bn} differs — run `sh tools/bundle-examples.sh`"
+            );
+        }
     }
 }

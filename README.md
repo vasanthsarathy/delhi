@@ -15,9 +15,11 @@ $ delhi eval examples/coin_lie.delhi -f "B[carol] h"
 true
 ```
 
+**[Documentation & guide](https://vasanthsarathy.github.io/delhi/)** — including an
+introduction to epistemic logic that assumes no background.
+
 [Install](#install) · [The language](#the-language) · [Querying](#querying) ·
-[From Python](#from-python) ·
-[Benchmarks](#how-fast-and-does-it-blow-up)
+[From Python](#from-python) · [Benchmarks](#how-fast-and-does-it-blow-up)
 
 ## Why
 
@@ -54,20 +56,26 @@ curl -fsSL https://raw.githubusercontent.com/vasanthsarathy/delhi/master/install
 irm https://raw.githubusercontent.com/vasanthsarathy/delhi/master/install.ps1 | iex
 ```
 
-**From the repository, with `cargo`.** Compiles from source and installs into
-`~/.cargo/bin`, which the Rust installer already puts on your `PATH` — so it is globally
-available with no clone and no further steps. Needs a Rust toolchain and a couple of
-minutes.
+**With `cargo`.** Compiles from source into `~/.cargo/bin`, which the Rust installer
+already puts on your `PATH` — globally available, no clone, no further steps. Needs a Rust
+toolchain and a couple of minutes.
 
 ```bash
-cargo install --git https://github.com/vasanthsarathy/delhi delhi-cli
+cargo install delhi            # install
+cargo install delhi --force    # update to the newest release
+```
+
+Or straight from git, to get whatever is on `master` ahead of the last release:
+
+```bash
+cargo install --git https://github.com/vasanthsarathy/delhi delhi
 ```
 
 **From a clone**, if you are working on delhi itself:
 
 ```bash
 git clone https://github.com/vasanthsarathy/delhi && cd delhi
-cargo install --path crates/delhi-cli    # or: cargo build --release
+cargo install --path crates/delhi    # or: cargo build --release
 ```
 
 Whichever route: `delhi --version` should answer, and `delhi --help` lists the
@@ -878,8 +886,8 @@ changes that.
 | `delhi-mb` | the mB+ semantics: bitset models, frame validation, entailment, bisimulation, product update |
 | `delhi-core` | the backend-agnostic trait a planner would be generic over |
 | `delhi-lang` | the front end: lex → parse → ground → lower |
-| `delhi-cli` | the `delhi` binary |
-| `delhi-gui` | the browser UI, behind `delhi-cli`'s default-on `gui` feature |
+| `delhi` | the `delhi` binary — the crate `cargo install delhi` fetches |
+| `delhi-gui` | the browser UI, behind `delhi`'s default-on `gui` feature |
 
 `delhi-lang` depends on the semantics; the semantics does not depend on the front end. Only
 `delhi-gui` has external dependencies, and only it is optional.
