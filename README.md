@@ -15,7 +15,7 @@ $ delhi eval examples/coin_lie.delhi -f "B[carol] h"
 true
 ```
 
-**[Documentation & guide](https://vasanthsarathy.github.io/delhi/)** — including an
+**[Documentation & guide](https://vsarathy.com/delhi/)** — including an
 introduction to epistemic logic that assumes no background.
 
 [Install](#install) · [The language](#the-language) · [Querying](#querying) ·
