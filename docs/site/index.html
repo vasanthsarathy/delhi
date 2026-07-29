@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>delhi — an epistemic model checker</title>
+<meta name="description" content="delhi represents what agents know and believe, how those attitudes change when things happen, and how an agent can end up confidently wrong about what another agent believes.">
+<style>
+  :root {
+    --bg: #14161a; --panel: #1b1e24; --line: #2b3038; --ink: #d7dbe2;
+    --dim: #8b93a1; --key: #e5b567; --good: #8fbf7f; --accent: #6fb3d2;
+    --pink: #d18ec2; --purple: #b39ddb;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #fbfbfc; --panel: #f2f3f5; --line: #dcdfe4; --ink: #1c2027;
+      --dim: #5e6673; --accent: #2a6f92; --good: #3f7a37; --key: #9a6d12;
+      --pink: #9c4f8a; --purple: #6a4fa8;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: dark light; scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 24px; }
+
+  header { border-bottom: 1px solid var(--line); }
+  nav { display: flex; align-items: center; gap: 22px; padding: 16px 0; flex-wrap: wrap; }
+  nav .brand {
+    font-family: var(--mono); font-size: 15px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--ink); text-decoration: none; font-weight: 600;
+  }
+  nav a:not(.brand) { color: var(--dim); text-decoration: none; font-size: 14.5px; }
+  nav a:not(.brand):hover { color: var(--ink); }
+  nav .spacer { margin-left: auto; }
+
+  .hero { padding: 76px 0 56px; }
+  h1 { font-size: clamp(34px, 5.6vw, 52px); line-height: 1.1; margin: 0 0 20px; letter-spacing: -.02em; }
+  h1 .fade { color: var(--dim); }
+  .lede { font-size: clamp(17px, 2.3vw, 20px); color: var(--dim); max-width: 660px; margin: 0 0 30px; }
+
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    display: inline-block; padding: 10px 20px; border-radius: 7px; text-decoration: none;
+    font-size: 15px; border: 1px solid var(--line); color: var(--ink); background: var(--panel);
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #08131a; font-weight: 600; }
+  @media (prefers-color-scheme: light) { .btn.primary { color: #fff; } }
+  .btn.primary:hover { filter: brightness(1.1); }
+
+  code, pre { font-family: var(--mono); }
+  pre {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 9px;
+    padding: 16px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.6; margin: 0;
+  }
+  p code, li code, td code {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: .89em;
+  }
+  .c-dim { color: var(--dim); } .c-key { color: var(--key); }
+  .c-good { color: var(--good); } .c-acc { color: var(--accent); }
+  .c-pink { color: var(--pink); } .c-pur { color: var(--purple); }
+
+  section { padding: 52px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 25px; margin: 0 0 10px; letter-spacing: -.01em; }
+  h2 + .sub { color: var(--dim); margin: 0 0 26px; max-width: 640px; }
+  h3 { font-size: 16px; margin: 0 0 8px; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px;
+  }
+  .card p { margin: 0; color: var(--dim); font-size: 14.5px; }
+  .card .tag {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--accent); display: block; margin-bottom: 9px;
+  }
+  @media (max-width: 760px) { .split, .cards { grid-template-columns: 1fr; } }
+
+  .steps { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+  .steps li { counter-increment: s; padding: 0 0 22px 42px; position: relative; }
+  .steps li::before {
+    content: counter(s); position: absolute; left: 0; top: 1px;
+    width: 26px; height: 26px; border-radius: 50%; background: var(--panel);
+    border: 1px solid var(--line); color: var(--accent);
+    font-family: var(--mono); font-size: 13px; display: grid; place-items: center;
+  }
+  .steps p { margin: 0 0 10px; color: var(--dim); font-size: 14.5px; }
+
+  footer { border-top: 1px solid var(--line); padding: 34px 0 48px; color: var(--dim); font-size: 14px; }
+  footer a { color: var(--dim); }
+  .note { font-size: 13.5px; color: var(--dim); margin-top: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="./">delhi</a>
+      <a href="#what">What it is</a>
+      <a href="#start">Get started</a>
+      <a href="./book/">The book</a>
+      <span class="spacer"></span>
+      <a href="https://docs.rs/delhi-lang">API docs</a>
+      <a href="https://github.com/vasanthsarathy/delhi">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="hero">
+    <h1>What agents believe,<br><span class="fade">and how they get it wrong.</span></h1>
+    <p class="lede">
+      delhi is an epistemic model checker. It represents what each agent knows and believes,
+      keeps it straight through announcements, sensing and actions that some agents witness
+      and others miss — and lets you ask what happens when someone's picture of another
+      person goes stale.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="./book/guide/install.html">Install</a>
+      <a class="btn" href="./book/">Read the book</a>
+      <a class="btn" href="https://github.com/vasanthsarathy/delhi">Source</a>
+    </div>
+    <p class="note">Rust, MIT/Apache-2.0. A single self-contained binary — no runtime dependencies.</p>
+  </div>
+
+  <section id="what">
+    <h2>The problem it solves</h2>
+    <p class="sub">
+      Most systems that reason about the world track facts. The interesting failures live one
+      level up, in what agents think about each other.
+    </p>
+    <div class="split">
+      <div>
+        <p>
+          Sally puts her marble in the basket and leaves. Anne moves it to the box. Sally comes
+          back — <em>where will she look?</em>
+        </p>
+        <p>
+          The answer is the basket, and getting it right means holding two incompatible pictures
+          at once: where the marble is, and where Sally thinks it is. A fact table cannot do
+          that. It is also the canonical test for whether a <em>child</em> can represent someone
+          else's mind, which is not a coincidence.
+        </p>
+        <p style="color:var(--dim);font-size:14.5px">
+          The conjunction below is the whole task: <code>!basket</code> is the world,
+          <code>B[sally] basket</code> is Sally, and neither is negotiable.
+        </p>
+      </div>
+      <pre><span class="c-dim">$</span> delhi eval sally_anne.delhi \
+    -a <span class="c-good">"sally_leaves()"</span> <span class="c-good">"anne_moves()"</span> <span class="c-good">"sally_returns()"</span> \
+    -f <span class="c-key">"B[sally] basket &amp; !basket"</span>
+<span class="c-good">true</span></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>What you get</h2>
+    <div class="cards">
+      <div class="card">
+        <span class="tag">Language</span>
+        <h3>Describe, don't derive</h3>
+        <p>Declare agents, what is true, what is believed, and who observes what. delhi builds
+           the model and checks it against every line you wrote.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Queries</span>
+        <h3>Search, don't guess</h3>
+        <p>Ask one formula, or enumerate every formula of a shape that holds —
+           <code>B[alice] _ &amp; !_</code> finds what an agent believes that is false.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Tools</span>
+        <h3>See it move</h3>
+        <p>A REPL, a browser UI with a live model graph, Graphviz output, benchmarks, and a
+           Python wrapper for ML stacks.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="start">
+    <h2>Get started</h2>
+    <p class="sub">Three commands to a second-order false belief.</p>
+    <ol class="steps">
+      <li>
+        <h3>Install</h3>
+        <p>A prebuilt binary, or from crates.io. <code>--force</code> is also how you update.</p>
+        <pre>cargo install delhi</pre>
+      </li>
+      <li>
+        <h3>Ask something</h3>
+        <p>Alice lies about the coin, Bob distracts her, Carol peeks. Alice never sees the peek.</p>
+        <pre><span class="c-dim">$</span> delhi eval coin_lie.delhi -a <span class="c-good">"announce_not_heads()"</span> <span class="c-good">"distract_a()"</span> <span class="c-good">"peek_c()"</span> \
+      -f <span class="c-key">"B[alice] B[carol] !h &amp; K[carol] h"</span>
+<span class="c-good">true</span>   <span class="c-dim"># alice is wrong about carol, not about the coin</span></pre>
+      </li>
+      <li>
+        <h3>Explore it</h3>
+        <p>A browser UI over your own folder of <code>.delhi</code> files — editor, live state,
+           model graph, console.</p>
+        <pre>delhi gui</pre>
+      </li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>New to epistemic logic?</h2>
+    <p class="sub">
+      The book opens with four short chapters that assume nothing beyond <em>and</em>,
+      <em>or</em> and <em>not</em> — what possible worlds are, why knowledge and belief need
+      different machinery, what higher-order attitudes buy you, and what happens to all of it
+      when the world changes.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="./book/logic/possible-worlds.html">Start with possible worlds</a>
+      <a class="btn" href="./book/background/further-reading.html">Further reading</a>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    delhi — an epistemic model checker ·
+    <a href="https://github.com/vasanthsarathy/delhi">GitHub</a> ·
+    <a href="./book/">Book</a> ·
+    <a href="https://docs.rs/delhi-lang">API docs</a> ·
+    <a href="https://crates.io/crates/delhi">crates.io</a>
+    <br>
+    Dual-licensed MIT / Apache-2.0. Built on mB, from Buckingham's thesis.
+  </div>
+</footer>
+
+</body>
+</html>

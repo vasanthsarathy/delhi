@@ -27,4 +27,4 @@ wheels/
 scratch/
 
 # Built docs site
-site/
+/site/
