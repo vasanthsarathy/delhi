@@ -1,0 +1,76 @@
+// A shift handover, and a robot deciding whether to speak up.
+//
+// The capability: an assistant notices that a person holds a false belief and must decide
+// whether, and how, to correct it. Doing that well requires four things at once ---
+// representing her belief separately from the fact, knowing whether she would find out
+// anyway, knowing what *telling* her would achieve as against *showing* her, and knowing
+// who else is in the room. This file is the paper's running example.
+//
+// The situation: the medication was NOT given. Nurse believes it was --- she handed off
+// mid-task and assumes it happened. Robot saw that it did not. Doctor has no idea.
+//
+// The goal is the interesting part:
+//
+//     goal { [][nurse] !given }
+//
+// Not "nurse believes the truth" but "nurse believes the truth *safely*" --- that no
+// further true information will unsettle it. That goal cannot be written at all in a
+// language whose only attitudes are knowledge and belief.
+//
+//     delhi eval examples/handover.delhi -f "B[nurse] given & !given"   // she is wrong
+//     delhi eval examples/handover.delhi -a "robot_tells()" -f "[][nurse] !given"
+//     delhi eval examples/handover.delhi -a "robot_lies()"  -f "[][nurse] given"
+//
+// See https://vsarathy.com/delhi/
+
+types   { Actor - Object }
+objects { nurse, robot, doctor - Actor }
+agents  { nurse, robot, doctor }
+props   { given, busy }        // the dose was administered; the doctor is occupied
+
+initially {
+    !given                     // it was NOT given
+    !busy                      // the doctor is free, so she is in the room
+    B[nurse] given             // the nurse believes it was --- a false belief
+    ?[nurse] given             // she has not verified it
+    ?[doctor] given            // the doctor has no idea either way
+}
+
+// Safely believing the truth, which is stronger than believing it and weaker than
+// knowing it. This is the goal the capability actually has.
+goal { [][nurse] !given }
+
+actions {
+    // Speaking. The nurse comes to BELIEVE, because a speaker may be wrong or lying.
+    // The doctor overhears only if she is in the room.
+    robot_tells() {
+        actor     robot
+        announces !given
+        nurse observes, robot observes
+        doctor aware if !busy
+    }
+
+    // The same speech act with a false content, to show that a lie moves belief but
+    // cannot make it safe.
+    robot_lies() {
+        actor     robot
+        announces given
+        nurse observes, robot observes
+    }
+
+    // Showing. Sensing rather than announcement, so the nurse comes to KNOW.
+    robot_shows() {
+        actor      nurse
+        determines given
+        nurse observes
+        robot observes
+        doctor aware if !busy
+    }
+
+    // The doctor gets pulled away, which removes her from anything that follows.
+    doctor_paged() {
+        actor  doctor
+        causes busy
+        nurse observes, robot observes, doctor observes
+    }
+}

@@ -78,88 +78,114 @@ believes initially, and a set of actions annotated with who observes them. From 
 \delhi{} constructs a plausibility model, derives event models for each action, and answers
 arbitrary queries in the modal language---including queries nested several levels deep.
 
-\subsection{A running example}
+\subsection{The capability this paper is about}
 \label{sec:running}
 
-One scenario carries this paper from here to the evaluation. We call it \emph{Coin Lie}; it
-is the worked example of \citet{buckingham2021thesis} and \citet{buckingham2021kr}, and it is
-small enough to draw in full while exercising every mechanism the paper describes. Readers
-wanting the static background---possible worlds, $S5$, common knowledge---will find it in
-\citet{fagin1995}.
+Rather than motivate the formalism abstractly, we fix one capability and one scenario, and
+keep both for the rest of the paper. \Cref{sec:motivating} works through what existing
+approaches can and cannot say about it; every later section returns to it.
 
 \begin{quote}
-A coin has been flipped and covered. It landed \emph{heads}. Alice and Bob can see it;
-Carol cannot, though she correctly suspects heads. Then three things happen. \textbf{Alice
-announces that it is tails}---a lie, and everyone hears it. \textbf{Bob distracts Alice.}
-\textbf{Carol peeks} under the cover: she sees the coin, Bob hears her do it, and Alice,
-being distracted, notices nothing.
+\textbf{The capability.} An assistant notices that a person holds a \emph{false belief}
+bearing on their work. It must decide whether to intervene, and how.
 \end{quote}
 
-At the end, Carol \emph{knows} the coin is heads, and Alice \emph{believes} that Carol
-believes it is tails. Alice is not wrong about the coin. She is wrong about Carol.
+That decision is harder than it sounds, because doing it well requires four things at once.
+The assistant must represent the person's belief \emph{separately from the fact}, or there is
+no mistake to notice. It must judge whether the person \emph{would find out anyway}, since
+intervening is pointless if so and urgent if not. It must know what \emph{telling} someone
+achieves as against \emph{showing} them, because a report can be doubted and a demonstration
+cannot. And it must know \emph{who else is in the room}, since correcting someone privately
+and correcting them in front of a colleague are different acts.
 
-\begin{lstlisting}[float=p,caption={\code{coin\_lie.delhi} in full. The sections are explained
-in \Cref{sec:surface}; the point for now is that nothing here is a Kripke structure---the
-modeller states facts, attitudes, and who observes what.},captionpos=b,label=lst:coinlie]
+\begin{quote}
+\textbf{The scenario.} A shift handover. A dose of medication was \textbf{not} given. The
+nurse believes it was --- she was interrupted and assumes the handover covered it. A robot
+assistant observed that it was not. A doctor is present but has no idea either way, and may
+be paged away at any moment.
+\end{quote}
+
+\Cref{lst:handover} is the whole domain. Notice its goal, which is the crux of the whole
+paper:
+
+\begin{center}
+\code{goal \{ [][nurse] !given \}}
+\end{center}
+
+Not \emph{the nurse believes the truth} and not \emph{the nurse knows the truth}, but
+\emph{the nurse believes the truth in a way that will survive}: no further true information
+will unsettle it. That is \emph{safe belief} (\Cref{sec:safe}), and it is the right success
+criterion for the capability, because a merely-held belief can be undone by the next thing
+the nurse overhears. It is also a goal that cannot be \emph{written down} in a formalism
+whose only attitudes are knowledge and belief --- which is where \Cref{sec:motivating}
+begins.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[node distance=30mm]
+  \node[actual] (w0) {$\overline{g}$};
+  \node[world, right=of w0] (w1) {$g$};
+  \draw[plaus] (w0) -- node[elab] {\emph{nurse}} (w1);
+  \draw[equi] (w0) to[bend right=28] node[elab, below] {\emph{doctor}} (w1);
+  \node[wlab, below=1.5mm of w0] {$w_0$ (actual)};
+  \node[wlab, below=1.5mm of w1] {$w_1$};
+\end{tikzpicture}
+\caption{The handover, as \delhi{} builds it from the \code{initially} block of
+\Cref{lst:handover}. Write $g$ for \code{given}. The dose was not given, so $w_0$ is actual
+(double ring). The nurse's arrow points to $w_1$: she cannot rule out either world and finds
+the wrong one more plausible. The doctor relates the two worlds in both directions --- she has
+no leaning at all. The robot has no arrow, so it knows. Three agents, one proposition, three
+different epistemic positions, none of which a fact-only representation can hold.}
+\label{fig:handover}
+\end{figure}
+
+\begin{lstlisting}[float=p,caption={\code{handover.delhi}. Sections are explained in
+\Cref{sec:surface}; for now note only that nothing here is a Kripke structure. The modeller
+states what is true, what is believed, and who observes what --- and \delhi{} derives
+\Cref{fig:handover} and the event models from that.},captionpos=b,label=lst:handover]
 types   { Actor - Object }
-objects { alice, bob, carol - Actor }
-agents  { alice, bob, carol }
-props   { h, d }                   // heads; distracted
+objects { nurse, robot, doctor - Actor }
+agents  { nurse, robot, doctor }
+props   { given, busy }        // the dose was administered; the doctor is occupied
 
 initially {
-    h                              // the coin really is heads
-    ?[carol] h                     // carol cannot tell
-    B[carol] h                     // but she correctly leans that way
+    !given                     // it was NOT given
+    !busy                      // the doctor is free, so she is in the room
+    B[nurse] given             // the nurse believes it was -- a false belief
+    ?[nurse] given             // she has not verified it
+    ?[doctor] given            // the doctor has no idea either way
 }
 
-goal { B[alice] B[carol] !h & K[carol] h }
+goal { [][nurse] !given }      // she believes the truth, and SAFELY
 
 actions {
-    announce_not_heads() {
-        actor     alice
-        announces !h               // a lie; truth is not required
-        alice observes, bob observes, carol observes
+    robot_tells() {            // speaking: she comes to BELIEVE
+        actor     robot
+        announces !given
+        nurse observes, robot observes
+        doctor aware if !busy  // overheard only if she is in the room
     }
-    distract_a() {
-        actor  bob
-        causes d
-        alice observes, bob observes, carol observes
+    robot_lies() {             // the same act with false content
+        actor     robot
+        announces given
+        nurse observes, robot observes
     }
-    peek_c() {
-        actor      carol
-        determines h
-        carol observes             // sees the coin: comes to KNOW
-        bob   aware                // hears it: knows carol learned something
-        alice aware if !d          // only notices if she is not distracted
+    robot_shows() {            // showing: she comes to KNOW
+        actor      nurse
+        determines given
+        nurse observes
+        robot observes
+        doctor aware if !busy
+    }
+    doctor_paged() {
+        actor  doctor
+        causes busy
+        nurse observes, robot observes, doctor observes
     }
 }
 \end{lstlisting}
 
-\Cref{fig:initial} shows the model \delhi{} builds from the \code{initially} block. Two
-worlds suffice: Carol cannot separate them, and she ranks the heads-world higher.
-
-\begin{figure}[t]
-\centering
-\begin{tikzpicture}[node distance=26mm]
-  \node[world] (w0) {$\overline{h}$};
-  \node[actual, right=of w0] (w1) {$h$};
-  \draw[plaus] (w0) -- node[elab] {\emph{carol}} (w1);
-  \node[wlab, below=1.5mm of w0] {$w_0$};
-  \node[wlab, below=1.5mm of w1] {$w_1$ (actual)};
-\end{tikzpicture}
-\caption{The initial Coin Lie model. The double ring marks the actual world. The arrow is
-Carol's plausibility relation and points toward the \emph{more} plausible world, so she
-believes $h$ without knowing it. Alice and Bob have no arrow between the worlds, which is
-what it means for them to know the coin: each of their relations is the identity.}
-\label{fig:initial}
-\end{figure}
-
-Read off \Cref{fig:initial}: $\Kop{\mathit{alice}} h$ holds, because every world Alice
-cannot rule out---just $w_1$---has $h$. $\Kop{\mathit{carol}} h$ fails, because Carol
-cannot rule out $w_0$. $\Bop{\mathit{carol}} h$ holds, because $w_1$ is the more plausible
-of the two. That one picture already separates knowledge from belief, and
-\Cref{sec:logic} makes the separation precise.
-
+% ===========================================================================
 \subsection{Contributions}
 
 \begin{enumerate}
@@ -218,6 +244,137 @@ scenarios of the size found in the theory-of-mind and epistemic-planning literat
 a few thousand worlds---and not domains requiring symbolic or factored representation.
 
 % ===========================================================================
+
+% ===========================================================================
+
+\section{What existing approaches can say about it}
+\label{sec:motivating}
+
+We now walk the scenario past the main families of formalism. The aim is not to score points
+--- each family made a deliberate trade and got something in return --- but to locate
+precisely where each one stops being able to express the problem, because those stopping
+points are what determined \delhi's design.
+
+\subsection{Classical planning over facts}
+
+A STRIPS-style representation has propositions and actions that change them. It can record
+\code{given = false}. It cannot record that the nurse thinks otherwise, because there is no
+place in the representation for a proposition to be false and simultaneously taken to be
+true. One could add an atom \code{nurse\_thinks\_given} and treat it as an ordinary fluent,
+but then nothing connects it to \code{given}: the two vary independently, no action is
+constrained by their relationship, and the modeller maintains the correspondence by hand for
+every action they write. \textbf{Stops at:} step one. The mistake is not representable.
+
+\subsection{Knowledge-only epistemic logic}
+
+Give each agent an $S5$ relation and the situation improves markedly. We can now say the
+nurse does not \emph{know} whether the dose was given, that the robot does know, and that the
+doctor does not --- three distinct positions, correctly. Public-announcement dynamics will
+even update all three when the robot speaks.
+
+What cannot be said is the one thing the scenario is about. Knowledge is \emph{factive}:
+$\Kop{i}\varphi \to \varphi$ is valid, so $\Kop{\mathit{nurse}}\,\mathit{given}$ is
+unsatisfiable when $\mathit{given}$ is false. The nurse's error is not merely hard to encode;
+it is ruled out by the logic. The best available paraphrase is that she is \emph{ignorant} of
+whether the dose was given --- which is true, and which loses the entire point, since an
+ignorant nurse would check and a mistaken one will not.
+
+\textbf{Stops at:} false belief. This is where $m\mathcal{A}^*$ \citep{baral} and the EFP
+planners \citep{le2018} sit, and it is a deliberate choice --- restricting to knowledge is
+part of what buys them planning performance.
+
+\subsection{Knowledge and belief as two relations}
+
+The obvious repair is a second relation per agent: an $S5$ relation for knowledge and a
+serial, transitive, Euclidean one for belief, with axioms linking them. Now
+$\Bop{\mathit{nurse}}\,\mathit{given} \wedge \neg\mathit{given}$ is satisfiable, and the
+scenario's premise is finally expressible.
+
+Two problems remain, and both bear directly on the capability.
+
+\textbf{Revision is destructive.} When the robot tells the nurse something contradicting her
+belief, the belief relation must be rebuilt. The rules available in this setting are blunt:
+in $m\mathcal{A}^*$'s treatment, contradicting information collapses \emph{all} of an agent's
+uncertainty, not just the part that conflicted. Our nurse also does not know whether the
+doctor has been paged; being corrected about the medication should not settle that question,
+and under a collapsing rule it does. Worse, the collapse is irreversible in the wrong way:
+having been told, she cannot later be brought back by better evidence, because the worlds
+that would support the alternative are gone.
+
+\textbf{Stability is inexpressible.} The assistant needs to know whether the nurse
+\emph{would find out anyway}. With knowledge and belief alone there is no operator for
+``believes, and no true information would change that''. One can ask whether she believes,
+and whether she knows, and get \emph{yes} and \emph{no} --- and those two answers are the same
+for a nurse who is about to check the chart and a nurse who will never look again. The goal of
+\Cref{lst:handover} is not expressible here.
+
+\subsection{Dynamic epistemic logic with hand-built event models}
+
+DEL \citep{baltag1998,vanditmarsch2007} is expressive enough for all of it. Plausibility
+extensions \citep{baltag2006,baltag2008} give belief revision that reorders rather than
+deletes, and safe belief to state the goal. Nothing in the scenario is beyond it, and
+\delhi's semantics is a DEL semantics.
+
+The cost is where the modeller's effort goes. In DEL as such, the event model for each action
+is \emph{supplied}, not derived. To say ``the robot tells the nurse, and the doctor overhears
+only if she has not been paged'' the modeller must construct a multi-event structure with the
+right preconditions and the right per-agent edges, and get every edge right --- and then do it
+again for the sensing variant, and again for the lie. \Cref{sec:eventbackground} shows what
+those structures look like; they are not hard, but they are fiddly, and an error in one edge
+produces a model that is well-formed and silently wrong.
+
+There is also no standard \emph{query} apparatus. Having built the model, the assistant's
+question --- \emph{what does the nurse believe that is false?} --- is not a formula, it is a
+search over formulas, and DEL as a logic has nothing to say about how to conduct it.
+
+\textbf{Stops at:} nothing, in principle. In practice: the event models are hand-built, and
+plan existence is undecidable in the general setting \citep{bolander2011}.
+
+\subsection{Depth-bounded epistemic states}
+
+Bounding nesting depth and compiling to classical planning \citep{muise2015} makes the
+problem tractable and scales well. Within the bound the representation handles belief, and the
+modal-literal representation is a genuinely good idea --- we borrow it in
+\Cref{sec:enumeration}. But the bound is on the representation, revision is limited, and safe
+belief is not present, so once again the goal cannot be stated.
+
+\textbf{Stops at:} the depth bound, and the absence of an operator for stability.
+
+\subsection{What the scenario demands}
+\label{sec:demands}
+
+Reading the failures back gives a specification, and it is the specification \delhi{} was
+built against.
+
+\begin{enumerate}
+  \item \textbf{Belief that can be false, with revision that preserves everything else.}
+    Correcting the nurse about the medication must not settle her uncertainty about the
+    doctor, and must leave room for her to be corrected again. This is what plausibility
+    models buy: revision \emph{reorders} worlds instead of deleting them
+    (\Cref{sec:prelim}).
+
+  \item \textbf{Safe belief in the object language.} The success criterion is stability, not
+    mere belief, so the language must be able to state it --- in a goal, in an invariant, and
+    in a query (\Cref{sec:logic}). This is the extension we mark with the $+$.
+
+  \item \textbf{Event models derived from declared observability.} The modeller should write
+    \code{doctor aware if !busy} and get the right multi-event structure, including the
+    conditional case, rather than draw it (\Cref{sec:dynamics}).
+
+  \item \textbf{Three observer positions, not two.} ``Overheard the correction'' and ``did
+    not notice it'' are different, and so is ``knew something was said without hearing what''
+    --- which is exactly the doctor's position when she is out of the room but sees the
+    conversation happen (\Cref{sec:observability}).
+
+  \item \textbf{Search over formulas, not just checking of them.} \emph{What does the nurse
+    believe that is false?} must be answerable without the analyst guessing the formula
+    first (\Cref{sec:query}).
+\end{enumerate}
+
+Those five are the paper's design choices, and each is now motivated by something the
+scenario needs and an existing approach cannot supply. The remaining sections deliver them in
+that order.
+
 \section{Preliminaries}
 \label{sec:prelim}
 
@@ -883,9 +1040,9 @@ is not obvious on first encounter, so we develop it from the idea rather than fr
 
 \paragraph{The idea.}
 An agent can be uncertain about \emph{how the world is}---that is what
-\Cref{fig:initial} draws. It can equally be uncertain about \emph{what just happened}. Alice
-speaks; did she tell the truth or lie? Carol reaches under the cover; did she see heads or
-tails, or was she merely fidgeting? These are uncertainties of exactly the same shape, and
+\Cref{fig:handover} draws. It can equally be uncertain about \emph{what just happened}. The
+robot speaks; did it report truthfully or not? The nurse reaches for the chart; did she read
+it, or merely tidy it? These are uncertainties of exactly the same shape, and
 the insight behind event models is to represent them with exactly the same apparatus.
 
 So an event is modelled the way a world is: as one possibility among several, with a relation
@@ -1162,50 +1319,62 @@ knowledge.
 \label{sec:worked}
 
 \Cref{fig:update} applies \Cref{def:update} to the running example: the initial model of
-\Cref{fig:initial} crossed with the announcement model of \Cref{fig:events} for $\psi =
-\neg h$.
+\Cref{fig:handover} crossed with the announcement model of \Cref{fig:events} for $\psi =
+\neg g$, which is the robot telling the nurse the truth.
 
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}
   % ---- before
   \begin{scope}
-    \node[world] (w0) at (0,0) {$\overline{h}$};
-    \node[actual] (w1) at (2.4,0) {$h$};
-    \draw[plaus] (w0) -- node[elab] {\emph{c}} (w1);
+    \node[actual] (w0) at (0,0) {$\overline{g}$};
+    \node[world]  (w1) at (2.1,0) {$g$};
+    \draw[plaus] (w0) -- node[elab] {\emph{n}} (w1);
     \node[wlab, below=1.5mm of w0] {$w_0$};
     \node[wlab, below=1.5mm of w1] {$w_1$};
-    \node[font=\small\bfseries] at (1.2,1.2) {before};
+    \node[font=\small\bfseries] at (1.05,1.3) {before};
   \end{scope}
-  % ---- arrow
-  \node at (4.0,0) {\large $\otimes$};
-  % ---- event model (announcement of not-h)
-  \begin{scope}[xshift=48mm]
-    \node[event] (ep) at (0,0.55) {$e^{\neg h}$};
-    \node[event] (en) at (0,-0.75) {$e^{h}$};
-    % No edge label here: Figure 3 gives the labels, and at this size any label on the
-    % arrow collides with it. The caption carries the one fact needed.
+  \node at (3.4,0) {\large $\otimes$};
+  % ---- event model (truthful announcement of not-g)
+  \begin{scope}[xshift=42mm]
+    \node[event] (ep) at (0,0.7)  {$e^{\neg g}$};
+    \node[event] (en) at (0,-0.6) {$e^{g}$};
+    \node[event] (et) at (0,-1.9) {$e^{\top}$};
     \draw[plaus] (en) to[bend right=45] (ep);
-    \node[font=\small\bfseries] at (0,1.75) {announce $\neg h$};
+    \node[font=\small\bfseries] at (0,1.9) {announce $\neg g$};
   \end{scope}
-  \node at (7.0,0) {\large $=$};
-  % ---- after
-  \begin{scope}[xshift=92mm]
-    \node[world] (p0) at (0,0) {$\overline{h}$};
-    \node[actual] (p1) at (2.4,0) {$h$};
-    \draw[plaus] (p1) -- node[elab] {\emph{c}} (p0);
-    \node[wlab, below=1.5mm of p0] {$\langle w_0, e^{\neg h}\rangle$};
-    \node[wlab, below=1.5mm of p1] {$\langle w_1, e^{h}\rangle$};
-    \node[font=\small\bfseries] at (1.2,1.2) {after};
+  \node at (6.0,0) {\large $=$};
+  % ---- after: two clusters
+  \begin{scope}[xshift=76mm]
+    % the announcement cluster
+    \node[actual] (p0) at (0,0.75)  {$\overline{g}$};
+    \node[world]  (p2) at (2.1,0.75) {$g$};
+    \draw[plaus] (p2) -- node[elab] {\emph{n}} (p0);
+    \draw[equi] (p0) to[bend left=25] node[elab, above] {\emph{d}} (p2);
+    \node[wlab, right=1mm of p2] {$\langle w_0,e^{\neg g}\rangle,\ \langle w_1,e^{g}\rangle$};
+    % the nothing-happened cluster
+    \node[world] (p1) at (0,-1.15)  {$\overline{g}$};
+    \node[world] (p3) at (2.1,-1.15) {$g$};
+    \draw[plaus] (p1) -- node[elab] {\emph{n}} (p3);
+    \draw[equi] (p1) to[bend right=25] node[elab, below] {\emph{d}} (p3);
+    \node[wlab, right=1mm of p3] {$\langle w_0,e^{\top}\rangle,\ \langle w_1,e^{\top}\rangle$};
+    \node[font=\small\bfseries] at (1.05,1.9) {after};
   \end{scope}
 \end{tikzpicture}
-\caption{Alice's lie, worked through. Only the two designated events survive at each world,
-since $\pre(e^{\neg h}) = \neg h$ holds only at $w_0$ and $\pre(e^{h}) = h$ only at $w_1$. The
-event arrow is the $\FPN$ edge of \Cref{fig:events}, which for Carol makes $e^{\neg h}$
-strictly the more plausible event. Carol's world arrow has consequently \emph{reversed}: she
-now finds the $\neg h$ world the more plausible, so $\Bop{\mathit{carol}}\neg h$ holds. Her
-\emph{knowledge} is untouched---both worlds are still present and still comparable---which is
-why \code{peek\_c()} can later restore the truth.}
+\caption{The robot telling the nurse the truth, worked through; $g$ abbreviates
+\code{given} and \emph{n}, \emph{d} are the nurse and the doctor. Each original world pairs
+with the designated event whose precondition it satisfies, and with $e^{\top}$, giving four
+worlds in two clusters. \textbf{Upper cluster (the announcement happened).} The event order
+makes $e^{\neg g}$ strictly the more plausible, and by action priority that overrides the
+nurse's prior order: her arrow has \emph{reversed}, so $\Bop{n}\neg g$ now holds.
+\textbf{Lower cluster ($e^{\top}$, nothing observable happened).} Her original order survives
+untouched --- this is the copy that exists for an agent who might have missed the event, and it
+is why $e^{\top}$ is in the construction at all. The nurse is a full observer, so she has no
+edge between the clusters and is not in fact uncertain which obtains; the doctor, being merely
+\code{aware}, relates worlds within each cluster but not across, so she learns that something
+was said without learning what. The nurse's \emph{knowledge} is untouched throughout --- every
+world is still present --- which is what leaves room for \code{robot\_shows()} to upgrade her
+to knowledge later.}
 \label{fig:update}
 \end{figure}
 
@@ -1223,8 +1392,10 @@ Let $\mathrm{R}_{\mathrm{alt}}$ be the rule
 \]
 Then $\mathrm{R}_{\mathrm{alt}}$ and \Cref{def:update} agree on three of the four
 event-comparability configurations and differ exactly when $f \to^{iuv} e$ holds and $e
-\to^{iuv} f$ does not. That configuration is realised in the Coin Lie announcement, and the
-two rules give contradictory answers to the goal of \Cref{lst:coinlie}.
+\to^{iuv} f$ does not. That configuration is realised by \emph{any} announcement to a full
+observer holding a contrary prior belief---in particular by \code{robot\_tells()} in
+\Cref{lst:handover}---and the two rules then give contradictory answers to whether the
+correction lands.
 \end{proposition}
 
 \begin{proof}
@@ -1241,25 +1412,31 @@ neither & $\bot$ & $\bot$ & yes \\
 \bottomrule
 \end{tabular}
 \end{center}
-For reachability, take $i = \mathit{carol}$, $u = w_1$, $v = w_0$, $e = e^{\neg h}$, $f =
-e^{h}$ in \Cref{fig:update}. Carol is a full observer, so $\PN(\mathit{carol}) = \neg\top =
-\bot$ and $Q(e^{\neg h}, e^{h})(\mathit{carol}) = \bot$, giving $\neg(e \to f)$; while
-$Q(e^{h}, e^{\neg h})(\mathit{carol}) = \FPN = \top$, giving $f \to e$. Also $w_1 \comp{i}
-w_0$ and $w_1 \plaus{i} w_0$ fails while $w_0 \plaus{i} w_1$ holds. Under \Cref{def:update}
-no edge is created and Carol retains a strict preference for the announced world, so
-$\Bop{\mathit{carol}}\neg h$ holds. Under $\mathrm{R}_{\mathrm{alt}}$ the first disjunct
-fires, an edge appears in both directions, the worlds become equiplausible, and
-$\Bop{\mathit{carol}}\neg h$ fails.
+For reachability, take $i = \mathit{nurse}$, $u = w_1$, $v = w_0$, $e = e^{\neg g}$, $f =
+e^{g}$ in \Cref{fig:update}. The nurse is a full observer, so $\PN(\mathit{nurse}) = \neg\top
+= \bot$ and $Q(e^{\neg g}, e^{g})(\mathit{nurse}) = \bot$, giving $\neg(e \to f)$; while
+$Q(e^{g}, e^{\neg g})(\mathit{nurse}) = \FPN = \top$, giving $f \to e$. Also $w_1 \comp{i}
+w_0$ holds, $w_1 \plaus{i} w_0$ fails, and $w_0 \plaus{i} w_1$ holds. Under \Cref{def:update}
+no edge is created, the nurse retains a strict preference for the announced world, and
+$\Bop{\mathit{nurse}}\neg g$ holds. Under $\mathrm{R}_{\mathrm{alt}}$ the first disjunct
+fires, an edge appears in both directions, the two worlds become equiplausible, and
+$\Bop{\mathit{nurse}}\neg g$ fails.
 \end{proof}
 
 \begin{remark}[Why this settles the choice]
 \label{rem:divergence}
-The divergence is not a corner case requiring construction: it is exercised by the very
-scenario the source literature uses to \emph{demonstrate} second-order false belief. Under
-$\mathrm{R}_{\mathrm{alt}}$ the lie does not land, so the goal of \Cref{lst:coinlie} is
-unreachable and the example loses its point. \delhi{} implements \Cref{def:update}; both
-rules are implemented behind a feature flag and the configuration above is pinned by a
-regression test.
+The divergence is not a corner case requiring construction. Under $\mathrm{R}_{\mathrm{alt}}$
+the robot's correction does not land: the nurse ends up with no belief either way rather than
+with the true one, so the goal of \Cref{lst:handover} is unreachable and the capability of
+\Cref{sec:running} cannot be discharged at all.
+
+The same configuration arises in the \emph{Coin Lie} scenario of
+\citet{buckingham2021thesis}, which the source literature uses precisely to
+\emph{demonstrate} second-order false belief---so under $\mathrm{R}_{\mathrm{alt}}$ that
+demonstration fails on its own example. That is the historical reason to regard
+\Cref{def:update} as authoritative, and it is independent of our scenario. \delhi{} implements
+\Cref{def:update}; both rules are implemented behind a feature flag and the configuration
+above is pinned by a regression test.
 \end{remark}
 
 % ===========================================================================
@@ -1379,21 +1556,31 @@ finds instances the analyst had no reason to anticipate.
 
 \begin{example}[Enumeration on the running example]
 \label{ex:ask}
-Run Coin Lie to completion and ask what Alice believes about Carol:
+This is the fifth demand of \Cref{sec:demands}, discharged on the scenario that raised it. The
+assistant's question is \emph{what does the nurse believe that is false?}, and it is answered
+by search:
 \begin{lstlisting}[style=shell]
-$ delhi ask coin_lie.delhi -a "announce_not_heads()" "distract_a()" "peek_c()" \
-        -q "B[alice] B[carol] _"
-  B[alice] B[carol] (d)
-  B[alice] B[carol] (!h)
-2 of 4 candidates at depth 0
+$ delhi ask handover.delhi -d 1 -q "B[nurse] _ & !_"
+  B[nurse] (given) & !(given)
+  B[nurse] (K[robot] given) & !(K[robot] given)
+  B[nurse] (B[robot] given) & !(B[robot] given)
+3 of 28 candidates at depth 1
 \end{lstlisting}
-The second match is the goal formula of \Cref{lst:coinlie}, recovered without being asked
-for. Widening the pattern to $\Bop{\mathit{alice}}\hole \wedge \neg\hole$ at depth $1$
-returns exactly one formula---$\Bop{\mathit{alice}}(\Bop{\mathit{carol}}\neg h) \wedge
-\neg(\Bop{\mathit{carol}}\neg h)$---from $28$ candidates: Alice's single false belief,
-located by search rather than by the analyst's guess. This is the operation
-\Cref{sec:intro} claims for the system, exhibited on the scenario the paper has carried
-throughout.
+The first is the mistake we put there. The second and third were not designed in and are
+consequences of it: believing the dose was given, she also believes the robot knows it was.
+An analyst checking a guessed formula would have found the first and missed the others.
+
+The same operation locates the \emph{second-order} error. Page the doctor away, then correct
+the nurse in her absence, and ask what the doctor now believes that is false:
+\begin{lstlisting}[style=shell]
+$ delhi ask handover.delhi -a "doctor_paged()" "robot_tells()" -d 1 -q "B[doctor] _ & !_"
+  B[doctor] (B[nurse] given) & !(B[nurse] given)
+1 of 28 candidates at depth 1
+\end{lstlisting}
+Exactly one: the doctor still believes the nurse is mistaken, when the nurse has since been
+put right. That is a false belief about \emph{a mind} rather than about the world, it arose
+from an observability condition rather than from anything declared, and no one had to guess
+its shape to find it.
 \end{example}
 
 % ===========================================================================

@@ -409,3 +409,65 @@ fn a_true_announcement_makes_a_belief_safe_and_a_lie_never_can() {
         ],
     );
 }
+
+#[test]
+fn the_handover_capability_needs_safe_belief_to_state_its_goal() {
+    // The paper's running example. Its headline claim is that the success criterion is
+    // *safe* belief rather than belief: telling the truth achieves it, telling a lie
+    // cannot, and showing achieves knowledge as well. Those three rows are the
+    // acquisition table of the safe-belief section, on the domain that motivates it.
+    let src = include_str!("../../../examples/handover.delhi");
+
+    // She is wrong, and the robot knows she is wrong.
+    let mut p = run(src, &[]);
+    expect(
+        &mut p,
+        &[
+            ("B[nurse] given & !given", true),
+            ("K[robot] (B[nurse] given & !given)", true),
+            // The goal does not hold yet -- and `[]` is what lets it be stated at all.
+            ("[][nurse] !given", false),
+        ],
+    );
+
+    // Telling: belief, safely, but not knowledge. This is the row that motivates `[]`.
+    let mut told = run(src, &["robot_tells()"]);
+    expect(
+        &mut told,
+        &[("B[nurse] !given", true), ("[][nurse] !given", true), ("K[nurse] !given", false)],
+    );
+    let goal = told.goal.expect("the file declares a goal");
+    assert!(told.state.entails(&told.store, goal), "telling the truth discharges the goal");
+
+    // Showing: knowledge, hence also safe belief.
+    let mut shown = run(src, &["robot_shows()"]);
+    expect(&mut shown, &[("K[nurse] !given", true), ("[][nurse] !given", true)]);
+
+    // Lying moves belief and can never make it safe, `[]` being factive.
+    let mut lied = run(src, &["robot_lies()"]);
+    expect(&mut lied, &[("B[nurse] given", true), ("[][nurse] given", false)]);
+}
+
+#[test]
+fn the_paged_doctor_ends_up_with_a_stale_belief_about_the_nurse() {
+    // `doctor aware if !busy` is the conditional-observability clause. Paging her away
+    // makes her oblivious to the correction, so her model of the nurse goes stale -- a
+    // false belief about a mind, arising from an observability condition rather than
+    // from anything declared. This is what the enumeration example in the paper finds.
+    let src = include_str!("../../../examples/handover.delhi");
+
+    // In the room: she learns the nurse was corrected.
+    let mut heard = run(src, &["robot_tells()"]);
+    expect(&mut heard, &[("K[doctor] B[nurse] !given", true)]);
+
+    // Paged away first: she does not, and still takes the nurse to be mistaken.
+    let mut missed = run(src, &["doctor_paged()", "robot_tells()"]);
+    expect(
+        &mut missed,
+        &[
+            ("K[doctor] B[nurse] !given", false),
+            ("B[doctor] B[nurse] given", true),
+            ("B[nurse] !given", true), // ...while the nurse has in fact been put right
+        ],
+    );
+}
