@@ -47,7 +47,10 @@ body:
         — that reasoning is often where the disagreement actually is.
       placeholder: |
         Got:      false
-        Expected: true — `a` observes the announcement, so she should come to believe p.
+        Expected: true — `a` observes the announcement, so surely she now knows p?
+
+        (This particular example is not a bug: `announces` gives belief, not knowledge,
+        because the speaker may be lying. `B[a] p` is true here. Real reports welcome.)
     validations:
       required: true
 
