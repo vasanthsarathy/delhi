@@ -8,6 +8,7 @@
 - [Knowledge and belief](./logic/knowledge-and-belief.md)
 - [Higher-order attitudes](./logic/higher-order.md)
 - [How attitudes change](./logic/dynamics.md)
+- [Safe belief](./logic/safe-belief.md)
 
 # Using delhi
 

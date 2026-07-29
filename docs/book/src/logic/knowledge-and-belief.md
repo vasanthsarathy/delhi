@@ -75,8 +75,12 @@ gap between them turns out to be where the useful questions live.
 
 **Safe belief, `[][a] φ`** — true in every world *at least as plausible* as the current
 one. It sits between the other two: stronger than belief, weaker than knowledge. Its point
-is stability. A safe belief survives learning any true fact; a mere belief can be
+is stability — a safe belief survives learning any true fact, where a mere belief can be
 overturned by one.
+
+It is measured from the *actual* world rather than from a fixed set, which gives it a
+character quite unlike the other two and makes it the subject of its own chapter:
+[Safe belief](./safe-belief.md).
 
 **Conditional belief, `B^ψ[a] φ`** — what the agent *would* believe if it learned ψ. This
 is the one that makes revision predictable: you can ask what Alice's belief would become

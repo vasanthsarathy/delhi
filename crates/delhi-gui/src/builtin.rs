@@ -457,6 +457,69 @@ actions {
 "#,
     ),
     (
+        "safe_belief.delhi",
+        r#"// Safe belief: the attitude between knowledge and belief.
+//
+// Two agents face the same question and lean opposite ways. One is right, one is wrong,
+// and neither *knows* — so plain belief cannot tell them apart. Safe belief can.
+//
+// The rule is that safe belief is measured from the actual world: `[][i] p` holds when p
+// is true in every world i finds at least as plausible as the way things actually are.
+// An agent who is right has almost nothing above the actual world, so its beliefs are
+// safe. An agent who is wrong has its own favoured worlds sitting above reality, and p
+// has to survive those too.
+//
+// The practical reading: a safe belief is one that no *true* information can overturn.
+//
+//     delhi eval examples/safe_belief.delhi -f "[][ada] up"      // true  — right
+//     delhi eval examples/safe_belief.delhi -f "[][ben] !up"     // false — wrong
+//     delhi eval examples/safe_belief.delhi -a "gossip()" -f "B[ben] !up"
+//
+// See https://vsarathy.com/delhi/book/logic/safe-belief.html
+
+types   { Actor - Object }
+objects { ada, ben, cleo - Actor }
+agents  { ada, ben, cleo }
+props   { up, rain }        // the server is up; it is raining
+
+initially {
+    up                      // it really is up
+    rain                    // and it really is raining
+
+    ?[ada] up               // ada cannot tell...
+    B[ada] up               // ...but leans the right way
+
+    ?[ben] up               // ben cannot tell either...
+    B[ben] !up              // ...and leans the wrong way
+
+    ?[cleo] up              // cleo has no idea and no leaning either way
+}
+
+actions {
+    // True, and said to everyone. Ada's belief is untouched; ben's is overturned.
+    gossip() {
+        actor     cleo
+        announces up
+        ada observes, ben observes, cleo observes
+    }
+
+    // A lie. It can move belief, but never safe belief — `[]` is factive.
+    deny() {
+        actor     cleo
+        announces !up
+        ada observes, ben observes, cleo observes
+    }
+
+    // Sensing: the observer comes to KNOW, and so also to safely believe.
+    check(?who - Actor) {
+        actor      ?who
+        determines up
+        ?who observes
+    }
+}
+"#,
+    ),
+    (
         "sally_anne.delhi",
         r#"// Sally-Anne — the canonical false-belief task.
 //

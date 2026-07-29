@@ -345,3 +345,67 @@ fn muddy_children_conclude_on_the_third_round_and_not_before() {
     let goal = p.goal.expect("the file declares a goal");
     assert!(p.state.entails(&p.store, goal), "the declared goal holds");
 }
+
+#[test]
+fn safe_belief_separates_being_right_from_merely_believing() {
+    // The headline claim: plain belief cannot tell ada and ben apart — both hold their
+    // view equally firmly and neither knows — and safe belief separates them at once,
+    // because it is measured from the actual world rather than from the top of the
+    // agent's own ordering.
+    let mut p = run(include_str!("../../../examples/safe_belief.delhi"), &[]);
+    expect(
+        &mut p,
+        &[
+            // Indistinguishable at the level of belief.
+            ("B[ada] up", true),
+            ("B[ben] !up", true),
+            ("Kw[ada] up", false),
+            ("Kw[ben] up", false),
+            // Told apart by safe belief. `[]` is factive, so ben's cannot be safe.
+            ("[][ada] up", true),
+            ("[][ben] !up", false),
+            // Cleo leans neither way, so both worlds sit above the actual one and
+            // nothing non-trivial is safe for her — a third distinct position.
+            ("B[cleo] up", false),
+            ("[][cleo] up", false),
+            // An agent cannot certify its own safe belief: `K[i] [][i] p` collapses to
+            // `K[i] p`. It *believes* the belief is safe either way — ben included, and
+            // ben is wrong.
+            ("K[ada] [][ada] up", false),
+            ("B[ada] [][ada] up", true),
+            ("B[ben] [][ben] !up", true),
+            ("[][ben] [][ben] !up", false),
+        ],
+    );
+}
+
+#[test]
+fn a_true_announcement_makes_a_belief_safe_and_a_lie_never_can() {
+    // The three acquisition routes, which is what the chapter on safe belief turns on.
+    let mut told = run(include_str!("../../../examples/safe_belief.delhi"), &["gossip()"]);
+    expect(
+        &mut told,
+        &[
+            // Ben was wrong; a *true* announcement makes his new belief safe without
+            // giving him knowledge. That middle state is the reason `[]` exists.
+            ("B[ben] up", true),
+            ("[][ben] up", true),
+            ("K[ben] up", false),
+        ],
+    );
+
+    let mut sensed = run(include_str!("../../../examples/safe_belief.delhi"), &["check(ben)"]);
+    expect(&mut sensed, &[("K[ben] up", true), ("[][ben] up", true)]);
+
+    let mut lied = run(include_str!("../../../examples/safe_belief.delhi"), &["deny()"]);
+    expect(
+        &mut lied,
+        &[
+            // A lie moves belief and can never make it safe, since `[]` is factive...
+            ("B[ada] !up", true),
+            ("[][ada] !up", false),
+            // ...but it can *destroy* one. Ada held `up` safely before this.
+            ("[][ada] up", false),
+        ],
+    );
+}
